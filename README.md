@@ -70,6 +70,24 @@ my.ai ships as a complete, runnable system — not just a framework.
 
 **Generated locally on first run (never shipped):** your database, accounts, settings, memory, uploads, and any models. See the [setup guide](docs/setup.md).
 
+## AI Model Stack
+
+my.ai runs entirely on local, self-hosted models — no cloud providers required. Models are served over OpenAI-compatible endpoints and selected per turn by the built-in auto model-router. The reference deployment uses two local endpoints:
+
+| Endpoint | Kind | Models |
+|---|---|---|
+| `host:11434` | Ollama (local) | `gpt-oss:120b`-class default chat, `Qwen3-32B`, `gpt-oss:20b`, `mistral-small3.2:24b`, `qwen3-coder:30b`, plus an embedding model (`mxbai-embed-large`) |
+| `host:8787` | OpenAI-compatible (local) | a fine-tuned coding/utility model |
+
+**Role assignments**
+
+- **Default chat** — the largest available model (120B-class).
+- **Utility** (summarization, naming, routing) — a fast coding/utility model.
+- **Embeddings** — `mxbai-embed-large` over HTTP, with an in-process FastEmbed (`all-MiniLM-L6-v2`) fallback.
+- **Auto model-routing** — ON: each prompt is classified (coding / complex / simple) and delegated to the right model automatically.
+
+Don't have a large workstation? The next section shows how to run the whole stack on ~18 GB of RAM.
+
 ## Running on Limited RAM (≈18 GB)
 
 The default model routing targets a large workstation (a 120B + 30B + 20B). On a smaller machine — say **~18 GB of RAM** — swap in small local models. my.ai routes every turn to one of three configurable roles, so you only need models that fit.
