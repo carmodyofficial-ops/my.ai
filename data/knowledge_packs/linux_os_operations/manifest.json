@@ -1,0 +1,39 @@
+{
+  "category": "technical_domain",
+  "created_at": "2026-06-21T12:37:32+00:00",
+  "deep_files": [
+    "decision_lenses.md",
+    "domain_eval_cases.json",
+    "domain_map.md",
+    "failure_modes.md",
+    "practical_playbooks.md"
+  ],
+  "depth_focus": [
+    "systemd",
+    "permissions",
+    "logs",
+    "processes",
+    "filesystems",
+    "shell scripting",
+    "diagnostics"
+  ],
+  "freshness": "living",
+  "last_domain_deepened_at": "2026-06-21T13:12:57+00:00",
+  "memory_write_allowed": true,
+  "name": "Linux and OS Operations",
+  "pack_id": "linux_os_operations",
+  "priority": 88,
+  "required_files": [
+    "manifest.json",
+    "overview.md",
+    "core_concepts.md",
+    "procedures.md",
+    "decision_frameworks.md",
+    "eval_questions.md",
+    "memory_hooks.md",
+    "safety_boundaries.md",
+    "source_index.json"
+  ],
+  "requires_extra_caution": false,
+  "trust_level": "medium"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "svelte",
+  "title": "Svelte (runes + classic)",
+  "source": "Svelte Documentation",
+  "source_url": "https://svelte.dev/docs",
+  "source_repo": "https://github.com/sveltejs/svelte",
+  "license": "MIT",
+  "license_verified_via": "GitHub license API, 2026-06-26",
+  "license_tier": "permissive",
+  "attribution": "Distilled from the official Svelte documentation (MIT).",
+  "method": "agent distillation, faithful to the official docs"
+}

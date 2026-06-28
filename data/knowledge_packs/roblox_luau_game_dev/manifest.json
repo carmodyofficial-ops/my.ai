@@ -1,0 +1,10 @@
+{
+  "name": "Roblox / Luau Game Development",
+  "pack_id": "roblox_luau_game_dev",
+  "trust_level": "high",
+  "guarded": false,
+  "topics": ["roblox", "luau", "lua", "game development", "datastore", "remoteevent", "services", "client-server"],
+  "summary": "Practical Roblox/Luau reference: service tree, server-authoritative client-server via RemoteEvents, DataStore persistence, leaderstats, instance/event patterns, and common pitfalls.",
+  "source": "authored",
+  "created": "2026-06-26T00:00:00Z"
+}

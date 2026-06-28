@@ -1,0 +1,13 @@
+{
+  "id": "github_actions",
+  "title": "GitHub Actions (CI/CD)",
+  "source": "GitHub Docs — GitHub Actions",
+  "source_url": "https://docs.github.com/actions",
+  "source_repo": "https://github.com/github/docs",
+  "license": "CC-BY-4.0",
+  "license_verified_via": "GitHub license API, 2026-06-26 (content CC-BY-4.0; code samples MIT)",
+  "license_tier": "cc-by",
+  "attribution": "Distilled from the official GitHub Actions documentation, (c) GitHub, CC-BY-4.0.",
+  "method": "agent distillation, faithful to the official docs",
+  "redistribution_note": "CC-BY-4.0 requires attribution to GitHub if the pack is published."
+}

@@ -1,0 +1,38 @@
+{
+  "category": "reasoning_domain",
+  "created_at": "2026-06-21T12:37:32+00:00",
+  "deep_files": [
+    "assumption_tracker.md",
+    "evidence_grading.md",
+    "recency_policy.md",
+    "source_triangulation.md"
+  ],
+  "depth_focus": [
+    "source evaluation",
+    "evidence grading",
+    "assumptions",
+    "citations",
+    "recency",
+    "counterarguments",
+    "synthesis"
+  ],
+  "freshness": "living",
+  "last_deepened_at": "2026-06-21T12:49:11+00:00",
+  "memory_write_allowed": true,
+  "name": "Research Methods",
+  "pack_id": "research_methods",
+  "priority": 80,
+  "required_files": [
+    "manifest.json",
+    "overview.md",
+    "core_concepts.md",
+    "procedures.md",
+    "decision_frameworks.md",
+    "eval_questions.md",
+    "memory_hooks.md",
+    "safety_boundaries.md",
+    "source_index.json"
+  ],
+  "requires_extra_caution": false,
+  "trust_level": "medium"
+}

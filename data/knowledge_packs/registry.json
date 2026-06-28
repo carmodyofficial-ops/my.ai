@@ -1,0 +1,106 @@
+{
+  "created_at": "2026-06-21T12:37:32+00:00",
+  "note": "Curated generic packs shipped with my.ai. Runtime adds more under data/.",
+  "packs": [
+    {
+      "category": "cognitive_scaffolding",
+      "manifest": "data/knowledge_packs/reasoning_and_learning/manifest.json",
+      "name": "Reasoning and Learning",
+      "pack_id": "reasoning_and_learning",
+      "path": "data/knowledge_packs/reasoning_and_learning",
+      "priority": 98,
+      "trust_level": "high"
+    },
+    {
+      "category": "technical_domain",
+      "manifest": "data/knowledge_packs/software_engineering/manifest.json",
+      "name": "Software Engineering",
+      "pack_id": "software_engineering",
+      "path": "data/knowledge_packs/software_engineering",
+      "priority": 90,
+      "trust_level": "medium"
+    },
+    {
+      "category": "technical_domain",
+      "manifest": "data/knowledge_packs/ai_engineering/manifest.json",
+      "name": "AI Engineering",
+      "pack_id": "ai_engineering",
+      "path": "data/knowledge_packs/ai_engineering",
+      "priority": 90,
+      "trust_level": "medium"
+    },
+    {
+      "category": "technical_domain",
+      "manifest": "data/knowledge_packs/linux_os_operations/manifest.json",
+      "name": "Linux and OS Operations",
+      "pack_id": "linux_os_operations",
+      "path": "data/knowledge_packs/linux_os_operations",
+      "priority": 88,
+      "trust_level": "medium"
+    },
+    {
+      "category": "technical_domain",
+      "manifest": "data/knowledge_packs/networking_and_security/manifest.json",
+      "name": "Networking and Security",
+      "pack_id": "networking_and_security",
+      "path": "data/knowledge_packs/networking_and_security",
+      "priority": 88,
+      "trust_level": "medium"
+    },
+    {
+      "category": "technical_domain",
+      "manifest": "data/knowledge_packs/devops_and_infrastructure/manifest.json",
+      "name": "DevOps and Infrastructure",
+      "pack_id": "devops_and_infrastructure",
+      "path": "data/knowledge_packs/devops_and_infrastructure",
+      "priority": 86,
+      "trust_level": "medium"
+    },
+    {
+      "category": "technical_domain",
+      "manifest": "data/knowledge_packs/data_and_databases/manifest.json",
+      "name": "Data and Databases",
+      "pack_id": "data_and_databases",
+      "path": "data/knowledge_packs/data_and_databases",
+      "priority": 84,
+      "trust_level": "medium"
+    },
+    {
+      "category": "business_domain",
+      "manifest": "data/knowledge_packs/product_management/manifest.json",
+      "name": "Product Management",
+      "pack_id": "product_management",
+      "path": "data/knowledge_packs/product_management",
+      "priority": 82,
+      "trust_level": "medium"
+    },
+    {
+      "category": "reasoning_domain",
+      "manifest": "data/knowledge_packs/research_methods/manifest.json",
+      "name": "Research Methods",
+      "pack_id": "research_methods",
+      "path": "data/knowledge_packs/research_methods",
+      "priority": 80,
+      "trust_level": "medium"
+    },
+    {
+      "category": "communication_domain",
+      "manifest": "data/knowledge_packs/writing_and_communication/manifest.json",
+      "name": "Writing and Communication",
+      "pack_id": "writing_and_communication",
+      "path": "data/knowledge_packs/writing_and_communication",
+      "priority": 78,
+      "trust_level": "medium"
+    },
+    {
+      "category": "technical_domain",
+      "description": "Kubernetes, kubectl, pods, deployments, services, ingress, RBAC, Helm, GitOps, storage, observability, security, local clusters, and production operations.",
+      "manifest": "data/knowledge_packs/kubernetes_and_cloud_native/manifest.json",
+      "name": "Kubernetes and Cloud Native",
+      "pack_id": "kubernetes_and_cloud_native",
+      "path": "data/knowledge_packs/kubernetes_and_cloud_native",
+      "priority": 88,
+      "trust_level": "medium"
+    }
+  ]
+}

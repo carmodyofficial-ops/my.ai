@@ -1,0 +1,56 @@
+{
+  "external_sources": [],
+  "local_project_sources": [],
+  "pack_id": "data_and_databases",
+  "sources": [
+    {
+      "file": "overview.md",
+      "purpose": "Purpose and scope"
+    },
+    {
+      "file": "core_concepts.md",
+      "purpose": "Concept map"
+    },
+    {
+      "file": "procedures.md",
+      "purpose": "Procedural guidance"
+    },
+    {
+      "file": "decision_frameworks.md",
+      "purpose": "Tradeoff analysis"
+    },
+    {
+      "file": "eval_questions.md",
+      "purpose": "Evaluation prompts"
+    },
+    {
+      "file": "memory_hooks.md",
+      "purpose": "Memory rules"
+    },
+    {
+      "file": "safety_boundaries.md",
+      "purpose": "Safety and trust limits"
+    },
+    {
+      "file": "domain_map.md",
+      "purpose": "K1G domain deepening file for data_and_databases"
+    },
+    {
+      "file": "practical_playbooks.md",
+      "purpose": "K1G domain deepening file for data_and_databases"
+    },
+    {
+      "file": "failure_modes.md",
+      "purpose": "K1G domain deepening file for data_and_databases"
+    },
+    {
+      "file": "decision_lenses.md",
+      "purpose": "K1G domain deepening file for data_and_databases"
+    },
+    {
+      "file": "domain_eval_cases.json",
+      "purpose": "K1G domain deepening file for data_and_databases"
+    }
+  ],
+  "updated_at": "2026-06-21T13:12:57+00:00"
+}

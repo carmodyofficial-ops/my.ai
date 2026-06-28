@@ -1,0 +1,26 @@
+{
+  "created_at": "2026-06-21T13:12:57+00:00",
+  "evals": [
+    {
+      "expected_guarded": null,
+      "expected_packs": [
+        "linux_os_operations"
+      ],
+      "id": "linux_os_operations_route",
+      "kind": "router",
+      "query": "Diagnose linux systemd journalctl permissions bash processes and filesystem logs",
+      "top_k": 5
+    },
+    {
+      "expected_context_packs": [
+        "linux_os_operations"
+      ],
+      "id": "linux_os_operations_context",
+      "kind": "context",
+      "min_context_blocks": 1,
+      "query": "Diagnose linux systemd journalctl permissions bash processes and filesystem logs",
+      "top_k": 5
+    }
+  ],
+  "pack_id": "linux_os_operations"
+}

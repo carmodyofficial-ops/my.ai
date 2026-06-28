@@ -1,0 +1,12 @@
+{
+  "id": "fastapi",
+  "title": "FastAPI (Python web)",
+  "source": "FastAPI Documentation",
+  "source_url": "https://fastapi.tiangolo.com/",
+  "source_repo": "https://github.com/tiangolo/fastapi",
+  "license": "MIT",
+  "license_verified_via": "LICENSE file (The MIT License), 2026-06-26",
+  "license_tier": "permissive",
+  "attribution": "Distilled from the official FastAPI documentation (MIT).",
+  "method": "agent distillation, faithful to the official docs"
+}

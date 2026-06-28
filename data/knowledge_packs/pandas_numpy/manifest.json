@@ -1,0 +1,13 @@
+{
+  "id": "pandas_numpy",
+  "title": "pandas + NumPy (data science)",
+  "source": "pandas documentation + NumPy documentation",
+  "source_url": "https://pandas.pydata.org/docs/ , https://numpy.org/doc/",
+  "source_repo": "https://github.com/pandas-dev/pandas , https://github.com/numpy/numpy",
+  "license": "BSD-3-Clause",
+  "license_verified_via": "GitHub license API (pandas BSD-3-Clause; NumPy BSD-3-Clause, LICENSE bundles third-party notices), 2026-06-26",
+  "license_tier": "permissive",
+  "attribution": "Distilled from the official pandas and NumPy documentation (both BSD-3-Clause).",
+  "method": "agent distillation, faithful to the official docs",
+  "redistribution_note": "BSD-3-Clause permits reuse with the copyright notice; retain attribution if published."
+}

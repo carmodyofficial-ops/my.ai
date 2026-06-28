@@ -1,0 +1,15 @@
+[Unit]
+Description=my.ai LAN proxy (loopback app -> LAN, optional TLS)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Optional overrides (TLS cert paths, ports). Leading '-' = fine if the file is absent.
+EnvironmentFile=-%h/.config/myai-lan-proxy.env
+ExecStart=/home/youruser/odysseus/scripts/lan_proxy_service.sh
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,39 @@
+{
+  "category": "cognitive_scaffolding",
+  "created_at": "2026-06-21T12:37:32+00:00",
+  "deep_files": [
+    "memory_consolidation_protocol.md",
+    "pondering_routine.md",
+    "reflection_protocol.md",
+    "uncertainty_protocol.md",
+    "verification_protocol.md"
+  ],
+  "depth_focus": [
+    "task decomposition",
+    "uncertainty",
+    "verification",
+    "reflection",
+    "lesson extraction",
+    "memory consolidation",
+    "self-evaluation"
+  ],
+  "freshness": "living",
+  "last_deepened_at": "2026-06-21T12:49:11+00:00",
+  "memory_write_allowed": true,
+  "name": "Reasoning and Learning",
+  "pack_id": "reasoning_and_learning",
+  "priority": 98,
+  "required_files": [
+    "manifest.json",
+    "overview.md",
+    "core_concepts.md",
+    "procedures.md",
+    "decision_frameworks.md",
+    "eval_questions.md",
+    "memory_hooks.md",
+    "safety_boundaries.md",
+    "source_index.json"
+  ],
+  "requires_extra_caution": false,
+  "trust_level": "high"
+}

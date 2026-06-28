@@ -1,0 +1,12 @@
+{
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/carmodyofficial-ops/my.ai.git"
+  },
+  "devDependencies": {
+    "@antithesishq/bombadil": "^0.5.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1"
+  }
+}

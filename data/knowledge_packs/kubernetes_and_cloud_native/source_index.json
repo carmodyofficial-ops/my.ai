@@ -1,0 +1,62 @@
+{
+  "pack_id": "kubernetes_and_cloud_native",
+  "sources": [
+    {
+      "file": "overview.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: overview.md"
+    },
+    {
+      "file": "core_concepts.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: core_concepts.md"
+    },
+    {
+      "file": "architecture_map.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: architecture_map.md"
+    },
+    {
+      "file": "workload_patterns.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: workload_patterns.md"
+    },
+    {
+      "file": "networking_services_ingress.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: networking_services_ingress.md"
+    },
+    {
+      "file": "storage_stateful_workloads.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: storage_stateful_workloads.md"
+    },
+    {
+      "file": "security_rbac_secrets.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: security_rbac_secrets.md"
+    },
+    {
+      "file": "helm_kustomize_gitops.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: helm_kustomize_gitops.md"
+    },
+    {
+      "file": "observability_and_troubleshooting.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: observability_and_troubleshooting.md"
+    },
+    {
+      "file": "local_clusters.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: local_clusters.md"
+    },
+    {
+      "file": "production_operations.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: production_operations.md"
+    },
+    {
+      "file": "decision_frameworks.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: decision_frameworks.md"
+    },
+    {
+      "file": "safety_boundaries.md",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: safety_boundaries.md"
+    },
+    {
+      "file": "domain_eval_cases.json",
+      "purpose": "K1L Kubernetes/cloud-native knowledge source: domain_eval_cases.json"
+    }
+  ],
+  "updated_at": "2026-06-21T13:39:15Z"
+}

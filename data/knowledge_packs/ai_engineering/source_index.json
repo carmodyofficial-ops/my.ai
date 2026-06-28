@@ -1,0 +1,52 @@
+{
+  "external_sources": [],
+  "local_project_sources": [],
+  "pack_id": "ai_engineering",
+  "sources": [
+    {
+      "file": "overview.md",
+      "purpose": "Purpose and scope"
+    },
+    {
+      "file": "core_concepts.md",
+      "purpose": "Concept map"
+    },
+    {
+      "file": "procedures.md",
+      "purpose": "Procedural guidance"
+    },
+    {
+      "file": "decision_frameworks.md",
+      "purpose": "Tradeoff analysis"
+    },
+    {
+      "file": "eval_questions.md",
+      "purpose": "Evaluation prompts"
+    },
+    {
+      "file": "memory_hooks.md",
+      "purpose": "Memory rules"
+    },
+    {
+      "file": "safety_boundaries.md",
+      "purpose": "Safety and trust limits"
+    },
+    {
+      "file": "rag_architecture.md",
+      "purpose": "K1B deepening file for ai_engineering: Rag Architecture"
+    },
+    {
+      "file": "agent_architecture.md",
+      "purpose": "K1B deepening file for ai_engineering: Agent Architecture"
+    },
+    {
+      "file": "eval_design.md",
+      "purpose": "K1B deepening file for ai_engineering: Eval Design"
+    },
+    {
+      "file": "hallucination_resistance.md",
+      "purpose": "K1B deepening file for ai_engineering: Hallucination Resistance"
+    }
+  ],
+  "updated_at": "2026-06-21T12:49:11+00:00"
+}

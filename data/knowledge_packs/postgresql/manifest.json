@@ -1,0 +1,13 @@
+{
+  "id": "postgresql",
+  "title": "PostgreSQL specifics",
+  "source": "PostgreSQL Documentation",
+  "source_url": "https://www.postgresql.org/docs/current/",
+  "source_repo": "https://git.postgresql.org/gitweb/?p=postgresql.git",
+  "license": "PostgreSQL License",
+  "license_verified_via": "PostgreSQL License is a permissive BSD/MIT-style license (postgresql.org/about/licence), 2026-06-26",
+  "license_tier": "permissive",
+  "attribution": "Distilled from the official PostgreSQL documentation (PostgreSQL License).",
+  "method": "agent distillation, faithful to the official docs",
+  "redistribution_note": "PostgreSQL License permits reuse/redistribution with the copyright + permission notice."
+}

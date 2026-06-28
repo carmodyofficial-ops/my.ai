@@ -1,0 +1,13 @@
+{
+  "id": "docker",
+  "title": "Docker & containers",
+  "source": "Docker Documentation",
+  "source_url": "https://docs.docker.com/",
+  "source_repo": "https://github.com/docker/docs",
+  "license": "Apache-2.0",
+  "license_verified_via": "GitHub license API (api.github.com/repos/docker/docs/license), 2026-06-26",
+  "license_tier": "permissive",
+  "attribution": "Distilled from the official Docker documentation (Apache-2.0).",
+  "method": "agent distillation, faithful to the official docs",
+  "redistribution_note": "Apache-2.0 permits reuse/redistribution with notice; retain this attribution if the pack is published."
+}

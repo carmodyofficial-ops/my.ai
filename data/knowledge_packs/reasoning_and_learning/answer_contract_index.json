@@ -1,0 +1,34 @@
+{
+  "milestone": "K1Q",
+  "name": "Completion Discipline Templates",
+  "created_at": "2026-06-21T19:05:31.373502+00:00",
+  "purpose": "Reduce incomplete local AI answers through category-specific answer contracts.",
+  "contracts": [
+    "data/knowledge_packs/reasoning_and_learning/answer_completion_contracts.md",
+    "data/knowledge_packs/skills_and_tools/response_completion_protocol.md",
+    "data/knowledge_packs/software_engineering/answer_contracts/software_engineering_answer_contract.md",
+    "data/knowledge_packs/software_engineering/answer_contracts/code_generation_answer_contract.md",
+    "data/knowledge_packs/kubernetes_and_cloud_native/answer_contracts/kubernetes_answer_contract.md",
+    "data/knowledge_packs/product_management/answer_contracts/product_management_answer_contract.md",
+    "data/knowledge_packs/reasoning_and_learning/answer_contracts/long_context_synthesis_answer_contract.md",
+    "data/knowledge_packs/health_and_lifestyle/answer_contracts/health_guarded_answer_contract.md"
+  ],
+  "bottom_test_targets": [
+    "long_context_synthesis_08",
+    "product_management_01",
+    "product_management_02",
+    "health_guarded_01",
+    "software_engineering_01",
+    "software_engineering_02",
+    "software_engineering_03",
+    "software_engineering_08",
+    "code_generation_04",
+    "kubernetes_cloud_native_01"
+  ],
+  "acceptance_targets": {
+    "k1o_overall_minimum_after_k1r": 95.5,
+    "completeness_minimum_after_k1r": 4.4,
+    "actionability_minimum_after_k1r": 4.75,
+    "no_bottom_test_below": 4.333
+  }
+}

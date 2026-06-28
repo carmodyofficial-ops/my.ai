@@ -1,0 +1,87 @@
+{
+  "snapshot_version": "S9A2_local_only_static_proposal_review_snapshot",
+  "generated_at": "2026-06-24T17:44:01Z",
+  "local_only": true,
+  "read_only": true,
+  "dry_run_only": true,
+  "field_mode_full_remote_applied": false,
+  "remote_ingestion_enabled": false,
+  "remote_execution_enabled": false,
+  "proposal_execution_enabled": false,
+  "proposal_queue_execution_enabled": false,
+  "queue_file_movement_enabled": false,
+  "backend_route_created": false,
+  "service_restart_performed": false,
+  "protected_mutation_performed": false,
+  "guest_mutation_performed": false,
+  "model_routing_mutation_performed": false,
+  "memory_rag_write_performed": false,
+  "commit_performed": false,
+  "remote_push_performed": false,
+  "git": {
+    "head": "103c2ea",
+    "latest_commit": "103c2ea S7 add read-only Field Mode foundation",
+    "status_short": ""
+  },
+  "accepted_gates": {
+    "s7e3": "PASS_POST_COMMIT_VALIDATION_COMPLETE",
+    "s8a4": "PASS_LOCAL_PROPOSAL_INBOX_DRY_RUN_CLOSEOUT_COMPLETE",
+    "s8c4": "PASS_FIELD_MODE_RED_TEAM_GUARDRAIL_CLOSEOUT_COMPLETE",
+    "s8d": "PASS_S8_ENGINEERING_TURNOVER_CREATED",
+    "s9a1": "PASS_LOCAL_ONLY_PROPOSAL_REVIEW_UI_PLAN_CREATED"
+  },
+  "proposal_queue_counts": {
+    "inbox": 0,
+    "classified": 0,
+    "queued_for_local_review": 0,
+    "accepted_for_local_plan": 0,
+    "rejected": 0,
+    "superseded": 0,
+    "closed": 0,
+    "audit": 0,
+    "samples": 1
+  },
+  "dry_run_health": {
+    "default_status": "PASS",
+    "include_inbox_status": "PASS",
+    "default_no_file_movement": true,
+    "default_no_proposal_execution": true,
+    "include_inbox_file_count_observed": 0
+  },
+  "red_team_health": {
+    "status": "PASS",
+    "fixtures_evaluated": 8,
+    "blocked_fixture_count": 7,
+    "allowed_control_count": 1,
+    "invalid_schema_result_count": 0,
+    "all_passed": true
+  },
+  "lockout": {
+    "tool_status": "PASS",
+    "state": "locked",
+    "latest_audit_event": null
+  },
+  "blocked_capabilities": [
+    "full remote Field Mode",
+    "remote ingestion",
+    "WhatsApp or pocket interface",
+    "voice-note ingestion",
+    "remote execution",
+    "proposal execution",
+    "queue file movement",
+    "backend route creation",
+    "service restart from Field Mode",
+    "protected mutation",
+    "Guest mutation",
+    "model routing mutation",
+    "memory/RAG write",
+    "commit",
+    "remote push"
+  ],
+  "next_recommended_actions": [
+    "Review the static panel only.",
+    "Keep lockout locked.",
+    "Proceed to S9A3 acceptance if static panel checks pass.",
+    "Do not enable remote ingestion or execution."
+  ]
+}

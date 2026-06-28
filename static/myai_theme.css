@@ -1,0 +1,70 @@
+/* H2U-D my.ai light grey theme override.
+   Intent: shift product branding/accent from red to light grey while preserving
+   semantic warning/error colors elsewhere. */
+
+:root {
+  --myai-accent: #d1d5db;
+  --myai-accent-strong: #e5e7eb;
+  --myai-accent-muted: #9ca3af;
+  --myai-accent-surface: rgba(209, 213, 219, 0.12);
+  --myai-accent-border: rgba(229, 231, 235, 0.28);
+  --myai-safe-neutral-surface: #f3f4f6;
+  --myai-focus-ring: rgba(229, 231, 235, 0.42);
+  --myai-primary-text: #f9fafb;
+}
+
+/* Brand and primary action surfaces */
+.brand,
+.logo,
+.app-logo,
+.sidebar-brand,
+.login-brand,
+.welcome-brand,
+.brand-text,
+#brand,
+#app-brand,
+#login-brand {
+  color: var(--myai-accent-strong) !important;
+}
+
+/* Common primary buttons and active nav states. Keep destructive/error classes out. */
+button.primary:not(.danger):not(.error),
+.confirm-btn-primary:not(.danger):not(.error),
+.pfws-btn.primary:not(.danger):not(.error),
+.primary-btn:not(.danger):not(.error),
+.nav-item.active,
+.sidebar .active,
+.tool-indicator.active {
+  background: var(--myai-accent-surface) !important;
+  border-color: var(--myai-accent-border) !important;
+  color: var(--myai-accent-strong) !important;
+}
+
+/* Rings, selected states, and workspace panels */
+.workspace-indicator,
+#workspace-indicator-btn,
+.pfws-panel,
+.pfws-header,
+.pfws-btn:not(.danger):not(.error) {
+  border-color: var(--myai-accent-border) !important;
+}
+
+/* Links and subtle accents, excluding warning/error contexts. */
+a:not(.danger):not(.error),
+.accent:not(.danger):not(.error),
+.highlight:not(.danger):not(.error) {
+  color: var(--myai-accent-strong);
+}
+
+/* Keep error/warning/destructive semantics available. */
+.error,
+.danger,
+.warning,
+.toast-error,
+.toast-warning,
+[role="alert"] {
+  /* Intentionally not overridden by my.ai brand theme. */
+}
+
+/* K2C_THEME_SAFE_LOOP_VERIFICATION_V01 */
+/* K2G_THEME_POLISH_V03 */

@@ -1,0 +1,25 @@
+{
+  "created_at": "2026-06-21T13:39:15Z",
+  "evals": [
+    {
+      "expected_packs": [
+        "kubernetes_and_cloud_native"
+      ],
+      "id": "kubernetes_core_router",
+      "kind": "router",
+      "query": "Debug Kubernetes kubectl pod CrashLoopBackOff deployment service ingress RBAC Helm",
+      "top_k": 5
+    },
+    {
+      "expected_context_packs": [
+        "kubernetes_and_cloud_native"
+      ],
+      "id": "kubernetes_context_crashloop",
+      "kind": "context",
+      "min_context_blocks": 1,
+      "query": "How do I debug a Kubernetes pod CrashLoopBackOff with kubectl logs describe events probes and rollout status?",
+      "top_k": 5
+    }
+  ],
+  "pack_id": "kubernetes_and_cloud_native"
+}

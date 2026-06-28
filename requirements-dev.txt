@@ -1,0 +1,11 @@
+# Development / test dependencies. NOT installed in the production image.
+#
+#   pip install -r requirements.txt -r requirements-dev.txt
+#
+# CI and local test runs need these; the running app does not import any of them.
+pytest
+pytest-asyncio
+# starlette.testclient prefers httpx2 since Starlette 1.2.0 and warns on every
+# TestClient import when only classic httpx is present. Runtime code uses the
+# classic `httpx` (in requirements.txt); this is test-client only.
+httpx2

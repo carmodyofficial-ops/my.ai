@@ -1,0 +1,12 @@
+{
+  "id": "tailwindcss",
+  "title": "Tailwind CSS",
+  "source": "Tailwind CSS Documentation",
+  "source_url": "https://tailwindcss.com/docs",
+  "source_repo": "https://github.com/tailwindlabs/tailwindcss",
+  "license": "MIT",
+  "license_verified_via": "GitHub license API, 2026-06-26",
+  "license_tier": "permissive",
+  "attribution": "Distilled from the official Tailwind CSS documentation (MIT).",
+  "method": "agent distillation, faithful to the official docs"
+}

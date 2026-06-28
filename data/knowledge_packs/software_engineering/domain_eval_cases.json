@@ -1,0 +1,26 @@
+{
+  "created_at": "2026-06-21T13:12:57+00:00",
+  "evals": [
+    {
+      "expected_guarded": null,
+      "expected_packs": [
+        "software_engineering"
+      ],
+      "id": "software_engineering_route",
+      "kind": "router",
+      "query": "Design software architecture tests APIs refactoring release and debugging",
+      "top_k": 5
+    },
+    {
+      "expected_context_packs": [
+        "software_engineering"
+      ],
+      "id": "software_engineering_context",
+      "kind": "context",
+      "min_context_blocks": 1,
+      "query": "Design software architecture tests APIs refactoring release and debugging",
+      "top_k": 5
+    }
+  ],
+  "pack_id": "software_engineering"
+}

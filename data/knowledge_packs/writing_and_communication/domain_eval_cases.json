@@ -1,0 +1,26 @@
+{
+  "created_at": "2026-06-21T13:12:57+00:00",
+  "evals": [
+    {
+      "expected_guarded": null,
+      "expected_packs": [
+        "writing_and_communication"
+      ],
+      "id": "writing_and_communication_route",
+      "kind": "router",
+      "query": "Draft email resume cover letter interview executive summary stakeholder communication tone",
+      "top_k": 5
+    },
+    {
+      "expected_context_packs": [
+        "writing_and_communication"
+      ],
+      "id": "writing_and_communication_context",
+      "kind": "context",
+      "min_context_blocks": 1,
+      "query": "Draft email resume cover letter interview executive summary stakeholder communication tone",
+      "top_k": 5
+    }
+  ],
+  "pack_id": "writing_and_communication"
+}

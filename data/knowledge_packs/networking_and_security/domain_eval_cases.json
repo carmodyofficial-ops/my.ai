@@ -1,0 +1,26 @@
+{
+  "created_at": "2026-06-21T13:12:57+00:00",
+  "evals": [
+    {
+      "expected_guarded": null,
+      "expected_packs": [
+        "networking_and_security"
+      ],
+      "id": "networking_and_security_route",
+      "kind": "router",
+      "query": "Analyze network firewall TLS HTTP port router threat authz authn secrets security",
+      "top_k": 5
+    },
+    {
+      "expected_context_packs": [
+        "networking_and_security"
+      ],
+      "id": "networking_and_security_context",
+      "kind": "context",
+      "min_context_blocks": 1,
+      "query": "Analyze network firewall TLS HTTP port router threat authz authn secrets security",
+      "top_k": 5
+    }
+  ],
+  "pack_id": "networking_and_security"
+}

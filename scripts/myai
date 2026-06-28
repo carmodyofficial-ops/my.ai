@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+"""myai — terminal cowork client for the local my.ai control plane.
+
+Talks to the cowork endpoint (/api/cowork/stream) on the running my.ai backend,
+streaming the agent's reply and tool activity into your terminal. Coworks on the
+files in your CURRENT directory (the backend agent reaches them via the host
+code-root bind mount). Read-only stdlib; no pip installs.
+
+Usage:
+    myai                     # interactive cowork REPL in the current project
+    myai "do X for me"       # one-shot: run once, print, exit
+    myai build "<task>"      # sandbox build: generate+test a reviewed patch
+    myai panel [-n N] "<task>"  # design panel: N candidate solutions, judge picks best
+    myai --help
+
+Config (env or ~/.config/myai/cli.env, KEY=VALUE):
+    MYAI_BASE_URL    default http://127.0.0.1:7001
+    MYAI_TOKEN       required — an admin API token (ody_...)
+    MYAI_COWORK_MODEL  optional — pin a model for cowork turns
+"""
+
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+CONFIG_FILE = Path.home() / ".config/myai/cli.env"
+
+# ── ANSI (suppressed when not a TTY) ──
+_TTY = sys.stdout.isatty()
+def _c(code, s):
+    return f"\033[{code}m{s}\033[0m" if _TTY else s
+DIM = lambda s: _c("2", s)
+CYAN = lambda s: _c("36", s)
+YELL = lambda s: _c("33", s)
+RED = lambda s: _c("31", s)
+GREEN = lambda s: _c("32", s)
+BOLD = lambda s: _c("1", s)
+
+
+def load_config():
+    cfg = {}
+    if CONFIG_FILE.exists():
+        for line in CONFIG_FILE.read_text(errors="replace").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                cfg[k.strip()] = v.strip().strip('"').strip("'")
+    # env overrides file
+    for k in ("MYAI_BASE_URL", "MYAI_TOKEN", "MYAI_COWORK_MODEL"):
+        if os.environ.get(k):
+            cfg[k] = os.environ[k]
+    cfg.setdefault("MYAI_BASE_URL", "http://127.0.0.1:7001")
+    return cfg
+
+
+def stream_turn(cfg, messages, model, workspace):
+    """POST one turn and yield parsed SSE events. Raises on transport/HTTP error."""
+    url = cfg["MYAI_BASE_URL"].rstrip("/") + "/api/cowork/stream"
+    payload = json.dumps({"messages": messages, "workspace": workspace,
+                          **({"model": model} if model else {})}).encode()
+    req = urllib.request.Request(url, data=payload, method="POST", headers={
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "Authorization": "Bearer " + cfg.get("MYAI_TOKEN", ""),
+    })
+    resp = urllib.request.urlopen(req, timeout=None)
+    is_error = False
+    for raw in resp:
+        line = raw.decode("utf-8", "replace").rstrip("\n")
+        if line.startswith("event: error"):
+            is_error = True
+            continue
+        if not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if not data or data == "[DONE]":
+            if data == "[DONE]":
+                break
+            continue
+        try:
+            obj = json.loads(data)
+        except Exception:
+            continue
+        if is_error:
+            yield {"type": "error", **(obj if isinstance(obj, dict) else {"error": str(obj)})}
+            is_error = False
+            continue
+        yield obj
+
+
+def render_turn(cfg, messages, model):
+    """Run a turn, render it, and return the assistant text (or None on failure)."""
+    workspace = os.getcwd()
+    answer = []
+    in_text = False
+    try:
+        for ev in stream_turn(cfg, messages, model, workspace):
+            t = ev.get("type")
+            if t == "cowork_meta":
+                ws = "this folder" if ev.get("workspace_bound") else DIM("(not under code root — chat only)")
+                print(DIM(f"[{ev.get('model')} · {ws}]"))
+            elif "delta" in ev and not ev.get("thinking"):
+                sys.stdout.write(ev["delta"]); sys.stdout.flush()
+                answer.append(ev["delta"]); in_text = True
+            elif t == "tool_start":
+                if in_text:
+                    print(); in_text = False
+                cmd = str(ev.get("command") or "")[:100]
+                print(DIM("  ⚙ " + str(ev.get("tool") or "tool") + (": " + cmd if cmd else "")))
+            elif t == "tool_output":
+                code = ev.get("exit_code")
+                tag = GREEN("ok") if code in (0, None) else RED(f"exit {code}")
+                print(DIM("  ↳ " + tag))
+            elif t == "error":
+                if in_text:
+                    print(); in_text = False
+                print(RED("  ! " + str(ev.get("error") or "error")))
+        if in_text:
+            print()
+        return "".join(answer).strip()
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")[:200]
+        msg = {401: "invalid/expired token", 403: "token owner is not admin",
+               503: "no model configured (set MYAI_COWORK_MODEL or a default model)"}.get(e.code, body)
+        print(RED(f"  ! HTTP {e.code}: {msg}"))
+        return None
+    except urllib.error.URLError as e:
+        print(RED(f"  ! cannot reach my.ai at {cfg['MYAI_BASE_URL']}: {e.reason}"))
+        return None
+    except KeyboardInterrupt:
+        print(DIM("\n  (turn cancelled)"))
+        return None
+
+
+def one_shot(cfg, prompt, model):
+    out = render_turn(cfg, [{"role": "user", "content": prompt}], model)
+    return 0 if out is not None else 1
+
+
+def repl(cfg, model):
+    print(BOLD("my.ai cowork") + DIM(f"  ·  {os.getcwd()}"))
+    print(DIM("Type a request. /help for commands, /exit to quit."))
+    messages = []
+    while True:
+        try:
+            line = input(CYAN("\nmy.ai> "))
+        except (EOFError, KeyboardInterrupt):
+            print(); break
+        s = line.strip()
+        if not s:
+            continue
+        if s in ("/exit", "/quit"):
+            break
+        if s == "/help":
+            print(DIM("  /reset  clear the conversation\n  /model <name>  set model for this session\n"
+                      "  /cwd  show working dir\n  /exit  quit"))
+            continue
+        if s == "/reset":
+            messages = []; print(DIM("  (conversation cleared)")); continue
+        if s == "/cwd":
+            print(DIM("  " + os.getcwd())); continue
+        if s.startswith("/model"):
+            parts = s.split(None, 1)
+            model = parts[1].strip() if len(parts) > 1 else None
+            print(DIM("  model: " + (model or "(default)"))); continue
+        messages.append({"role": "user", "content": s})
+        out = render_turn(cfg, messages, model)
+        if out:
+            messages.append({"role": "assistant", "content": out})
+        else:
+            messages.pop()  # drop the failed user turn so history stays clean
+    return 0
+
+
+def _http_json(cfg, path, payload=None, method="GET", timeout=30):
+    url = cfg["MYAI_BASE_URL"].rstrip("/") + path
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(url, data=data, method=method, headers={
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + cfg.get("MYAI_TOKEN", ""),
+    })
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8", "replace"))
+
+
+def _print_build_result(cfg, st):
+    print(GREEN("\n  ✓ done"))
+    if st.get("mode") == "design_panel":
+        print(BOLD(f"  winner: {st.get('winner_label')} ") + DIM(f"(of {st.get('candidate_count')} candidates)"))
+        if st.get("judge_reason"):
+            print(DIM("  judge: " + str(st["judge_reason"])[:300]))
+        for c in (st.get("candidates") or []):
+            mark = "→" if c.get("idx") == st.get("winner_index") else " "
+            print(DIM(f"    {mark} {c.get('label')}: checks={c.get('checks_status')} files={c.get('changed')}"))
+    print(f"  checks: {st.get('checks_status')}   files changed: {st.get('changed_file_count')}")
+    if st.get("review_repair_applied"):
+        print(DIM(f"  review-repair: kept the {st.get('repair_kept')} version"))
+    if st.get("patch_file"):
+        print(BOLD("  patch: ") + str(st["patch_file"]))
+        print(DIM("  review: ") + cfg["MYAI_BASE_URL"].rstrip("/") + str(st.get("review_url") or ""))
+
+
+def sandbox_build(cfg, prompt, candidates, model):
+    """Launch a sandbox build (candidates>1 = design panel) and poll to completion."""
+    import time
+    body = {"prompt": prompt, "candidates": candidates}
+    if model:
+        body["model"] = model
+    try:
+        start = _http_json(cfg, "/api/workspace/sandbox/build", body, "POST", timeout=30)
+    except urllib.error.HTTPError as e:
+        print(RED(f"  build request failed: HTTP {e.code}"), DIM(e.read().decode('replace')[:200] if hasattr(e, 'read') else "")); return 1
+    except Exception as e:
+        print(RED(f"  build request failed: {e}")); return 1
+    tid = start.get("tracking_id")
+    if not tid:
+        print(RED("  no tracking_id returned"), DIM(json.dumps(start)[:200])); return 1
+    print(BOLD(f"my.ai {start.get('mode', 'sandbox_build')}") + DIM(f"  ·  {tid}"))
+    print(DIM("  " + (start.get("message") or "")))
+    print(DIM("  generating + testing in an isolated mirror; this can take a few minutes…"))
+    last = None
+    poll_url = f"/api/workspace/sandbox/runs/{tid}"
+    while True:
+        time.sleep(4)
+        try:
+            st = _http_json(cfg, poll_url, None, "GET", timeout=20)
+        except Exception as e:
+            print(DIM(f"  (poll: {e})")); continue
+        state = str(st.get("state"))
+        if state != last:
+            extra = f" (candidate {st.get('candidate_index')})" if st.get("candidate_index") else ""
+            print(DIM(f"  · {state}{extra}"))
+            last = state
+        if state == "done" or st.get("patch_file"):
+            _print_build_result(cfg, st); return 0
+        if state == "error" or state.startswith("ERROR"):
+            print(RED("  build failed:"), DIM(json.dumps(st)[:300])); return 1
+
+
+_BUILD_HELP = ('usage: myai panel [-n N] "<task>"   # N candidate solutions, judge picks best (default 3)\n'
+               '       myai build "<task>"           # single sandbox build (review-repaired)')
+
+
+def main(argv):
+    if argv and argv[0] in ("-h", "--help"):
+        print(__doc__); print("\n" + _BUILD_HELP); return 0
+    cfg = load_config()
+    if not cfg.get("MYAI_TOKEN"):
+        print(RED("No MYAI_TOKEN set."), "Add it to", str(CONFIG_FILE), "or export MYAI_TOKEN.")
+        return 2
+    model = cfg.get("MYAI_COWORK_MODEL") or None
+    if argv and argv[0] in ("panel", "build"):
+        sub, rest = argv[0], list(argv[1:])
+        candidates = 3 if sub == "panel" else 1
+        if sub == "panel" and rest and rest[0] in ("-n", "--candidates") and len(rest) > 1:
+            try:
+                candidates = max(2, min(int(rest[1]), 4)); rest = rest[2:]
+            except ValueError:
+                pass
+        prompt = " ".join(rest).strip()
+        if not prompt:
+            print(RED(_BUILD_HELP)); return 2
+        return sandbox_build(cfg, prompt, candidates, model)
+    if argv:
+        return one_shot(cfg, " ".join(argv), model)
+    return repl(cfg, model)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

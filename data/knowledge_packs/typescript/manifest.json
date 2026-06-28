@@ -1,0 +1,13 @@
+{
+  "id": "typescript",
+  "title": "TypeScript (types/generics/narrowing)",
+  "source": "TypeScript Handbook (typescriptlang.org)",
+  "source_url": "https://www.typescriptlang.org/docs/handbook/intro.html",
+  "source_repo": "https://github.com/microsoft/TypeScript-Website",
+  "license": "CC-BY-4.0",
+  "license_verified_via": "GitHub license API, 2026-06-26",
+  "license_tier": "cc-by",
+  "attribution": "Distilled from the official TypeScript Handbook, (c) Microsoft, CC-BY-4.0.",
+  "method": "agent distillation, faithful to the official docs",
+  "redistribution_note": "CC-BY-4.0 requires attribution to Microsoft / the TypeScript Handbook if the pack is published."
+}

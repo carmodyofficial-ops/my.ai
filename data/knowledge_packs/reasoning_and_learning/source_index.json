@@ -1,0 +1,56 @@
+{
+  "external_sources": [],
+  "local_project_sources": [],
+  "pack_id": "reasoning_and_learning",
+  "sources": [
+    {
+      "file": "overview.md",
+      "purpose": "Purpose and scope"
+    },
+    {
+      "file": "core_concepts.md",
+      "purpose": "Concept map"
+    },
+    {
+      "file": "procedures.md",
+      "purpose": "Procedural guidance"
+    },
+    {
+      "file": "decision_frameworks.md",
+      "purpose": "Tradeoff analysis"
+    },
+    {
+      "file": "eval_questions.md",
+      "purpose": "Evaluation prompts"
+    },
+    {
+      "file": "memory_hooks.md",
+      "purpose": "Memory rules"
+    },
+    {
+      "file": "safety_boundaries.md",
+      "purpose": "Safety and trust limits"
+    },
+    {
+      "file": "uncertainty_protocol.md",
+      "purpose": "K1B deepening file for reasoning_and_learning: Uncertainty Protocol"
+    },
+    {
+      "file": "verification_protocol.md",
+      "purpose": "K1B deepening file for reasoning_and_learning: Verification Protocol"
+    },
+    {
+      "file": "reflection_protocol.md",
+      "purpose": "K1B deepening file for reasoning_and_learning: Reflection Protocol"
+    },
+    {
+      "file": "memory_consolidation_protocol.md",
+      "purpose": "K1B deepening file for reasoning_and_learning: Memory Consolidation Protocol"
+    },
+    {
+      "file": "pondering_routine.md",
+      "purpose": "K1B deepening file for reasoning_and_learning: Pondering Routine"
+    }
+  ],
+  "updated_at": "2026-06-21T12:49:11+00:00"
+}
