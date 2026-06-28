@@ -394,6 +394,33 @@ Key settings:
 
 All upload-limit vars are validated (must be a positive integer) and optional; an invalid value fails fast at startup.
 
+### Running on limited RAM (≈18 GB)
+
+The default model routing assumes a large workstation (a 120B + 30B + 20B). On a small machine, point the three routing roles at small local models and cap the context window. In **Settings → Models** (or `data/settings.json`):
+
+```json
+{
+  "auto_model_coding":  "qwen2.5-coder:7b",
+  "auto_model_complex": "qwen2.5-coder:7b",
+  "auto_model_simple":  "llama3.2:3b",
+  "local_context_window_cap": 8192
+}
+```
+
+A single 7–8B model (~5 GB) can serve all three roles. Then stop Ollama from co-loading
+models — env vars, or a systemd drop-in on Linux (`/etc/systemd/system/ollama.service.d/override.conf`):
+
+```ini
+OLLAMA_MAX_LOADED_MODELS=1
+OLLAMA_KEEP_ALIVE=30m
+OLLAMA_NUM_PARALLEL=1
+```
+
+`local_context_window_cap` shrinks the per-model KV cache — drop to `4096` if memory is very
+tight; remote/API models are never capped. To free more RAM, comment ChromaDB/SearXNG out of
+`docker-compose.yml` (embeddings fall back to the in-process FastEmbed model). Full walkthrough,
+model table, and expectations: [low-RAM guide in the README](../README.md#running-on-limited-ram-18-gb).
+
 ### Built-in MCP servers (optional setup)
 
 my.ai auto-registers a few built-in MCP servers at startup. The npx-based ones (currently the browser server, `@playwright/mcp`) only start when their npm package is already in the local npx cache. If a package isn't cached, that server is skipped with a startup log message explaining what to do, so a fresh install does not block on a multi-minute npm download or hang if Playwright system deps are missing.
