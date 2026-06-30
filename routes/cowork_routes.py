@@ -14,6 +14,7 @@ effective_user()). The agent runs as that admin owner, so its tools are enabled.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 
@@ -48,6 +49,52 @@ COWORK_LIMITS: dict[str, int] = {
     "nofile": 4096,
     "timeout": 600,
 }
+
+
+# ── Per-command approval registry ──────────────────────────────────────────
+# When a cowork stream runs with require_approval=true, the agent loop pauses
+# before each mutating/effectful tool and awaits a decision from the client. The
+# loop emits an `approval_required` SSE; the client POSTs /api/cowork/approve to
+# resolve it. Pending decisions live here as futures keyed by approval id.
+_PENDING_APPROVALS: dict[str, dict] = {}
+_APPROVAL_TTL = 300  # seconds to wait for a decision before auto-denying
+
+
+def _make_approval_cb(owner: str):
+    """Return a callback the agent loop calls (synchronously) to register a
+    pending approval and get back an awaitable that resolves to the user's
+    decision. Registering synchronously — before the loop emits the
+    approval_required event — closes the race where a fast client could POST the
+    decision before the future exists.
+    """
+    def _cb(meta: dict):
+        approval_id = str(meta.get("id") or "")
+        loop = asyncio.get_running_loop()
+        fut: asyncio.Future = loop.create_future()
+        _PENDING_APPROVALS[approval_id] = {"future": fut, "owner": owner}
+
+        async def _wait() -> bool:
+            try:
+                return bool(await asyncio.wait_for(fut, timeout=_APPROVAL_TTL))
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                return False  # no/late decision → deny (fail-closed)
+            finally:
+                _PENDING_APPROVALS.pop(approval_id, None)
+
+        return _wait()
+    return _cb
+
+
+def _resolve_approval(approval_id: str, approved: bool, owner: str) -> bool:
+    """Resolve a pending approval. Returns False if unknown/expired or owned by
+    someone else (an approval can only be answered by the stream's own owner)."""
+    entry = _PENDING_APPROVALS.get(approval_id)
+    if not entry or entry.get("owner") != owner:
+        return False
+    fut = entry.get("future")
+    if fut is not None and not fut.done():
+        fut.set_result(bool(approved))
+    return True
 
 
 def map_host_workspace_to_container(host_path: str) -> str | None:
@@ -137,6 +184,12 @@ def setup_cowork_routes() -> APIRouter:
             max_rounds = 30
         max_rounds = max(1, min(max_rounds, 100))
 
+        # Opt-in per-command approval: when true, the agent pauses before each
+        # mutating tool and waits for the client to approve via /api/cowork/approve.
+        # Default false keeps the existing trusted, non-interactive behavior.
+        require_approval = bool(body.get("require_approval", False))
+        approval_cb = _make_approval_cb(owner) if require_approval else None
+
         async def gen():
             from src.agent_loop import stream_agent_loop
             # First event: tell the client how the workspace mapped + which model.
@@ -158,6 +211,7 @@ def setup_cowork_routes() -> APIRouter:
                     workspace=ws,
                     max_rounds=max_rounds,
                     trusted_execution=True,
+                    approval_cb=approval_cb,
                 ):
                     yield chunk
             except Exception as exc:  # surface as an SSE error, never 500 mid-stream
@@ -166,5 +220,23 @@ def setup_cowork_routes() -> APIRouter:
                 tool_execution.reset_sandbox_limits(_limit_token)
 
         return StreamingResponse(gen(), media_type="text/event-stream")
+
+    @router.post("/api/cowork/approve")
+    async def cowork_approve(request: Request):
+        owner = _require_cowork_admin(request)
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="JSON body required")
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=400, detail="JSON object required")
+        approval_id = str(body.get("id") or "").strip()
+        approved = bool(body.get("approved", False))
+        if not approval_id:
+            raise HTTPException(status_code=400, detail="id is required")
+        if not _resolve_approval(approval_id, approved, owner):
+            raise HTTPException(status_code=404,
+                                detail="no such pending approval (expired, already resolved, or not yours)")
+        return {"ok": True, "id": approval_id, "approved": approved}
 
     return router

@@ -1023,99 +1023,19 @@ def setup_workspace_routes():
             temperature = 0.6
         temperature = max(0.0, min(temperature, 1.2))
 
-        # Resolve the model endpoint the same way chat does. Primary source is the
-        # originating session's config (sess.endpoint_url/model/headers — already a
-        # working full chat-completions URL), falling back to the configured default
-        # model. This avoids the utility-fallback chain (often unset) and guarantees
-        # a tools-capable, correctly-pathed endpoint.
-        endpoint_url = model = None
-        headers = {}
-        if session_id:
-            try:
-                from src.ai_interaction import get_session_manager
-                sess = get_session_manager().get_session(session_id)
-                if sess and getattr(sess, "endpoint_url", None) and getattr(sess, "model", None):
-                    endpoint_url = sess.endpoint_url
-                    model = sess.model
-                    headers = getattr(sess, "headers", None) or {}
-            except Exception:
-                pass
-        if not (endpoint_url and model):
-            from src.endpoint_resolver import resolve_endpoint
-            endpoint_url, model, headers = resolve_endpoint("default", owner=owner)
-            headers = headers or {}
-        # Admin may pin a specific model (e.g. a coding model) on the same endpoint;
-        # the resolved chat-completions URL serves whichever model is named.
-        if body.get("model") and endpoint_url:
-            model = str(body.get("model"))
-        if not (endpoint_url and model):
-            raise HTTPException(
-                status_code=503,
-                detail="no model endpoint configured for sandbox builds; open a chat with a model selected first",
-            )
-
-        import asyncio as _asyncio
-        import secrets as _secrets
-        from datetime import datetime, timezone
-        from src.workspace_request_executor import (
-            seed_sandbox_status, execute_sandbox_coding_request, execute_sandbox_design_panel,
-            sandbox_semaphore, idempotent_existing, record_idempotent,
+        # Resolve + enqueue via the shared launcher (one source of truth, also
+        # used by the in-chat request_sandbox_build tool). It prefers the
+        # originating session's endpoint/model, else the configured default, and
+        # honors an admin-pinned model. Returns {"ok": False, ...} on failure.
+        from src.workspace_request_executor import launch_sandbox_build
+        result = await launch_sandbox_build(
+            prompt, owner=owner, session_id=session_id, candidates=candidates,
+            max_rounds=max_rounds, temperature=temperature,
+            model=str(body.get("model")) if body.get("model") else None,
         )
-
-        # Idempotency: a double-clicked/retried identical submit returns the
-        # in-flight run instead of launching a second full pipeline.
-        import hashlib as _hashlib
-        _idem = _hashlib.sha256(f"{owner}|{session_id}|{candidates}|{prompt}".encode()).hexdigest()[:16]
-        _existing = idempotent_existing(_idem)
-        if _existing:
-            return {
-                "ok": True, "tracking_id": _existing, "deduped": True,
-                "poll": f"/api/workspace/sandbox/runs/{_existing}",
-                "message": "An identical build was just submitted; returning that run.",
-            }
-
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        tracking_id = f"sbx_{stamp}_{_secrets.token_hex(4)}"
-        record_idempotent(_idem, tracking_id)
-        seed_sandbox_status(tracking_id, prompt=prompt, owner=owner, session_id=session_id)
-
-        async def _runner():
-            # Concurrency gate: one (configurable) sandbox run at a time so we
-            # don't oversubscribe the GPU or pile up mirrors. Waiting runs sit in
-            # the seeded "queued" state until a slot frees.
-            async with sandbox_semaphore():
-                try:
-                    if candidates > 1:
-                        await execute_sandbox_design_panel(
-                            tracking_id=tracking_id, prompt=prompt, owner=owner,
-                            session_id=session_id, endpoint_url=endpoint_url, model=model,
-                            headers=headers, candidates=candidates, max_rounds=max_rounds,
-                        )
-                    else:
-                        await execute_sandbox_coding_request(
-                            tracking_id=tracking_id, prompt=prompt, owner=owner,
-                            session_id=session_id, endpoint_url=endpoint_url, model=model,
-                            headers=headers, max_rounds=max_rounds, temperature=temperature,
-                        )
-                except Exception:
-                    # the executor already records error state; this is a last-resort
-                    # guard so a stray exception can't crash the background task.
-                    pass
-
-        _asyncio.create_task(_runner())
-        _msg = ("Design panel started: generating %d distinct candidate solutions, testing each, "
-                "and a judge will pick the best. Nothing touches the live repo." % candidates) if candidates > 1 else \
-               "Sandbox build started. Code is generated and tested in an isolated dev-mirror; nothing touches the live repo until you review and approve the patch."
-        return {
-            "ok": True,
-            "tracking_id": tracking_id,
-            "state": "queued",
-            "mode": "design_panel" if candidates > 1 else "sandbox_build",
-            "candidates": candidates,
-            "poll": f"/api/workspace/sandbox/runs/{tracking_id}",
-            "automatic_execution": False,
-            "message": _msg,
-        }
+        if not result.get("ok"):
+            raise HTTPException(status_code=503, detail=result.get("error") or "sandbox build failed to start")
+        return result
 
     @router.get("/sandbox/runs")
     async def sandbox_runs(request: Request):
@@ -1328,7 +1248,9 @@ async def workspace_patch_review_apply(request: _WorkspacePatchReviewRequest):
     dead end. Admin-gated; requires the exact approval phrase in the body (the same
     human gate as the CLI, moved into the UI the pipeline already links to).
     apply_reviewed_patch re-reviews, re-checks scope, backs up, applies, and
-    post-apply re-checks (auto-reverting on failure). Never commits or pushes."""
+    post-apply re-checks (auto-reverting on failure). By default it leaves the
+    change UNCOMMITTED (original behavior); pass commit=true (opt-in, on top of
+    the approval phrase) to branch + commit it, and push/open_pr to publish."""
     _require_patch_review_admin(request)
     try:
         body = await request.json()
@@ -1343,10 +1265,41 @@ async def workspace_patch_review_apply(request: _WorkspacePatchReviewRequest):
     # Confine to a dev-mirror patch path; no absolute paths or '..' escape.
     if patch_file.startswith("/") or ".." in patch_file or "patches/" not in patch_file:
         raise HTTPException(status_code=400, detail="invalid patch_file")
+
+    # Opt-in git workflow. commit defaults OFF (unchanged behavior). When asked to
+    # commit, default to a derived `sandbox/<run-id>` branch so an auto-commit
+    # never silently lands on the main branch unless the caller names one.
+    import os as _os
+    import re as _re
+    commit = bool(body.get("commit", False))
+    push = bool(body.get("push", False))
+    open_pr = bool(body.get("open_pr", False))
+    commit_message = (str(body.get("commit_message")).strip() or None) if body.get("commit_message") else None
+    pr_base = str(body.get("pr_base") or "dev").strip() or "dev"
+
+    def _safe_branch(name: str) -> str:
+        name = _re.sub(r"[^A-Za-z0-9._/-]+", "-", name).strip("-/") or "patch"
+        return name[:80]
+
+    branch = None
+    if commit:
+        raw_branch = str(body.get("branch") or "").strip()
+        if raw_branch:
+            branch = _safe_branch(raw_branch)
+        else:
+            stem = _os.path.splitext(_os.path.basename(patch_file))[0]
+            branch = _safe_branch(f"sandbox/{stem}")
+
     from src.workspace_patch_approval import apply_reviewed_patch
     return apply_reviewed_patch(
         patch_file,
         approval_phrase=approval_phrase,
         allowed_prefixes=list(_workspace_patch_review_allowed_prefixes()),
+        commit=commit,
+        branch=branch,
+        commit_message=commit_message,
+        push=push,
+        open_pr=open_pr,
+        pr_base=pr_base,
     )
 

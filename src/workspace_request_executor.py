@@ -76,11 +76,29 @@ def _mirrors_base(root: Path | str = ROOT) -> Path:
     return Path(root) / "data/dev_mirror/mirrors"
 
 
+def _deregister_worktree(mirror_run_dir: Path, root: Path | str = ROOT) -> None:
+    """If a mirror was created as a git worktree (its repo/ has a `.git` FILE),
+    deregister it with `git worktree remove` before the dir is rmtree'd, so the
+    main repo's .git/worktrees registry doesn't accumulate dangling entries.
+    Best-effort; never raises."""
+    try:
+        repo = mirror_run_dir / "repo"
+        gitmark = repo / ".git"
+        if gitmark.is_file():  # a worktree marks its root with a .git FILE
+            subprocess.run(["git", "-C", str(root), "worktree", "remove", "--force", str(repo)],
+                           text=True, capture_output=True, timeout=60)
+            subprocess.run(["git", "-C", str(root), "worktree", "prune"],
+                           text=True, capture_output=True, timeout=60)
+    except Exception:
+        pass
+
+
 def remove_mirror(run_id: str, root: Path | str = ROOT) -> bool:
     """Best-effort delete of one run's mirror dir. Never raises."""
     try:
         d = _mirrors_base(root) / str(run_id)
         if d.exists():
+            _deregister_worktree(d, root)
             shutil.rmtree(d, ignore_errors=True)
             return True
     except Exception:
@@ -109,6 +127,7 @@ def cleanup_stale_mirrors(root: Path | str = ROOT, keep_recent: int = 3,
                 continue
             try:
                 if d.stat().st_mtime < cutoff:
+                    _deregister_worktree(d, root)
                     shutil.rmtree(d, ignore_errors=True)
                     removed += 1
             except Exception:
@@ -444,6 +463,117 @@ def housekeeping_on_startup(root: Path | str = ROOT) -> dict[str, Any]:
     except Exception as exc:
         logger.warning("[sandbox] startup housekeeping failed: %s", exc)
         return {"error": str(exc)[:200]}
+
+
+async def launch_sandbox_build(
+    prompt: str,
+    *,
+    owner: str,
+    session_id: str | None = None,
+    candidates: int = 1,
+    max_rounds: int = 40,
+    temperature: float = 0.6,
+    model: str | None = None,
+) -> dict[str, Any]:
+    """Resolve a model endpoint and enqueue a sandbox build (or, when
+    ``candidates`` > 1, a design panel) as a background task.
+
+    Single source of truth shared by the HTTP route (/api/workspace/sandbox/
+    build) and the in-chat ``request_sandbox_build`` agent tool. Returns a status
+    dict; on failure returns ``{"ok": False, "error": ...}`` rather than raising
+    so either caller can surface it. Nothing touches the live repo — the only
+    deliverable is a human-reviewable patch.
+    """
+    import secrets as _secrets
+    import hashlib as _hashlib
+
+    prompt = (prompt or "").strip()
+    if not prompt:
+        return {"ok": False, "error": "prompt is required"}
+    candidates = max(1, min(int(candidates or 1), 4))
+    try:
+        max_rounds = max(1, min(int(max_rounds or 40), 100))
+    except Exception:
+        max_rounds = 40
+    try:
+        temperature = max(0.0, min(float(temperature), 1.2))
+    except Exception:
+        temperature = 0.6
+
+    # Resolve the model endpoint: prefer the originating session's config, else
+    # the configured default — same precedence as the HTTP route.
+    endpoint_url = None
+    headers: dict = {}
+    resolved_model = None
+    if session_id:
+        try:
+            from src.ai_interaction import get_session_manager
+            sess = get_session_manager().get_session(session_id)
+            if sess and getattr(sess, "endpoint_url", None) and getattr(sess, "model", None):
+                endpoint_url = sess.endpoint_url
+                resolved_model = sess.model
+                headers = getattr(sess, "headers", None) or {}
+        except Exception:
+            pass
+    if not (endpoint_url and resolved_model):
+        try:
+            from src.endpoint_resolver import resolve_endpoint
+            endpoint_url, resolved_model, headers = resolve_endpoint("default", owner=owner)
+            headers = headers or {}
+        except Exception:
+            endpoint_url = resolved_model = None
+    if model and endpoint_url:
+        resolved_model = str(model)
+    if not (endpoint_url and resolved_model):
+        return {"ok": False,
+                "error": "no model endpoint configured for sandbox builds; open a chat with a model selected first"}
+
+    # Idempotency: a repeated identical submit returns the in-flight run instead
+    # of launching a second full pipeline.
+    _idem = _hashlib.sha256(f"{owner}|{session_id}|{candidates}|{prompt}".encode()).hexdigest()[:16]
+    _existing = idempotent_existing(_idem)
+    if _existing:
+        return {"ok": True, "tracking_id": _existing, "deduped": True,
+                "poll": f"/api/workspace/sandbox/runs/{_existing}",
+                "message": "An identical build was just submitted; returning that run."}
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    tracking_id = f"sbx_{stamp}_{_secrets.token_hex(4)}"
+    record_idempotent(_idem, tracking_id)
+    seed_sandbox_status(tracking_id, prompt=prompt, owner=owner, session_id=session_id)
+
+    async def _runner():
+        # One sandbox run at a time (GPU/mirror bound); waiting runs sit queued.
+        async with sandbox_semaphore():
+            try:
+                if candidates > 1:
+                    await execute_sandbox_design_panel(
+                        tracking_id=tracking_id, prompt=prompt, owner=owner,
+                        session_id=session_id, endpoint_url=endpoint_url, model=resolved_model,
+                        headers=headers, candidates=candidates, max_rounds=max_rounds,
+                    )
+                else:
+                    await execute_sandbox_coding_request(
+                        tracking_id=tracking_id, prompt=prompt, owner=owner,
+                        session_id=session_id, endpoint_url=endpoint_url, model=resolved_model,
+                        headers=headers, max_rounds=max_rounds, temperature=temperature,
+                    )
+            except Exception:
+                # The executor records error state; this is a last-resort guard so
+                # a stray exception can't crash the background task.
+                pass
+
+    asyncio.create_task(_runner())
+    _msg = (("Design panel started: generating %d distinct candidate solutions, testing each, "
+             "and a judge will pick the best. Nothing touches the live repo." % candidates)
+            if candidates > 1 else
+            "Sandbox build started. Code is generated and tested in an isolated dev-mirror; "
+            "nothing touches the live repo until you review and approve the patch.")
+    return {"ok": True, "tracking_id": tracking_id, "state": "queued",
+            "mode": "design_panel" if candidates > 1 else "sandbox_build",
+            "candidates": candidates,
+            "poll": f"/api/workspace/sandbox/runs/{tracking_id}",
+            "automatic_execution": False, "message": _msg}
 
 
 async def execute_sandbox_coding_request(

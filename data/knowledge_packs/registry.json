@@ -1,7 +1,15 @@
 {
   "created_at": "2026-06-21T12:37:32+00:00",
-  "note": "Curated generic packs shipped with my.ai. Runtime adds more under data/.",
   "packs": [
+    {
+      "category": "system_self_awareness",
+      "manifest": "data/knowledge_packs/my_ai_system_core/manifest.json",
+      "name": "my.ai System Core",
+      "pack_id": "my_ai_system_core",
+      "path": "data/knowledge_packs/my_ai_system_core",
+      "priority": 100,
+      "trust_level": "high"
+    },
     {
       "category": "cognitive_scaffolding",
       "manifest": "data/knowledge_packs/reasoning_and_learning/manifest.json",
@@ -9,6 +17,24 @@
       "pack_id": "reasoning_and_learning",
       "path": "data/knowledge_packs/reasoning_and_learning",
       "priority": 98,
+      "trust_level": "high"
+    },
+    {
+      "category": "engineering_project_memory",
+      "manifest": "data/knowledge_packs/projectforge_sme/manifest.json",
+      "name": "ProjectForge SME",
+      "pack_id": "projectforge_sme",
+      "path": "data/knowledge_packs/projectforge_sme",
+      "priority": 96,
+      "trust_level": "high"
+    },
+    {
+      "category": "action_capability",
+      "manifest": "data/knowledge_packs/skills_and_tools/manifest.json",
+      "name": "Skills and Tools",
+      "pack_id": "skills_and_tools",
+      "path": "data/knowledge_packs/skills_and_tools",
+      "priority": 94,
       "trust_level": "high"
     },
     {
@@ -75,6 +101,15 @@
       "trust_level": "medium"
     },
     {
+      "category": "industry_domain",
+      "manifest": "data/knowledge_packs/aviation_operations/manifest.json",
+      "name": "Aviation Operations",
+      "pack_id": "aviation_operations",
+      "path": "data/knowledge_packs/aviation_operations",
+      "priority": 82,
+      "trust_level": "medium"
+    },
+    {
       "category": "reasoning_domain",
       "manifest": "data/knowledge_packs/research_methods/manifest.json",
       "name": "Research Methods",
@@ -93,6 +128,42 @@
       "trust_level": "medium"
     },
     {
+      "category": "guarded_domain",
+      "manifest": "data/knowledge_packs/finance_and_trading/manifest.json",
+      "name": "Finance and Trading",
+      "pack_id": "finance_and_trading",
+      "path": "data/knowledge_packs/finance_and_trading",
+      "priority": 76,
+      "trust_level": "guarded"
+    },
+    {
+      "category": "personal_operations",
+      "manifest": "data/knowledge_packs/home_operations/manifest.json",
+      "name": "Home Operations",
+      "pack_id": "home_operations",
+      "path": "data/knowledge_packs/home_operations",
+      "priority": 74,
+      "trust_level": "medium"
+    },
+    {
+      "category": "guarded_domain",
+      "manifest": "data/knowledge_packs/health_and_lifestyle/manifest.json",
+      "name": "Health and Lifestyle",
+      "pack_id": "health_and_lifestyle",
+      "path": "data/knowledge_packs/health_and_lifestyle",
+      "priority": 70,
+      "trust_level": "guarded"
+    },
+    {
+      "category": "technical_domain",
+      "manifest": "data/knowledge_packs/robotics_and_autonomy/manifest.json",
+      "name": "Robotics and Autonomy",
+      "pack_id": "robotics_and_autonomy",
+      "path": "data/knowledge_packs/robotics_and_autonomy",
+      "priority": 68,
+      "trust_level": "medium"
+    },
+    {
       "category": "technical_domain",
       "description": "Kubernetes, kubectl, pods, deployments, services, ingress, RBAC, Helm, GitOps, storage, observability, security, local clusters, and production operations.",
       "manifest": "data/knowledge_packs/kubernetes_and_cloud_native/manifest.json",
@@ -101,6 +172,27 @@
       "path": "data/knowledge_packs/kubernetes_and_cloud_native",
       "priority": 88,
       "trust_level": "medium"
+    },
+    {
+      "category": "veterans_benefits",
+      "manifest": "data/knowledge_packs/va_disability_compensation/manifest.json",
+      "name": "VA Disability Compensation \u2014 Conditions, Symptoms & Ratings",
+      "pack_id": "va_disability_compensation",
+      "path": "data/knowledge_packs/va_disability_compensation",
+      "priority": 90,
+      "trust_level": "authoritative"
+    },
+    {
+      "category": "veterans_benefits",
+      "manifest": "data/knowledge_packs/va_benefits_and_claims/manifest.json",
+      "name": "VA Benefits & Claims",
+      "pack_id": "va_benefits_and_claims",
+      "path": "data/knowledge_packs/va_benefits_and_claims",
+      "priority": 90,
+      "trust_level": "high"
     }
-  ]
+  ],
+  "purpose": "Structured registry of my.ai knowledge packs for retrieval, reasoning, memory, skills, and evals.",
+  "updated_at": "2026-06-21T13:39:15Z",
+  "version": "k1_intelligence_spine_v2"
 }

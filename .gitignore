@@ -24,12 +24,10 @@ requirements.lock
 secrets.env.*
 !secrets.env.example
 
-# Data — all runtime/user data stays local (db, auth, settings, memory, sessions,
-# uploads, sandbox scratch, dev-mirror, d42_tools, etc.). The curated knowledge
-# packs + skills that ship WITH my.ai are the only tracked content under data/.
-data/*
-!data/knowledge_packs/
-!data/skills/
+# Data — all user data stays local (includes data/d42_tools/, the dev-mirror
+# sandbox tool scripts the workspace_request_executor shells out to; kept local
+# operator infra, not version-controlled).
+data/
 !services/hwfit/data/
 !services/hwfit/data/hf_models.json
 logs/

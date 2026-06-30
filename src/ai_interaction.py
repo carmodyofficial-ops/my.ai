@@ -198,6 +198,101 @@ async def do_chat_with_model(content: str, session_id: Optional[str] = None, own
         return {"error": f"Failed to get response from {model_spec}: {e}"}
 
 
+_SUBAGENT_SYSTEM_PROMPT = (
+    "You are a focused sub-agent working ONE piece of a larger task in parallel "
+    "with other sub-agents. Do exactly your assigned subtask — no more, no less — "
+    "and return only the result, densely and concretely (specific findings, code, "
+    "file:line, values). No preamble, no restating the task, no meta-commentary. "
+    "If your subtask is impossible or under-specified, say so in one line."
+)
+
+_SUBAGENT_MAX = 6          # cap concurrent sub-agents per dispatch (cost/fan-out guard)
+_SUBAGENT_TIMEOUT = 90     # per-subagent LLM timeout
+
+
+async def do_dispatch_subagents(content: str, session_id: Optional[str] = None,
+                                owner: Optional[str] = None) -> Dict:
+    """Run several INDEPENDENT subtasks in parallel and return their results.
+
+    The main agent decomposes a task into independent pieces (e.g. "investigate
+    module A", "investigate module B", "draft the X section"), dispatches them
+    here, and synthesizes the returned results itself. Each sub-agent is a
+    focused, single-shot model call with no tools and no shared state — so this
+    is safe for parallel ANALYSIS/REASONING/DRAFTING, not for parallel file
+    mutation (which would conflict).
+
+    Content: a JSON object ``{"tasks": ["...", "..."], "context": "optional
+    shared background"}``; ``tasks`` may also be given as a plain ``---``-
+    separated list. Up to %d tasks run concurrently.
+    """ % _SUBAGENT_MAX
+    from src.llm_core import llm_call_async
+
+    raw = (content or "").strip()
+    tasks = []
+    shared = ""
+    model_spec = ""
+    try:
+        parsed = json.loads(raw) if raw.startswith("{") else None
+    except (ValueError, TypeError):
+        parsed = None
+    if isinstance(parsed, dict):
+        t = parsed.get("tasks")
+        if isinstance(t, list):
+            tasks = [str(x).strip() for x in t if str(x).strip()]
+        shared = str(parsed.get("context") or "").strip()
+        model_spec = str(parsed.get("model") or "").strip()
+    else:
+        # Plain list: split on lines of '---'.
+        tasks = [blk.strip() for blk in raw.split("\n---") if blk.strip()]
+
+    if not tasks:
+        return {"error": "dispatch_subagents needs a non-empty `tasks` list (JSON "
+                         "{\"tasks\": [...]} or `---`-separated blocks)."}
+    if len(tasks) > _SUBAGENT_MAX:
+        return {"error": f"too many subtasks ({len(tasks)}); max {_SUBAGENT_MAX} per "
+                         "dispatch. Split into multiple calls or merge subtasks."}
+
+    # Resolve a capable model: an explicit spec, else the owner's default endpoint.
+    try:
+        if model_spec:
+            url, model, headers = _resolve_model(model_spec, owner=owner)
+        else:
+            url, model, headers = resolve_endpoint("default", owner=owner)
+            headers = headers or {}
+    except Exception as e:
+        return {"error": f"could not resolve a model for sub-agents: {e}"}
+    if not (url and model):
+        return {"error": "no model endpoint configured for sub-agents"}
+
+    _ctx_block = f"\n\nShared context for all sub-agents:\n{shared}" if shared else ""
+
+    async def _run_one(idx: int, task: str) -> Dict:
+        try:
+            resp = await llm_call_async(
+                url, model,
+                [{"role": "system", "content": _SUBAGENT_SYSTEM_PROMPT + _ctx_block},
+                 {"role": "user", "content": task}],
+                headers=headers, timeout=_SUBAGENT_TIMEOUT,
+            )
+            resp = (resp or "").strip()
+            if len(resp) > 6000:
+                resp = resp[:6000] + "\n... (truncated)"
+            return {"index": idx, "task": task[:200], "result": resp}
+        except Exception as e:
+            return {"index": idx, "task": task[:200], "error": str(e)[:300]}
+
+    import asyncio
+    results = await asyncio.gather(*[_run_one(i, t) for i, t in enumerate(tasks)])
+    ok = sum(1 for r in results if "result" in r)
+    return {
+        "model": model,
+        "count": len(results),
+        "succeeded": ok,
+        "failed": len(results) - ok,
+        "results": results,
+    }
+
+
 _TEACHER_SYSTEM_PROMPT = (
     "You are a senior AI mentor. A less capable model is stuck on a problem and asking for help. "
     "Provide clear, actionable guidance:\n"
@@ -1854,6 +1949,10 @@ async def dispatch_ai_tool(
     elif tool == "pipeline":
         desc = "pipeline: running steps"
         result = await do_pipeline(content, session_id, owner=owner)
+
+    elif tool == "dispatch_subagents":
+        result = await do_dispatch_subagents(content, session_id, owner=owner)
+        desc = f"dispatch_subagents: {result.get('count', 0)} subtask(s)"
 
     elif tool == "manage_session":
         action = content.split("\n")[0].strip()[:40]

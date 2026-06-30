@@ -688,6 +688,36 @@ FUNCTION_TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "dispatch_subagents",
+            "description": "Run several INDEPENDENT subtasks IN PARALLEL and get their results back, then synthesize them yourself. Use when a task splits into pieces that don't depend on each other — e.g. investigate several modules/files at once, analyze multiple options, or draft separate sections concurrently. Each sub-agent is a focused single-shot worker with NO tools and no shared state, so this is for parallel ANALYSIS / REASONING / DRAFTING, not for parallel file edits (those would conflict — make those edits yourself, sequentially). Give each subtask enough self-contained detail to stand alone; put common background in `context`. Up to 6 run at once.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tasks": {"type": "array", "items": {"type": "string"}, "description": "The independent subtasks (2-6). Each must be self-contained — the sub-agent sees only this string plus the shared context, not the chat history."},
+                    "context": {"type": "string", "description": "Optional shared background given to every sub-agent (the goal, key constraints, relevant paths)."}
+                },
+                "required": ["tasks"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "request_sandbox_build",
+            "description": "Kick off an isolated SANDBOX BUILD for a substantial coding change (a new feature, a multi-file change, or 'build/implement X for me'). The pipeline generates the code in a throwaway full-repo mirror, builds and tests it, reviews and repairs it, and produces a patch — NOTHING touches the live repo until the user reviews and approves it. Prefer this over editing files directly when the user asks you to BUILD/IMPLEMENT a non-trivial change. Confirm the request with the user first, then call this once; it returns a tracking id and runs in the background (do not wait on it). For small edits, just use edit_file/write_file instead.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "A clear, self-contained description of the change to build — what to implement and any constraints. The sandbox coder gets only this, not the chat history."},
+                    "candidates": {"type": "integer", "description": "Number of distinct candidate solutions to generate and judge (1-4). Use 1 normally; 2-4 runs a best-of-N design panel for harder/ambiguous design problems.", "minimum": 1, "maximum": 4}
+                },
+                "required": ["prompt"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "manage_tasks",
             "description": "Manage scheduled/automated tasks: list, create, edit, delete, pause, resume, or run tasks. Use this for ANY recurring/scheduled request ('every morning…', 'each day at 7:30', 'daily summarize…') — create a task rather than doing it once. Task types: llm (AI runs a prompt), research (runs the deep-research pipeline on a question), or action (built-in automation). Triggers can be time-based or event-based.",
             "parameters": {

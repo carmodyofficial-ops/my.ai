@@ -132,6 +132,41 @@ DEFAULT_SETTINGS = {
     # prefill size. Remote endpoints are never capped. 0 disables. See
     # `src.model_context.LOCAL_CONTEXT_CAP_DEFAULT`.
     "local_context_window_cap": 32768,
+    # Coding turns benefit from a larger local window than the general cap above:
+    # the configured coding model (auto_model_coding) is typically smaller than
+    # the 120B complex model, so a bigger KV reservation is affordable, and
+    # long-horizon coding (reading many files, iterating over tool output) needs
+    # the room. Applied ONLY to the configured coding model; 0 = fall back to
+    # local_context_window_cap. See src.model_context.LOCAL_CONTEXT_CAP_CODING_DEFAULT.
+    "local_context_window_cap_coding": 65536,
+    # --- Per-turn LOCAL model auto-routing (src/model_router.py). Surfaced here
+    # so they appear in Settings; the router reads these same defaults, so simply
+    # listing them changes no behavior. Remote endpoints are never auto-routed. ---
+    "auto_model_routing": True,
+    "auto_model_routing_llm": True,
+    "auto_model_coding": "qwen3-coder:30b",
+    "auto_model_complex": "seamon67/GPT-OSS-Heretic:v2-120b",
+    "auto_model_simple": "gpt-oss:20b",
+    # --- Deliberate + sustainable coding-loop features ---
+    # Inject the senior-engineer coding brief (read-before-edit -> plan -> verify
+    # -> iterate) on coding-classified chat/agent turns, not just cowork/sandbox.
+    "coding_persona_enabled": True,
+    # Tell the agent to author its own todo (via update_plan) for multi-step work
+    # and keep it pinned + ticked across rounds (a plan it owns, not user-gated).
+    "agent_self_todo_enabled": True,
+    # Summarize older history mid-loop (instead of drop-oldest) when a long
+    # tool-heavy turn approaches the window. See src/context_compactor.py.
+    "agent_midloop_compaction": True,
+    # Auto-run the independent completion verifier (agent_loop mechanism 3a) when
+    # the turn's model is strong enough to judge reliably (remote/API models +
+    # the local 120B), without flipping the global agent_verifier_subagent on for
+    # weak local models that false-reject. See agent_loop._model_is_strong.
+    "agent_verifier_auto_strong": True,
+    # After a turn that edited code and claims done, run a fast SAFE syntax check
+    # (py_compile / node --check / json — no execution) on the changed files and
+    # bounce syntax errors back to the agent before accepting "done". Model-
+    # agnostic. See agent_loop._static_syntax_check.
+    "agent_autoverify_edits": True,
     "agent_stream_timeout_seconds": 300,
     # Extra directory roots that read_file / write_file may access, in
     # addition to the built-in project data/ and system temp dirs. Each

@@ -49,18 +49,24 @@ def load_config():
                 k, v = line.split("=", 1)
                 cfg[k.strip()] = v.strip().strip('"').strip("'")
     # env overrides file
-    for k in ("MYAI_BASE_URL", "MYAI_TOKEN", "MYAI_COWORK_MODEL"):
+    for k in ("MYAI_BASE_URL", "MYAI_TOKEN", "MYAI_COWORK_MODEL", "MYAI_REQUIRE_APPROVAL"):
         if os.environ.get(k):
             cfg[k] = os.environ[k]
     cfg.setdefault("MYAI_BASE_URL", "http://127.0.0.1:7001")
     return cfg
 
 
+def _truthy(v):
+    return str(v).strip().lower() in ("1", "true", "yes", "on")
+
+
 def stream_turn(cfg, messages, model, workspace):
     """POST one turn and yield parsed SSE events. Raises on transport/HTTP error."""
     url = cfg["MYAI_BASE_URL"].rstrip("/") + "/api/cowork/stream"
+    require_approval = _truthy(cfg.get("MYAI_REQUIRE_APPROVAL"))
     payload = json.dumps({"messages": messages, "workspace": workspace,
-                          **({"model": model} if model else {})}).encode()
+                          **({"model": model} if model else {}),
+                          **({"require_approval": True} if require_approval else {})}).encode()
     req = urllib.request.Request(url, data=payload, method="POST", headers={
         "Content-Type": "application/json",
         "Accept": "text/event-stream",
@@ -105,6 +111,25 @@ def render_turn(cfg, messages, model):
             elif "delta" in ev and not ev.get("thinking"):
                 sys.stdout.write(ev["delta"]); sys.stdout.flush()
                 answer.append(ev["delta"]); in_text = True
+            elif t == "approval_required":
+                if in_text:
+                    print(); in_text = False
+                tool = str(ev.get("tool") or "tool")
+                cmd = str(ev.get("command") or "")[:160]
+                aid = str(ev.get("id") or "")
+                try:
+                    ans = input(YELL(f"  ⏸ approve {tool}" + (f": {cmd}" if cmd else "") + "  [y/N] "))
+                except EOFError:
+                    ans = ""
+                approved = ans.strip().lower() in ("y", "yes")
+                try:
+                    _http_json(cfg, "/api/cowork/approve",
+                               {"id": aid, "approved": approved}, "POST", timeout=30)
+                except Exception as e:
+                    print(RED(f"  ! failed to send decision: {e}"))
+                print(DIM("  " + (GREEN("approved") if approved else RED("denied"))))
+            elif t == "approval_resolved":
+                pass  # decision already echoed at the prompt
             elif t == "tool_start":
                 if in_text:
                     print(); in_text = False

@@ -716,6 +716,60 @@ async def _execute_tool_block_impl(
     # marker: returns a `plan_update` payload the agent loop turns into a
     # `plan_update` SSE event; the frontend replaces the stored plan and refreshes
     # the docked plan window. Does NOT end the turn.
+    # request_sandbox_build: let a natural-language coding request in chat kick
+    # off the isolated sandbox build pipeline (the same one behind the workspace
+    # "Build" button). Admin-gated upstream (tool_security blocks it for non-
+    # admins); enqueues a background run and returns a tracking id. Nothing
+    # touches the live repo — the deliverable is a reviewable patch.
+    if tool == "request_sandbox_build":
+        import json as _json
+        raw = (content or "").strip()
+        prompt = ""
+        candidates = 1
+        try:
+            parsed = _json.loads(raw) if raw.startswith("{") else {}
+        except (ValueError, TypeError):
+            parsed = {}
+        if isinstance(parsed, dict) and parsed.get("prompt"):
+            prompt = str(parsed.get("prompt", "")).strip()
+            try:
+                candidates = int(parsed.get("candidates") or 1)
+            except (ValueError, TypeError):
+                candidates = 1
+        else:
+            prompt = raw
+        if not prompt:
+            return "request_sandbox_build: invalid", {
+                "error": "request_sandbox_build needs a non-empty `prompt` describing the change to build.",
+                "exit_code": 1,
+            }
+        try:
+            from src.workspace_request_executor import launch_sandbox_build
+            res = await launch_sandbox_build(
+                prompt, owner=owner, session_id=session_id,
+                candidates=max(1, min(candidates, 4)),
+            )
+        except Exception as e:
+            return "request_sandbox_build: error", {
+                "error": f"failed to start sandbox build: {e}", "exit_code": 1,
+            }
+        if not res.get("ok"):
+            return "request_sandbox_build: blocked", {
+                "error": res.get("error") or "could not start sandbox build", "exit_code": 1,
+            }
+        tid = res.get("tracking_id")
+        desc = f"request_sandbox_build: {res.get('mode', 'build')} {tid}"
+        return desc, {
+            "output": (
+                (res.get("message") or "Sandbox build started.")
+                + f"\nTracking id: {tid}. Track and review the resulting patch in the "
+                  "workspace panel before anything is applied."
+            ),
+            "tracking_id": tid,
+            "sandbox_build": res,
+            "exit_code": 0,
+        }
+
     if tool == "update_plan":
         import json as _json
         raw = (content or "").strip()
@@ -801,7 +855,7 @@ async def _execute_tool_block_impl(
         desc = f"search_chats: {query[:80]}"
         result = await do_search_chats(query, owner=owner)
     elif tool in ("chat_with_model", "create_session", "list_sessions",
-                  "send_to_session", "pipeline",
+                  "send_to_session", "pipeline", "dispatch_subagents",
                   "manage_session", "manage_memory", "list_models",
                   "ui_control", "ask_teacher"):
         from src.ai_interaction import dispatch_ai_tool

@@ -1,10 +1,10 @@
-# Contributing to my.ai
+# Contributing to Odysseus
 
 Thanks for helping. The project is moving quickly, so the best contributions are focused, easy to review, and easy to test.
 
 ## Branch model
 
-my.ai has two branches:
+Odysseus has two branches:
 
 - **`dev`** — where all PRs land. Things can be in flux here; the merge button gets used freely.
 - **`main`** — what users run. Curated and tested by the maintainer. Fast-forwarded to a stable `dev` commit at each release.
@@ -26,7 +26,7 @@ Docker is the recommended path for normal testing:
 
 ```bash
 git clone https://github.com/carmodyofficial-ops/my.ai.git
-cd my.ai
+cd odysseus
 cp .env.example .env
 docker compose up -d --build
 ```
@@ -78,7 +78,7 @@ Please keep PRs small. Large PRs that mix unrelated cleanup, formatting, refacto
 
 ## Style and visual changes
 
-my.ai has an intentional visual style. PRs that ignore it will be closed without merge, no matter how correct the underlying code is.
+Odysseus has an intentional visual style. PRs that ignore it will be closed without merge, no matter how correct the underlying code is.
 
 Before submitting any change that affects what the app looks like — buttons, icons, fonts, colors, spacing, layout, CSS, HTML, SVG, or any `static/js/` module that draws to the DOM — please:
 

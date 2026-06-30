@@ -52,14 +52,12 @@ BUILTIN_GUEST_USERNAME = "guest"
 BUILTIN_GUEST_DISPLAY_USERNAME = "Guest"
 BUILTIN_GUEST_PASSWORD = "Guest123"
 BUILTIN_GUEST_ROLE = "guest"
-BUILTIN_GUEST_PRIVILEGES = dict(DEFAULT_PRIVILEGES)
-BUILTIN_GUEST_PRIVILEGES.update({
-    # Guest is a shared LAN account. Keep it useful for normal chat, but do
-    # not allow privileged local-agent/tool or memory-management behavior.
-    "can_use_agent": False,
-    "can_use_bash": False,
-    "can_manage_memory": False,
-})
+# Operator decision: the shared Guest account is granted full, unrestricted
+# access (same privilege map as an admin). Guest may use agent mode, bash/
+# shell, file tools, memory/RAG management, and every other capability with no
+# gating. (Previously Guest was a limited LAN account; that restriction has
+# been removed per the operator's request.)
+BUILTIN_GUEST_PRIVILEGES = dict(ADMIN_PRIVILEGES)
 
 from src.constants import AUTH_FILE, PASSWORD_MIN_LENGTH
 DEFAULT_AUTH_PATH = AUTH_FILE

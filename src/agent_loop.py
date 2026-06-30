@@ -1400,6 +1400,25 @@ def _build_system_prompt(
             'that open draft is the target: use update_document/edit_document on it instead of creating another document.'
         )
 
+    # Coding persona on GENERAL chat/agent coding turns. The cowork + sandbox
+    # paths already prepend the coding brief (coding_prompt.coding_system_message)
+    # and have sandbox_build=True here, so gate those out to avoid a double
+    # injection. Everywhere else, a coding-classified turn gets the same
+    # senior-engineer discipline (read-before-edit -> plan -> verify -> iterate)
+    # plus self-todo tracking via the update_plan tool.
+    if not suppress_local_context and not sandbox_build:
+        try:
+            if get_setting("coding_persona_enabled", True):
+                _coding_user = _extract_last_user_message(messages) or ""
+                from src.model_router import classify_heuristic as _classify_coding
+                _cat, _conf = _classify_coding(_coding_user)
+                if _cat == "coding" and _conf in ("high", "med"):
+                    from src.coding_prompt import coding_general_brief
+                    _todo_on = bool(get_setting("agent_self_todo_enabled", True))
+                    agent_prompt += "\n\n" + coding_general_brief(include_todo=_todo_on)
+        except Exception:
+            logger.debug("coding persona injection skipped (non-fatal)", exc_info=True)
+
     # Inject relevant skills based on the user's last message. The
     # SkillsManager does a Jaccard token-match over published skills'
     # name + description + when_to_use + procedure, returning the top
@@ -1928,6 +1947,115 @@ _VERIFIER_EFFECTFUL_TOOLS = {
 _VERIFIER_MAX_ROUNDS = 2  # cap re-verify cycles per turn — never loop forever
 
 
+def _model_is_strong(endpoint_url: str, model: str) -> bool:
+    """Whether ``model`` is capable enough to run the independent completion
+    verifier without false-rejecting.
+
+    The verifier judges completion from a compact action snapshot (no document
+    bodies), which weak local models can't do reliably — they reject valid work
+    ("content not shown") and burn an extra round every effectful turn. So:
+      - remote / API endpoints (Claude, GPT, Gemini, …) always qualify;
+      - among LOCAL models, only the configured 'complex' model (the big one,
+        e.g. the 120B) or an obviously large model id qualifies.
+    Fail-safe: any error → not strong (verifier stays off).
+    """
+    try:
+        from src.model_context import is_local_endpoint
+        if not is_local_endpoint(endpoint_url):
+            return True
+        from src import settings
+        complex_model = (settings.get_setting("auto_model_complex", "") or "").strip().lower()
+        m = (model or "").strip().lower()
+        if complex_model and m and (complex_model in m or m in complex_model):
+            return True
+        return any(tag in m for tag in ("120b", "70b", "72b", "65b", "-large", ":large"))
+    except Exception:
+        return False
+
+
+# Mutating / effectful tools that an optional per-command approval gate (cowork)
+# pauses on before executing. Read-only tools (read_file/ls/glob/grep/get_workspace/
+# web_*) run without prompting so approval fatigue stays low.
+_APPROVAL_REQUIRED_TOOLS = {
+    "bash", "python", "write_file", "edit_file", "multi_edit", "delete_file",
+    "move_file", "apply_patch", "git", "run_tests", "lint_format", "code_sandbox",
+    "http_request",
+}
+
+# Edit tools whose result carries a structured "path" we can statically check.
+_CODE_EDIT_TOOLS = {"edit_file", "write_file", "multi_edit"}
+# Extensions we can syntax-check SAFELY (no code execution). Deliberately omits
+# .ts/.tsx/.jsx — `node --check` can't parse those and would false-positive.
+_SYNTAX_CHECK_EXTS = (".py", ".js", ".mjs", ".cjs", ".json")
+
+
+async def _static_syntax_check(paths, *, timeout: float = 12.0, max_files: int = 20) -> list:
+    """Fast, SAFE syntax check of edited files — no code execution.
+
+    py_compile for Python, `node --check` for plain JS (skipped if node is
+    absent), json.loads for JSON. Returns a list of short human-readable error
+    strings (empty = all good / nothing checkable). Best-effort: any infra error
+    on a file is swallowed so this can never block a valid completion.
+    """
+    import os
+    import sys
+    import asyncio
+    import json as _json
+    errors: list = []
+    checked = 0
+    seen = set()
+    for p in paths:
+        if checked >= max_files:
+            break
+        if not isinstance(p, str) or not p or p in seen:
+            continue
+        seen.add(p)
+        ext = os.path.splitext(p)[1].lower()
+        if ext not in _SYNTAX_CHECK_EXTS:
+            continue
+        try:
+            if not os.path.isfile(p):
+                continue
+        except Exception:
+            continue
+        rel = os.path.basename(p)
+        try:
+            if ext == ".json":
+                try:
+                    with open(p, "r", encoding="utf-8", errors="replace") as fh:
+                        _json.load(fh)
+                except Exception as je:
+                    errors.append(f"{rel}: invalid JSON — {je}")
+                checked += 1
+                continue
+            if ext == ".py":
+                cmd = [sys.executable, "-m", "py_compile", p]
+            else:  # plain JS
+                cmd = ["node", "--check", p]
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd, stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT)
+            except (FileNotFoundError, NotImplementedError):
+                continue  # interpreter unavailable (e.g. no node) — skip
+            try:
+                out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                continue
+            checked += 1
+            if proc.returncode not in (0, None):
+                tail = (out or b"").decode("utf-8", "replace").strip().splitlines()[-6:]
+                errors.append(f"{rel}:\n" + "\n".join(tail) if tail
+                              else f"{rel}: syntax check failed")
+        except Exception:
+            continue
+    return errors
+
+
 def _build_actions_snapshot(tool_events: list, limit: int = 8000) -> str:
     """Compact record of what the agent actually did this turn, for the
     verifier to judge against. One block per tool execution: the command and
@@ -2067,6 +2195,25 @@ def build_active_plan_note(approved_plan: str) -> str:
     )
 
 
+def build_self_plan_note(plan: str) -> str:
+    """System note that pins a todo the AGENT authored itself (via update_plan)
+    when there is no user-approved plan. Re-shown every round so the agent never
+    loses its own plan to mid-loop trimming. Returns "" for empty input.
+    """
+    if not plan or not plan.strip():
+        return ""
+    return (
+        "## YOUR TODO (you wrote this — keep executing)\n"
+        "This is the checklist you authored for the current task. It is re-shown "
+        "every round so you never lose it. Work through it IN ORDER. After you "
+        "finish each step, call `update_plan` with the full checklist and that "
+        "step marked `- [x]`. Do the next unchecked item until all are done; "
+        "do not skip, reorder, or invent steps. When every item is `- [x]`, do a "
+        "final verification, then report what you did.\n\n"
+        "Current todo:\n" + plan.strip()
+    )
+
+
 def _detect_runaway_call(call_freq, threshold=15):
     """Tool name of a call signature repeated >= ``threshold`` times — a real
     runaway loop. Counts IDENTICAL repeated calls (same tool AND args), so a
@@ -2103,6 +2250,7 @@ async def stream_agent_loop(
     workspace: Optional[str] = None,
     sandbox_build: bool = False,
     trusted_execution: bool = False,
+    approval_cb=None,
     _is_teacher_run: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Streaming agent loop generator.
@@ -2194,6 +2342,23 @@ async def stream_agent_loop(
                 "[safe-local] execution/mutation tools withheld for copy-only turn: %s",
                 sorted(SAFE_LOCAL_ABSTENTION_TOOLS),
             )
+
+    # Whether fenced ```python/```bash code COULD actually run this turn. A
+    # textual-only (non-native) model has its fenced code parsed AS a tool call;
+    # but if execution is unavailable (non-admin, guide-only, safe-local, or the
+    # shell tools are disabled), parsing the model's *illustrative* code as a tool
+    # only yields a blocked result it then fixates on (the "{"blocked": true}"
+    # copy-only loop). When exec is unavailable we treat fenced code as CONTENT so
+    # the user just sees the code. Explicit tool markup ([TOOL_CALL]/<invoke>/…)
+    # is unaffected — only the ambiguous fenced pattern is gated.
+    _dis = disabled_tools or set()
+    _exec_fenced_available = (
+        owner_is_admin_or_single_user(owner)
+        and not guide_only
+        and "python" not in _dis
+        and "bash" not in _dis
+        and not (tool_policy and (tool_policy.blocks("python") or tool_policy.blocks("bash")))
+    )
 
     _intent = _classify_agent_request(messages, _last_user)
     # Tool retrieval uses the latest message by default. It may inherit recent
@@ -2648,6 +2813,20 @@ async def stream_agent_loop(
     # so the user can resume instead of the turn silently stalling.
     _exhausted_rounds = False
 
+    # Agent-authored todo: when the agent calls update_plan WITHOUT a pre-approved
+    # plan, capture the latest checklist (_self_plan) and keep a protected,
+    # always-refreshed pin of it in-context (_self_plan_pinned) so it survives
+    # mid-loop trimming and the agent always sees its own plan. Disabled while an
+    # approved_plan is active (that has its own pinned note).
+    _self_plan = ""
+    _self_plan_pinned = ""
+
+    # Auto edit-verify (mechanism 3c): files the agent edited this turn via the
+    # structured edit tools, and a one-shot guard so the safe syntax check runs
+    # at most once per completion (it re-arms only on fresh edits).
+    _edited_paths: Set[str] = set()
+    _autoverify_count = 0
+
     for round_num in range(1, max_rounds + 1):
         round_response = ""
         round_reasoning = ""  # reasoning_content deltas (DeepSeek-thinking, vLLM --reasoning-parser)
@@ -2657,6 +2836,33 @@ async def stream_agent_loop(
         _doc_acc = ""
         _doc_opened = False
         _doc_last_len = 0
+
+        # Keep the agent's self-authored todo pinned (protected from trimming)
+        # and refreshed to the latest version, so a long task never loses its
+        # plan. Mirrors the approved-plan pin but for a plan the agent made
+        # itself. Skipped while an approved_plan is active (that has its own pin).
+        if (_self_plan and _self_plan != _self_plan_pinned
+                and not (approved_plan and approved_plan.strip())):
+            try:
+                messages = [
+                    m for m in messages
+                    if not (isinstance(m, dict) and m.get("_self_plan"))
+                ]
+                _pin_idx = 0
+                for _pi, _pm in enumerate(messages):
+                    if isinstance(_pm, dict) and _pm.get("role") == "system":
+                        _pin_idx = _pi + 1
+                    else:
+                        break
+                messages.insert(_pin_idx, {
+                    "role": "system",
+                    "content": build_self_plan_note(_self_plan),
+                    "_protected": True,
+                    "_self_plan": True,
+                })
+                _self_plan_pinned = _self_plan
+            except Exception:
+                logger.debug("[agent] self-plan pin skipped", exc_info=True)
 
         # Re-trim the growing context BEFORE each round's request. The loop appends
         # a (often large) tool result every round; without this a long, tool-heavy
@@ -2669,10 +2875,33 @@ async def stream_agent_loop(
             try:
                 _bt = estimate_tokens(messages)
                 if _bt > _trim_budget:
-                    from src.context_compactor import trim_for_context as _trim_fn
-                    messages = _trim_fn(messages, _trim_budget, reserve_tokens=_trim_reserve)
-                    logger.info("[agent] mid-loop re-trim r%d: %d->%d tok (budget=%s)",
-                                round_num, _bt, estimate_tokens(messages), _trim_budget)
+                    # Prefer summarizing older history over dropping it
+                    # (sustainable context): compact first, then trim enforces the
+                    # hard budget. session=None so we don't mutate persisted
+                    # history mid-run; the loop's working copy is what matters.
+                    if get_setting("agent_midloop_compaction", True):
+                        try:
+                            from src.context_compactor import (
+                                maybe_compact as _compact_fn,
+                                _sanitize_tool_messages as _sanitize_msgs,
+                            )
+                            messages, _cl_unused, _did = await _compact_fn(
+                                None, endpoint_url, model, messages, headers, owner=owner)
+                            if _did:
+                                # maybe_compact splits mid-history and may strand a
+                                # tool message whose assistant parent was summarized
+                                # away — sanitize so the provider doesn't 400.
+                                messages = _sanitize_msgs(messages)
+                                logger.info("[agent] mid-loop compaction r%d: %d->%d tok",
+                                            round_num, _bt, estimate_tokens(messages))
+                        except Exception as _ce:
+                            logger.debug("[agent] mid-loop compaction skipped: %s", _ce)
+                    _bt2 = estimate_tokens(messages)
+                    if _bt2 > _trim_budget:
+                        from src.context_compactor import trim_for_context as _trim_fn
+                        messages = _trim_fn(messages, _trim_budget, reserve_tokens=_trim_reserve)
+                        logger.info("[agent] mid-loop re-trim r%d: %d->%d tok (budget=%s)",
+                                    round_num, _bt2, estimate_tokens(messages), _trim_budget)
             except Exception as _e:
                 logger.warning("[agent] mid-loop trim skipped: %s", _e)
         _doc_fence_offset = 0  # offset into round_response for text-fence content
@@ -2905,7 +3134,9 @@ async def stream_agent_loop(
                 yield chunk
             # Intercept [DONE] — don't forward until all rounds finish
 
-        tool_blocks, used_native = _resolve_tool_blocks(round_response, native_tool_calls, round_num, is_api_model=_is_api_model)
+        tool_blocks, used_native = _resolve_tool_blocks(
+            round_response, native_tool_calls, round_num,
+            is_api_model=(_is_api_model or not _exec_fenced_available))
 
         # Force-answer round: we told the model to STOP calling tools and
         # answer. If it ignored that and emitted a (possibly DSML) tool
@@ -3016,14 +3247,47 @@ async def stream_agent_loop(
             # to re-trigger). Skipped on force-answer rounds (no tools to
             # fix with), pure Q&A, and when the toggle is off.
             _claimed_done = bool(_THINK_RE.sub("", cleaned_round).strip())
+            # ── Auto edit-verify (mechanism 3c) ───────────────────────
+            # When the agent finishes after editing code, byte/syntax-check the
+            # changed files (NO execution — py_compile / node --check / json) so a
+            # broken edit can't be reported as done. Cheap and model-agnostic, so
+            # it runs before the semantic verifiers and even on weak local models.
+            # One-shot per completion; re-arms only when a fresh edit lands.
+            if (_claimed_done and not _force_answer
+                    and _edited_paths and _autoverify_count < 1
+                    and get_setting("agent_autoverify_edits", True)):
+                _syntax_errors = await _static_syntax_check(list(_edited_paths))
+                _autoverify_count += 1
+                if _syntax_errors:
+                    logger.info("[agent] auto edit-verify found %d syntax error(s) on round %d",
+                                len(_syntax_errors), round_num)
+                    _note = "\n\n_Checked the edited files and found a syntax error to fix._\n\n"
+                    yield f'data: {json.dumps({"delta": _note})}\n\n'
+                    full_response += _note
+                    messages.append({
+                        "role": "system",
+                        "content": (
+                            "Your edits left these files with syntax errors. Fix them "
+                            "before finishing — read the file, correct the cause, and "
+                            "re-check:\n\n" + "\n\n".join(_syntax_errors)
+                        ),
+                    })
+                    _edited_paths = set()  # require a fresh edit before re-checking
+                    continue
+            # Run the independent verifier when explicitly enabled, OR
+            # automatically when this turn's model is strong enough to judge
+            # reliably (remote/API models + the local 120B). Weak local models
+            # false-reject from the action-snapshot, so they fall through to the
+            # model-agnostic ProForge VERIFY nudge (3b) instead.
+            _verifier_on = (
+                get_setting("agent_verifier_subagent", False)
+                or (get_setting("agent_verifier_auto_strong", True)
+                    and _model_is_strong(endpoint_url, model))
+            )
             if (_effectful_used and not _force_answer
                     and _claimed_done
                     and _verifier_rounds < _VERIFIER_MAX_ROUNDS
-                    # Default OFF: on weak local models the verifier can't judge
-                    # from the action-snapshot (no doc body), so it false-rejects
-                    # ("content not shown") and forces a costly extra round every
-                    # effectful turn. Opt-in via setting for strong models.
-                    and get_setting("agent_verifier_subagent", False)):
+                    and _verifier_on):
                 # Brief "working" indicator while the verifier runs.
                 yield f'data: {json.dumps({"type": "agent_step", "round": round_num})}\n\n'
                 _vfail = await _run_verifier_subagent(
@@ -3061,7 +3325,7 @@ async def stream_agent_loop(
                     and _claimed_done
                     and not _pf_verify_nudged
                     and get_setting("proforge_protocol_enabled", True)
-                    and not get_setting("agent_verifier_subagent", False)):
+                    and not _verifier_on):
                 _pf_verify_nudged = True
                 messages.append({
                     "role": "system",
@@ -3251,14 +3515,64 @@ async def stream_agent_loop(
             else:
                 cmd_display = block.content.strip()
 
-            if tool_policy and tool_policy.blocks(block.tool_type):
-                desc = f"{block.tool_type}: BLOCKED"
+            # --- Optional per-command approval gate (cowork) ---
+            # When an approval_cb is supplied and this is a mutating/effectful
+            # tool, pause and ask the client to approve before running it. The cb
+            # is called SYNCHRONOUSLY to register the pending decision, THEN we
+            # emit the approval_required event, THEN we await the decision — so a
+            # fast client can't resolve it before it's registered.
+            _approval_denied = False
+            if approval_cb is not None and block.tool_type in _APPROVAL_REQUIRED_TOOLS:
+                import secrets as _secrets
+                _aid = _secrets.token_hex(8)
+                try:
+                    _waiter = approval_cb({"id": _aid, "tool": block.tool_type,
+                                           "command": cmd_display,
+                                           "content": (block.content or "")[:4000]})
+                except Exception as _ae:
+                    logger.warning("[agent] approval_cb register failed: %s", _ae)
+                    _waiter = None
+                yield (
+                    f'data: {json.dumps({"type": "approval_required", "id": _aid, "tool": block.tool_type, "command": cmd_display, "round": round_num})}\n\n'
+                )
+                _approved = False
+                if _waiter is not None:
+                    try:
+                        _approved = bool(await _waiter)
+                    except Exception as _we:
+                        logger.warning("[agent] approval wait failed: %s", _we)
+                        _approved = False
+                _approval_denied = not _approved
+                yield (
+                    f'data: {json.dumps({"type": "approval_resolved", "id": _aid, "approved": (not _approval_denied)})}\n\n'
+                )
+
+            if _approval_denied:
+                desc = f"{block.tool_type}: not approved"
                 result = {
-                    "error": tool_policy.reason_for(block.tool_type),
+                    "error": "The user did not approve this command, so it was skipped. "
+                             "Do not retry it; continue with the rest of the task or ask the user.",
                     "exit_code": 1,
-                    "blocked": True,
+                    "denied": True,
                 }
-                logger.info("Tool blocked before start by policy: %s", block.tool_type)
+                logger.info("Tool skipped — not approved by user: %s", block.tool_type)
+            elif tool_policy and tool_policy.blocks(block.tool_type):
+                desc = f"{block.tool_type}: not executed"
+                # Recovery-oriented message (NOT a bare {"blocked": true}, which
+                # weak/abliterated models parrot into a copy-only failure loop):
+                # tell the model to stop calling the tool and just answer in text.
+                result = {
+                    "error": (
+                        f"{block.tool_type} was not executed ({tool_policy.reason_for(block.tool_type)}). "
+                        "Tool execution is unavailable on this turn. Do NOT call this tool again and do "
+                        "NOT report a 'blocked'/JSON status — just answer the user directly in your text "
+                        "reply, writing any code or commands inline (in fenced blocks) for them to copy "
+                        "and run themselves."
+                    ),
+                    "exit_code": 1,
+                    "not_executed": True,
+                }
+                logger.info("Tool not executed (policy) — steering to text answer: %s", block.tool_type)
             else:
                 yield (
                     f'data: {json.dumps({"type": "tool_start", "tool": block.tool_type, "command": cmd_display, "round": round_num})}\n\n'
@@ -3412,6 +3726,16 @@ async def stream_agent_loop(
                 yield (
                     f'data: {json.dumps({"type": "plan_update", "data": result["plan_update"]})}\n\n'
                 )
+                # Track the agent's own todo so the round-top pin keeps it in
+                # context across rounds even without a user-approved plan. Only
+                # when there is no approved_plan (that flow owns its own pin).
+                if not (approved_plan and approved_plan.strip()):
+                    try:
+                        _pu_plan = result["plan_update"].get("plan")
+                        if isinstance(_pu_plan, str) and _pu_plan.strip():
+                            _self_plan = _pu_plan.strip()
+                    except Exception:
+                        pass
 
             # Build output for frontend tool bubble.
             # Document tools get a short summary — content goes to the editor panel.
@@ -3547,6 +3871,13 @@ async def stream_agent_loop(
             tool_events.append(tool_event)
             if block.tool_type in _VERIFIER_EFFECTFUL_TOOLS:
                 _effectful_used = True
+            # Track edited files for the auto edit-verify syntax check, and
+            # re-arm it (a fresh edit after a prior check should be re-checked).
+            if block.tool_type in _CODE_EDIT_TOOLS:
+                _ep = result.get("path")
+                if isinstance(_ep, str) and _ep:
+                    _edited_paths.add(_ep)
+                    _autoverify_count = 0
 
             formatted = format_tool_result(desc, result)
             tool_results.append(formatted)

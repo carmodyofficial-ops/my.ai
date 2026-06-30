@@ -98,7 +98,7 @@ class EditFileTool:
             return {"error": f"edit_file: old_string is not unique in {path} ({n} matches). Add surrounding context or set replace_all=true.", "exit_code": 1}
 
         n = original.count(old)
-        result = {"output": f"Edited {path} ({n} replacement{'s' if n != 1 else ''})", "exit_code": 0}
+        result = {"output": f"Edited {path} ({n} replacement{'s' if n != 1 else ''})", "exit_code": 0, "path": path}
         diff = _unified_diff(original, updated, path)
         if diff:
             result["diff"] = diff
@@ -184,7 +184,7 @@ class WriteFileTool:
         except OSError as e:
             return {"error": f"write_file: {path}: {e}", "exit_code": 1}
         diff = _unified_diff(old_content, body, path)
-        result = {"output": f"Wrote {size} bytes to {path}", "exit_code": 0}
+        result = {"output": f"Wrote {size} bytes to {path}", "exit_code": 0, "path": path}
         if diff:
             result["diff"] = diff
         return result
@@ -238,7 +238,7 @@ class MultiEditTool:
         except (IsADirectoryError, UnicodeDecodeError, PermissionError, OSError) as e:
             return {"error": f"multi_edit: {path}: {e}", "exit_code": 1}
         diff = _unified_diff(original, newtext, path)
-        result = {"output": f"Applied {len(edits)} edit(s) to {path}", "exit_code": 0}
+        result = {"output": f"Applied {len(edits)} edit(s) to {path}", "exit_code": 0, "path": path}
         if diff:
             result["diff"] = diff
         return result

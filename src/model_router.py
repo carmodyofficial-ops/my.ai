@@ -195,10 +195,18 @@ async def select_model_for_turn(message, *, chat_mode: str, current_model: str,
             return current_model
         if not _is_local(endpoint_url):
             return current_model
+        # Coalesce null/blank → default: a persisted settings.json may carry these
+        # keys as null (the Settings save path materializes known keys), which
+        # would otherwise pass None through and fall back to current_model — i.e.
+        # coding turns would silently stay on the chat/complex model.
+        def _routed_model(key: str, dflt: str) -> str:
+            v = settings.get_setting(key, dflt)
+            v = str(v).strip() if v is not None else ""
+            return v or dflt
         models = {
-            "coding": settings.get_setting("auto_model_coding", "qwen3-coder:30b"),
-            "complex": settings.get_setting("auto_model_complex", "seamon67/GPT-OSS-Heretic:v2-120b"),
-            "simple": settings.get_setting("auto_model_simple", "gpt-oss:20b"),
+            "coding": _routed_model("auto_model_coding", "qwen3-coder:30b"),
+            "complex": _routed_model("auto_model_complex", "seamon67/GPT-OSS-Heretic:v2-120b"),
+            "simple": _routed_model("auto_model_simple", "gpt-oss:20b"),
         }
         msg = message if isinstance(message, str) else ""
         words = len(msg.split())

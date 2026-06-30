@@ -115,6 +115,11 @@ REQUEST_TIMEOUT = 5
 # compactor in one place. Remote endpoints are never capped (their real window is
 # wanted). 0 disables. Operator-tunable via setting `local_context_window_cap`.
 LOCAL_CONTEXT_CAP_DEFAULT = 32768
+# A larger cap reserved for the configured coding model only — see
+# `local_context_window_cap_coding`. The coding model is typically smaller than
+# the 120B complex model, so the extra KV reservation is affordable, and
+# long-horizon coding wants the room.
+LOCAL_CONTEXT_CAP_CODING_DEFAULT = 65536
 
 
 def _local_context_cap() -> int:
@@ -125,6 +130,33 @@ def _local_context_cap() -> int:
         return v if v >= 0 else 0
     except Exception:
         return LOCAL_CONTEXT_CAP_DEFAULT
+
+
+def _local_context_cap_for_model(model: str) -> int:
+    """Effective local cap for ``model`` (0 = no cap).
+
+    The configured coding model (``auto_model_coding``) gets the larger
+    ``local_context_window_cap_coding`` so coding turns have more room; every
+    other local model uses the general cap. Fail-safe: any error → general cap.
+    """
+    base = _local_context_cap()
+    try:
+        from src import settings
+        coding_model = (settings.get_setting("auto_model_coding", "qwen3-coder:30b") or "").strip().lower()
+        prefix = coding_model.split(":", 1)[0]
+        if prefix and model and prefix in model.lower():
+            coding_cap = int(settings.get_setting(
+                "local_context_window_cap_coding", LOCAL_CONTEXT_CAP_CODING_DEFAULT) or 0)
+            if coding_cap < 0:
+                coding_cap = 0
+            if coding_cap == 0:
+                return base          # coding cap disabled → general cap
+            if base == 0:
+                return coding_cap    # general cap disabled → coding cap
+            return max(base, coding_cap)
+    except Exception:
+        pass
+    return base
 
 # Known context windows for major API models (used as fallback when /models
 # endpoint doesn't report context_length).
@@ -274,7 +306,7 @@ def _get_context_length_cached(endpoint_url: str, model: str) -> Tuple[int, bool
     # keep their real window. The `known` flag is preserved — a capped window is
     # still a known/deliberate value to scale against.
     if is_local and ctx and ctx > 0:
-        _cap = _local_context_cap()
+        _cap = _local_context_cap_for_model(model)
         if _cap > 0 and ctx > _cap:
             ctx = _cap
     # Only cache non-default values to allow retry on next request.

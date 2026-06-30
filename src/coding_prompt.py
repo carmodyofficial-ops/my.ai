@@ -33,3 +33,23 @@ For support / questions that need no code change: answer precisely and concretel
 def coding_system_message() -> dict:
     """The coding brief as a system message to prepend before the conversation."""
     return {"role": "system", "content": CODING_SYSTEM_PROMPT}
+
+
+# Self-todo tracking — only injected on the GENERAL chat/agent path, where the
+# `update_plan` tool is available (cowork/sandbox toolsets do not include it, so
+# the shared CODING_SYSTEM_PROMPT above must NOT mention it).
+CODING_TODO_ADDENDUM = """TODO TRACKING — for any multi-step task (more than ~2 steps): FIRST call the `update_plan` tool with a short GitHub-style checklist of the concrete steps you will take:
+- [ ] first step
+- [ ] second step
+Then work the steps IN ORDER. After you finish each step, call `update_plan` again with the FULL checklist and that step marked `- [x]`. This keeps your plan visible in the user's plan window and keeps you on track across a long task. Keep the list tight (3-7 items); skip this ceremony for a trivial one-step request."""
+
+
+def coding_general_brief(include_todo: bool = True) -> str:
+    """The coding brief for the general chat/agent path (not cowork/sandbox).
+
+    Adds self-todo tracking (which depends on the `update_plan` tool, present
+    only on the general path) when ``include_todo`` is set.
+    """
+    if include_todo:
+        return CODING_SYSTEM_PROMPT + "\n\n" + CODING_TODO_ADDENDUM
+    return CODING_SYSTEM_PROMPT
