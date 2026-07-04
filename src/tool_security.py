@@ -199,11 +199,6 @@ def owner_is_admin_or_single_user(owner: Optional[str]) -> bool:
         auth = AuthManager()
         if not auth.is_configured:
             return False
-        # The shared Guest account is operator-granted full access: treat it as
-        # admin-equivalent here so no tools are blocked for it (no agent/bash/
-        # file/memory gating). See BUILTIN_GUEST_PRIVILEGES in core/auth.py.
-        if auth.is_builtin_guest(owner):
-            return True
         return bool(owner and auth.is_admin(owner))
     except Exception as exc:
         logger.warning("Unable to evaluate owner admin status: %s", exc)
