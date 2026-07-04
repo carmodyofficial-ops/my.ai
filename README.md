@@ -79,7 +79,7 @@ Odysseus is a self-hosted workspace with powerful local tools. Keep auth enabled
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=carmodyofficial-ops%2Fodysseus&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=carmodyofficial-ops%2Fmy.ai&type=date&legend=top-left">
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=carmodyofficial-ops/my.ai&type=date&theme=dark&legend=top-left" />
    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=carmodyofficial-ops/my.ai&type=date&legend=top-left" />

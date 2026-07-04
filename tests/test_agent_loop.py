@@ -323,7 +323,10 @@ class TestAppendToolResultsNativeContent:
         # tool result follows as a role:tool message keyed by tool_call_id
         assert messages[1]["role"] == "tool"
         assert messages[1]["tool_call_id"] == "call_abc"
-        assert messages[1]["content"] == "page text"
+        # web_fetch results ride inside the untrusted-source envelope now;
+        # the payload must be present, wrapped.
+        assert "page text" in messages[1]["content"]
+        assert "UNTRUSTED" in messages[1]["content"]
 
     def test_whitespace_only_text_yields_null_content(self):
         messages = []

@@ -23,6 +23,15 @@ ddgs
 # via npx; Go uses gofmt (shipped with the Go toolchain) — neither is a pip dep.
 ruff
 
+# Test runner backing the `run_tests` agent tool for Python workspaces (the
+# coding agent runs the USER'S tests through it at runtime — a feature dep,
+# distinct from requirements-dev.txt which tests my.ai itself). Without it,
+# run_tests reports "pytest is not installed" and the agent verifies another way.
+# pytest-asyncio: async-test support, needed for my.ai's own suite in-container
+# and for user projects with async tests.
+pytest
+pytest-asyncio
+
 # PDF form-filling feature (fillable AcroForm detection, field extraction,
 # value/annotation/signature stamping, page rendering for the form overlay).
 # NOTE: PyMuPDF is AGPL-3.0. Installing it brings AGPL obligations for a

@@ -116,10 +116,13 @@ def test_agent_loop_blocks_guide_only_fenced_tool_before_start(monkeypatch):
     events = _events(chunks)
     assert called is False
     assert not any(event.get("type") == "tool_start" for event in events)
-    blocked = [event for event in events if event.get("type") == "tool_output"]
-    assert blocked
-    assert blocked[0]["tool"] == "bash"
-    assert blocked[0]["exit_code"] == 1
+    # Since f46f4fb, when execution is unavailable (guide-only) an ambiguous
+    # fenced block is treated as illustrative CONTENT rather than parsed into a
+    # blocked tool call: emitting a blocked tool_output made weak models parrot
+    # the "blocked" JSON in a copy-only loop. So: no tool events at all, and
+    # the code is simply shown to the user.
+    assert not any(event.get("type") == "tool_output" for event in events)
+    assert any("echo should-not-run" in (event.get("delta") or "") for event in events)
 
 
 def test_guide_only_hides_api_function_schemas(monkeypatch):
@@ -204,7 +207,10 @@ def test_guide_only_blocks_document_prestream(monkeypatch):
     events = _events(chunks)
     assert not any(event.get("type") == "doc_stream_open" for event in events)
     assert not any(event.get("type") == "tool_start" for event in events)
-    assert any(event.get("type") == "tool_output" and event.get("tool") == "create_document" for event in events)
+    # Since f46f4fb, guide-only turns treat fenced blocks as illustrative
+    # content instead of emitting a blocked tool_output (which weak models
+    # parroted into a copy-only loop) — so no tool_output either.
+    assert not any(event.get("type") == "tool_output" for event in events)
 
 
 def test_guide_only_blocks_later_round_document_streaming(monkeypatch):
@@ -233,7 +239,12 @@ def test_guide_only_blocks_later_round_document_streaming(monkeypatch):
         )
     )
     events = _events(chunks)
-    assert calls == 2
+    # Since f46f4fb a guide-only fenced block is display content, not a
+    # (blocked) tool call — round 1 therefore produces no tool round at all
+    # and the loop finishes in a single round instead of churning through a
+    # blocked-tool retry into round 2. Either way, no document may stream.
+    assert calls == 1
+    assert not any(event.get("type") == "tool_start" for event in events)
     assert not any(event.get("type") == "doc_stream_open" for event in events)
     assert not any(event.get("type") == "doc_stream_delta" for event in events)
 

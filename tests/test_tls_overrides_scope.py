@@ -56,6 +56,10 @@ def _grep_files(pattern: str) -> set[str]:
             continue
         if rel.startswith(".claude/") or "/.claude/" in rel:
             continue
+        # data/ is gitignored runtime content — dev-mirror snapshots under it
+        # contain full copies of the repo and false-positive every scope grep.
+        if rel.startswith("data/"):
+            continue
         try:
             body = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:

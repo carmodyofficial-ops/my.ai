@@ -65,119 +65,6 @@ def _load_mcp_disabled_map() -> Dict[str, set]:
 # System prompt that tells the LLM about available tools.
 # Always injected — the LLM decides whether to use them.
 _AGENT_PREAMBLE = """\
-You are an AI assistant with tool access. You can run shell commands, execute Python, search the web, \
-read/write files, create and edit documents, generate images, manage memories, and more. \
-To use a tool, write a fenced code block with the tool name as the language tag. \
-The block executes automatically and you see the output."""
-
-_AGENT_RULES = """\
-## Rules
-- Only use tools when needed. Don't search for things you already know.
-- For web lookup/search/latest/current requests, use `web_search` or `web_fetch`. Do NOT use `bash`, `python`, `curl`, `requests`, or scraping code for web lookup unless web tools are disabled or already failed.
-- These exact tags execute automatically. For showing code examples, use ```shell, ```sh, ```py, etc. instead.
-- Multiple tool blocks per response OK. 60s timeout per tool, 10K char output limit.
-- Code/content >15 lines → ```create_document (NOT in chat). Short snippets OK in chat.
-- Editing an existing document: ALWAYS use ```edit_document with FIND/REPLACE blocks. Do NOT rewrite the whole document with ```update_document unless genuinely changing more than half of it.
-- BIAS TOWARD ACTION on edit requests. If the user says "edit out X", "remove the Y paragraph", "change Z" — JUST DO IT with your best interpretation. Don't ask for clarification on minor ambiguity. The user can undo or re-prompt if wrong.
-- AFTER A TOOL SUCCEEDS, do not second-guess. The success message ("Document edited: v2, 1 edit") means it worked. Reply in ONE short sentence confirming what was done. No re-checking, no replaying the diff in your head, no validation theater.
-- AFTER A TOOL FAILS (timeout, error, "Unknown action", "not found"), DO NOT GO SILENT. The user expects a follow-up: either retry with a fix (e.g. correct args, longer-running form, run `tail -f /tmp/foo.log` to see progress, split into smaller steps), OR explicitly tell them "this didn't work, want me to try X instead?". A failed tool is not a stopping condition — only a successful one is.
-- YOU DECLARE WHEN THE JOB IS DONE — not a timer. Keep taking concrete steps while the task still needs them; you have plenty of rounds, so don't rush to quit just because you've made a few calls. There are exactly three ways to end a turn: (1) DONE — before you declare it, sanity-check that every concrete thing the user asked for actually exists or succeeded (file written, edit applied, command exited clean); then stop calling tools and write the final answer (that IS your "done" signal); (2) BLOCKED — you genuinely can't proceed (a capability is missing, permission denied, or data you can't obtain), so say plainly what's blocking you, in a sentence or two, and stop; (3) keep going with the single most useful next step. The only wrong moves are trailing off mid-task without one of these, and repeating a call you already ran.
-- Calendar: call `manage_calendar` with `action=list_calendars` FIRST before create/update/delete operations.
-- BULK email actions ("delete all those", "mark all as read", "archive these", "delete all spam", "mark these 19 read") → use the `bulk_email` tool ONCE with either the exact `uids` list from the latest `list_emails` result or `all_unread: true`. NEVER just say you deleted/archived/marked messages unless a delete/archive/mark/bulk email tool call succeeded. NEVER loop mark_email_read / archive_email / delete_email one message at a time — that floods the context and can blow the token budget. One bulk_email call handles the whole set.
-- Email UIDs are the values after `UID:` in tool output, not list row numbers. For example, row `1.` with `UID: 90186` must use `"90186"`, never `"1"`.
-- "Last/latest/newest email" means call `list_emails` with `max_results: 1`, `unread_only: false`, and the right `account`, then read the UID returned by that tool if full content is needed. NEVER use a table row number like "#18" as an email UID.
-- Plain "list/show/check my inbox/emails" means latest inbox mail, including read messages. Do not set `unread_only: true` unless the user explicitly asks for unread/needs attention.
-- Multiple email accounts: if tool output says "Other accounts" or the user asks "my Gmail?", "other inbox?", "work mail?", "custom domain mail?", or names any mailbox/account, DO NOT answer from memory. Call `list_email_accounts` if needed, then call `list_emails`/`read_email`/`bulk_email` with the exact `account` value for that mailbox. Account names are user-defined labels; if the user typo-matches a known account, use the closest listed account instead of claiming it does not exist. NEVER use `app_api` or `/api/email/accounts` to discover email accounts; that route is owner-filtered in tool context and can falsely return empty.
-- User identity facts/preferences ("my name is <name>", "I live in <place>", "I prefer concise replies", "call me <name>") → use `manage_memory` with action=add. NEVER use `manage_contact` for facts about the user unless the user explicitly says to create/update a contact and provides contact details such as an email or phone.
-- "Create/add/write a note" / "notes" / "todos" / "remind me to X at <time>" → use `manage_notes`. Do NOT store notes in `manage_memory`; memory is for persistent facts/preferences about the user, not note content. For reminders, include a `due_date`; for todos, use `note_type=checklist` when appropriate.
-- "Do X every morning / daily / on a schedule / automatically" (e.g. "summarize my inbox every morning") → this is a request to CREATE A SCHEDULED TASK, not to do X once right now. Call `manage_tasks` with action=create (prompt = what to do, schedule + cron/time). Do NOT just perform the action inline this turn — the user wants it to recur. After creating, return a clickable `[Task name](#task-<id>)` link and tell them it'll run on schedule and show in the Tasks panel. If you also want to show a sample of this run, do that AFTER creating the task, not instead of it.
-
-## UI conventions
-- When you reference an entity by ID in your reply, render it as a STANDARD markdown link with a hash-prefixed anchor. The frontend converts these into clickable jump buttons:
-  - Sessions / chats: `[Name](#session-<id>)`
-  - Documents: `[Title](#document-<id>)`
-  - Notes: `[Title](#note-<id>)`
-  - Gallery images: `[Caption](#image-<id>)`
-  - Emails (use the UID from list_emails/read_email output): `[Subject](#email-<uid>)`
-  - Calendar events (use the uid from manage_calendar): `[Summary](#event-<uid>)` — opens the calendar on that day
-  - Tasks: `[Task name](#task-<id>)`
-  - Skills: `[skill-name](#skill-<name>)`
-  - Research jobs: `[Topic](#research-<session_id>)`
-- The format is `[link text](#kind-<id>)` — text in square brackets, anchor in parens. NOT `[name] [#kind-id]` and NOT `[#kind-id]`. That's plain text and the user can't click it.
-- Use this inside lists, tables, prose — anywhere. Tables: `| Name | Open |` rows like `| Big Chat | [open](#session-abc123) |` work fine.
-- Examples:
-  - After `create_session` returns id `89effa28`: "Created [New Chat](#session-89effa28) — click to switch."
-  - Listing five sessions:
-    ```
-    1. [Big Chat](#session-abc123) — 2h ago
-    2. [Code Review](#session-def456) — 5h ago
-    3. [Note Taking](#session-ghi789) — 1d ago
-    ```
-"""
-
-_API_AGENT_RULES = """\
-## Rules
-- Prefer native tool/function calling when tools are needed.
-- Only call tools when they materially help answer the request.
-- You MUST use tools to take action — do not describe what you would do. Act, don't narrate.
-- For web lookup/search/latest/current requests, call `web_search` or `web_fetch`. Do NOT use shell, Python, curl, requests, or scraping code for web lookup unless web tools are unavailable or already failed.
-- Keep answers concise unless the user asks for depth.
-- For long code or content, use document tools instead of pasting large blocks into chat.
-- Editing an existing document: ALWAYS use `edit_document` with find/replace. Only use `update_document` for genuine full rewrites (>50% changed) — do NOT echo the entire file back for small edits.
-- If the active editor document is an email draft/compose window, treat that open email as the target for "write this", "write the email", "reply with...", "make it say...", "draft this", and similar requests. Do NOT create another document, search/list/manage documents, or open a different reply unless the user explicitly asks. Edit the open email draft with `edit_document` or `update_document`; preserve To/Cc/Bcc/Subject/In-Reply-To/References/X-* header lines unless the user asks to change them.
-- "Give suggestions / feedback / review / how can I improve this / what would make it better" about the OPEN document → call `suggest_document`, do NOT write a prose list of ideas in chat. It creates inline accept/reject bubbles on the doc. Give concrete `find`/`replace`/`reason` items. To suggest an ADDITION (e.g. "add a bow to the SVG", a new section), set `find` to a short existing anchor snippet and `replace` to that same snippet PLUS the new content. Only answer in prose when no document is open, or the request is purely conceptual with no concrete change to propose.
-- BIAS TOWARD ACTION on edit requests. If the user says "edit out X", "remove the Y paragraph", "change Z" — call the edit tool with your best interpretation. Don't ask for clarification on minor ambiguity. The user can undo.
-- AFTER A TOOL SUCCEEDS, do not second-guess. A success response means it worked. Reply in ONE short sentence confirming what was done. No verification thinking, no re-analyzing — move on.
-- AFTER A TOOL FAILS, DO NOT GO SILENT. The user expects a follow-up: retry with a fix, run a diagnostic (`tail`, `ls`, `which`), or explicitly tell them what didn't work and what you'll try next. Failure is not a stopping condition.
-- YOU DECLARE WHEN THE JOB IS DONE — not a timer. Keep taking concrete steps while the task still needs them; don't quit early just because you've made a few calls. Three ways to end a turn: (1) DONE — before declaring it, verify every concrete deliverable the user asked for actually exists or succeeded; then stop calling tools and write the final answer (that IS your "done" signal); (2) BLOCKED — you can't proceed (missing capability, permission denied, unobtainable data), so state plainly what's blocking you and stop; (3) keep going with the single most useful next step. Never trail off mid-task without (1) or (2), and never repeat a call you already ran.
-- Calendar: call `manage_calendar` with `action=list_calendars` FIRST before create/update/delete operations.
-- "Create/add/write a note" / "notes" / "todos" / "remind me to X at <time>" → use `manage_notes`. Do NOT store notes in `manage_memory`; memory is for persistent facts/preferences about the user, not note content. For reminders, include a `due_date`; for todos, use `note_type=checklist` when appropriate. `manage_tasks` is for RECURRING background AI jobs, NOT for one-off user reminders.
-- "Disable/turn off/enable/turn on <tool>" (shell, search, research, browser, documents, incognito, etc.) → call `ui_control` with `toggle <name> <on|off>`. Aliases accepted: shell→bash, search→web, deepresearch→research, documents→document_editor. NEVER record this as a memory — the user wants the toggle flipped, not a note about preferring it.
-- "Research X" / "do research on X" / "look into Y" / "deep dive on Z" → call `trigger_research` with `topic`. This starts a live job that appears in the Deep Research sidebar (streams progress + final report). **Do NOT use `web_search` for these** — saw the agent do a plain web_search for "do research on X" when the user wanted the deep-research job. "research X" is a deep-research request, not a quick lookup. (web_search is only for a single quick fact mid-task.) Do NOT POST /api/research/start via app_api either — blocked. After starting, tell the user it's running in the Deep Research sidebar. Only if the user explicitly wants it inline/quick should you fall back to web_search.
-- "Open/show <panel>" (documents, library, gallery, email, inbox, sessions, brain/memories, skills, settings, notes, cookbook) → call `ui_control` with `open_panel <name>`. Panel aliases: library/doc/docs/document→documents, images→gallery, mail/inbox/emails→email, chats/history→sessions, memory/memories→brain, preferences→settings, models/serve/serving→cookbook. CRITICAL: "open memory/memories/brain" / "open skills" / "open notes" / "open documents" / "open cookbook" means OPEN THE PANEL — call `ui_control`, NOT a manage/list tool. The "manage_*" tools list contents in chat; `ui_control open_panel` opens the visual modal the user is asking for.
-- "Open/start a reply", "open a reply to <sender>", "draft a reply window" for email → find/read the email if needed, then call `ui_control` with `open_email_reply <uid> <folder> reply`. This opens the same email document compose window as clicking Reply in the Email UI. Do NOT call `reply_to_email` unless the user explicitly gave body text and wants to SEND immediately.
-- Bulk email actions ("delete all those", "archive these", "mark all read") require a real email tool call. Use `bulk_email` once with UIDs from the latest `list_emails` result and the same `account`; never claim success without the tool result.
-- Email UIDs are the values after `UID:` in tool output, not list row numbers. For example, row `1.` with `UID: 90186` must use `"90186"`, never `"1"`.
-- "Last/latest/newest email" means call `list_emails` with `max_results: 1`, `unread_only: false`, and the right `account`, then read the UID returned by that tool if full content is needed. NEVER use a table row number like "#18" as an email UID.
-- Plain "list/show/check my inbox/emails" means latest inbox mail, including read messages. Do not set `unread_only: true` unless the user explicitly asks for unread/needs attention.
-- Multiple email accounts: if tool output says "Other accounts" or the user asks "my Gmail?", "other inbox?", "work mail?", "custom domain mail?", or names any mailbox/account, DO NOT answer from memory or infer it is the same inbox. Call `list_email_accounts` if needed, then call `list_emails`/`read_email`/`bulk_email` with the exact `account` value for that mailbox. Account names are user-defined labels; if the user typo-matches a known account, use the closest listed account instead of claiming it does not exist. NEVER use `app_api` or `/api/email/accounts` to discover email accounts; that route is owner-filtered in tool context and can falsely return empty.
-- User identity facts/preferences ("my name is <name>", "I live in <place>", "I prefer concise replies", "call me <name>") → use `manage_memory` with action=add. NEVER use `manage_contact` for facts about the user unless the user explicitly says to create/update a contact and provides contact details such as an email or phone.
-- You are running INSIDE Odysseus — there is no OpenWebUI, ChatGPT, or external chat backend to query. All chats/sessions live in THIS app and are accessed via `list_sessions` (or `manage_session` with `action=list`), and deleted via `manage_session` with `action=delete`. Do NOT shell out to find sqlite files, curl localhost:8080, or grep for routers — those don't exist here. If `list_sessions` returns rows, that IS the source of truth.
-- After `list_sessions`, preserve the returned `[Chat title](#session-<id>)` links in your user-facing reply. Do not rewrite chat lists as plain tables with non-clickable titles.
-- "Cookbook" = the LLM-serving subsystem (NOT chat sessions, NOT a recipe app). Routing:
-  • "What's running" / "what's serving" / "show my cookbook" / "is anything up" → **first action MUST be `list_served_models` (no args)**. The tool is ALWAYS available. Do not run `ps aux`, do not `curl localhost:8000`, do not `which vllm`. Even if you don't remember seeing the tool listed, it IS available — call it. The output IS the source of truth (it tracks diffusion models, vLLM, SGLang, llama.cpp, Ollama, etc. — anything spawned via the cookbook, including remote hosts that `ps aux` here can't see).
-  • "What's downloading" / "show downloads" → `list_downloads` (always available).
-  • "What models do I have" → `list_cached_models` (always available).
-  • "Kill / stop / shut down" → `stop_served_model` (or `cancel_download`) with the session_id from the list.
-  • Searching for a model → `search_hf_models`.
-  • Downloading or serving a model → these run on a SERVER. If the user names one ("on gpu-box", "on the gpu box") pass `host=`. If they DON'T name one, the tool defaults to the cookbook's currently-selected server (NOT localhost). When there are multiple servers and it's genuinely ambiguous which they mean, call `list_cookbook_servers` and ask. Only download to localhost when the user explicitly says "locally" / "on this machine" (pass `local=true`).
-  • Image/inpainting/diffusion serve requests ("serve inpaint", "SDXL inpainting", "image model") → use `serve_model` with the built-in Diffusers command: `python3 scripts/diffusion_server.py --model <repo> --port 8100` (or another free port). Do NOT invent modules like `diffusers_api_server`, and do NOT use bash/ssh/pip directly. The Cookbook route copies `scripts/diffusion_server.py` to remote hosts and registers the image endpoint.
-  • Launching a known model ("run SD 3.5", "start the inpaint model", "serve qwen") → **FIRST** `list_serve_presets` to find the saved launch template, **THEN** `serve_preset {name: "..."}`. Do NOT fabricate a tmux command — the user already saved working ones from the UI. Only fall back to raw `serve_model` if no preset matches.
-  • Launching a model the user names ("serve minimax m2.7 on gpu-box") with NO preset → `serve_model {repo_id, cmd, host}`. The cookbook route OWNS tmux session creation AND state-file registration AND UI live-refresh — bypassing it produces an orphan the UI can never see. After launching, call `list_served_models` to verify readiness. If it reports a diagnosis and suggested adjusted command, retry with `serve_model` using that command instead of asking the user to debug raw tmux logs.
-  • Adopting an already-running tmux session (someone or a prior bash launch started a server, but it's not in the cookbook) → `adopt_served_model {host, tmux_session, model, port}`. This registers it in cookbook_state.json AND adds it as a chat endpoint so the user can pick it in the model dropdown. Use this whenever you find a running server that the cookbook doesn't know about.
-  • After ANY successful serve (preset or raw or adopted), the cookbook's serve flow auto-adds the model as an endpoint. If for some reason it didn't (e.g. the launch was external), call `adopt_served_model` to fix both at once, or `manage_endpoints` with action=add to register the URL manually.
-  **Anti-pattern (CRITICAL — saw the agent do this and it produced an orphan session invisible to the UI):** `ssh <host> 'tmux new-session ... vllm serve ...'` via bash. THIS IS WRONG even when it "works". The launch must go through `serve_model` so the cookbook route creates the tmux session AND writes the task to cookbook_state.json. If the user asks for a launch and you reach for bash/ssh/tmux, STOP — call `serve_model` instead. Bash launches don't show up in the Cookbook UI, can't be `stop_served_model`'d, and don't survive a UI refresh.
-  Anti-pattern (DO NOT do this — saw it twice): "I don't see list_served_models in my tool list, let me try bash ps aux." → wrong. The tool IS available. Just call it.
-  Anti-pattern: POSTing to `/api/cookbook/state` via `app_api` — that overwrites the whole state file (presets and all). Blocked. Use serve_preset / serve_model / stop_served_model.
-
-## UI conventions
-- When referencing an entity by ID, render it as a STANDARD markdown link with a hash-prefixed anchor — the frontend renders these as clickable jump buttons:
-  - Sessions / chats: `[Name](#session-<id>)`
-  - Documents: `[Title](#document-<id>)`
-  - Notes: `[Title](#note-<id>)`
-  - Gallery images: `[Caption](#image-<id>)`
-  - Emails (use the UID from list_emails/read_email output): `[Subject](#email-<uid>)`
-  - Calendar events (use the uid from manage_calendar): `[Summary](#event-<uid>)` — opens the calendar on that day
-  - Tasks: `[Task name](#task-<id>)`
-  - Skills: `[skill-name](#skill-<name>)`
-  - Research jobs: `[Topic](#research-<session_id>)`
-- The format is `[link text](#kind-<id>)` — text in square brackets, anchor in parens. NOT `[name] [#kind-id]` and NOT `[#kind-id]`. That's plain text and the user can't click it.
-- Use this inside lists, tables, prose — anywhere. Tables: `| Big Chat | [open](#session-abc123) |` works.
-- Examples:
-  - After `create_session` returns id `89effa28`: "Created [New Chat](#session-89effa28) — click to switch."
-  - Listing sessions: "1. [Big Chat](#session-abc123) — 2h ago, 2. [Code Review](#session-def456) — 5h ago\""""
-
-_AGENT_PREAMBLE = """\
 You are an AI assistant with tool access. Only the tools listed below are available for this turn.
 To use a tool, write a fenced code block with the tool name as the language tag. The block executes automatically and you see the output."""
 
@@ -233,7 +120,7 @@ _DOMAIN_RULES = {
 - For feedback/review/suggestions on an open document, use `suggest_document`.""",
     "email": """\
 ## Email rules
-- Email UIDs are the values after `UID:` in tool output, never list row numbers.
+- Email UIDs are the values after `UID:` in tool output, never list row numbers (row `1.` with `UID: 90186` → use `"90186"`, never `"1"`).
 - For latest/newest email, list with `max_results: 1`, `unread_only: false`, then read the returned UID if needed.
 - For named mailboxes/accounts, call `list_email_accounts` if needed and pass the exact `account` value.
 - Bulk email actions use `bulk_email` once with explicit UIDs; do not loop one message at a time.
@@ -241,7 +128,7 @@ _DOMAIN_RULES = {
     "cookbook": """\
 ## Cookbook/model-serving rules
 - Cookbook is the LLM-serving subsystem.
-- "What's running/serving" starts with `list_served_models`. "What's downloading" uses `list_downloads`.
+- "What's running/serving" starts with `list_served_models`. "What's downloading" uses `list_downloads`. These tools are ALWAYS available — never conclude a tool is missing and fall back to `ps aux`/bash.
 - Launch known models by checking `list_serve_presets` before raw `serve_model`.
 - Downloads/serves run on a Cookbook server; pass the named `host` when the user names one.
 - Do not launch model servers manually with bash/ssh/tmux. Use `serve_model`/`serve_preset` so the UI can track and stop them.
@@ -284,7 +171,8 @@ _DOMAIN_TOOL_MAP = {
     "notes_calendar_tasks": {"manage_notes", "manage_calendar", "manage_tasks"},
     "ui": {"ui_control"},
     "sessions": {"create_session", "list_sessions", "manage_session", "send_to_session", "search_chats"},
-    "files": {"bash", "python", "read_file", "write_file", "edit_file", "grep", "glob", "ls", "get_workspace"},
+    "files": {"bash", "python", "read_file", "write_file", "edit_file", "grep", "glob", "ls", "get_workspace",
+              "multi_edit", "apply_patch", "delete_file", "move_file", "run_tests", "git", "lint_format", "code_sandbox"},
     "settings": {"manage_settings", "manage_endpoints", "manage_mcp", "manage_webhooks", "manage_tokens", "app_api"},
     "contacts": {"resolve_contact", "manage_contact"},
 }
@@ -365,6 +253,54 @@ Edit an EXISTING file by exact string replacement. PREFER this over bash (sed/ec
 ```get_workspace
 ```
 Return the absolute path of the active workspace folder. File tools are CONFINED to it (paths can be RELATIVE to it); the shell starts there (cwd) but is NOT sandboxed. Call this first when the user says "the project"/"the code"/"this folder" without a path, instead of asking them. No arguments.""",
+
+    "ls": """\
+```ls
+<directory path — empty for the workspace root>
+```
+List a directory (dirs first, sizes shown). PREFER over `bash ls`.""",
+
+    "glob": """\
+```glob
+{"pattern": "**/*.py", "path": "<dir, optional>"}
+```
+Find files by name pattern, newest first. A bare pattern on one line also works. PREFER over `bash find`.""",
+
+    "grep": """\
+```grep
+{"pattern": "<regex>", "path": "<dir, optional>", "glob": "*.py", "ignore_case": false}
+```
+Search file CONTENTS by regex; returns file:line:text matches. A bare pattern on one line also works. PREFER over `bash grep` — it skips build/vendor dirs and caps output.""",
+
+    "multi_edit": """\
+```multi_edit
+{"path": "<file>", "edits": [{"old_string": "<exact>", "new_string": "<new>"}, ...]}
+```
+Apply several exact string replacements to ONE file atomically (all or none; shows a diff). Use instead of repeated edit_file calls to the same file.""",
+
+    "delete_file": "- ```delete_file``` — Delete a file. Content = the path (or JSON {\"path\": ...}).",
+    "move_file": "- ```move_file``` — Move/rename a file. Args (JSON): {\"source\": \"...\", \"destination\": \"...\"}.",
+
+    "code_sandbox": """\
+```code_sandbox
+{"files": [{"path": "solution.py", "content": "..."}], "run": "python3 solution.py"}
+```
+Write files into an ISOLATED scratch dir and run a command there (auto-cleans; nothing touches the user's project). If `run` is omitted it auto-runs pytest (when a test file is present) or the single .py file. USE THIS to build and TEST code you're asked to write, and for quick experiments — instead of littering the workspace with scratch files.""",
+
+    "run_tests": """\
+```run_tests
+{"path": "<test file/dir, optional>", "framework": "auto|pytest|npm|go|cargo"}
+```
+Run the project's test suite (auto-detects the framework) and return a parsed pass/fail summary. `{}` runs everything. PREFER over raw `bash pytest`.""",
+
+    "git": "- ```git``` — Local, non-destructive git. Args (JSON): {\"subcommand\": \"status|diff|log|show|branch|add|commit|stash|blame|...\", \"args\": [\"-5\", \"--oneline\"]}. No push/reset/rebase/merge/checkout/--force. PREFER over `bash git`.",
+    "lint_format": "- ```lint_format``` — Run the project's linter/formatter (auto-detects ruff/black/eslint/prettier/gofmt). Args (JSON): {\"path\": \".\", \"fix\": false}. Use after edits to catch style/syntax issues.",
+
+    "apply_patch": """\
+```apply_patch
+{"patch": "diff --git a/f.py b/f.py\\n--- a/f.py\\n+++ b/f.py\\n@@ ... @@\\n-old\\n+new\\n"}
+```
+Apply a unified diff to the workspace via `git apply` (path-safe). Use for multi-file changes you already have as a diff; for normal edits prefer edit_file/multi_edit.""",
 
     "create_document": """\
 ```create_document
@@ -627,9 +563,14 @@ _API_HOSTS = frozenset([
 ])
 _MCP_KEYWORDS = frozenset(["mcp", "browse", "browser", "website", "calendar", "event", "email",
                            "gmail", "screenshot", "navigate", "click", "miniflux", "rss", "feed"])
+# Single source of truth for admin-gated tool names. Used BOTH for prompt-prose
+# inclusion (_ADMIN_TOOLS) and schema filtering (_ADMIN_SCHEMA_NAMES) — these
+# were two hand-maintained sets that drifted (search_chats vs manage_documents/
+# manage_settings), producing described-but-not-callable tools and vice versa.
 _ADMIN_SCHEMA_NAMES = frozenset([
     "manage_session", "manage_skills", "manage_tasks",
     "manage_endpoints", "manage_mcp", "manage_webhooks", "manage_tokens",
+    "manage_documents", "manage_settings",
     "create_session", "list_sessions", "send_to_session", "pipeline",
     "ask_teacher", "list_models", "search_chats",
 ])
@@ -1029,10 +970,37 @@ def _classify_agent_request(messages: List[Dict], last_user: str) -> Dict[str, o
         domains.add("sessions")
     if has(r"\b(file|folder|directory|repo|git|grep|find in files|read file|edit file|shell|terminal|bash|python)\b"):
         domains.add("files")
+    # Coding language is a files-domain signal too — "fix the bug in stats.py",
+    # "refactor the parser", "review this code". Without this, clear coding
+    # turns seed no file tools and depend entirely on vector retrieval.
+    if has(r"\b(fix|debug|refactor|implement|compile|lint|unit test|bug|error|traceback|stack trace)\b",
+           r"\b(the|this|my|your|source) code\b", r"\bcodebase\b",
+           r"\.(py|js|ts|jsx|tsx|go|rs|java|kt|c|h|cpp|cs|sh|rb|php|html|css|sql|lua|toml|ya?ml|json)\b"):
+        domains.add("files")
     if has(r"\b(endpoint|api token|mcp|webhook|preference|configure|config|setting)\b"):
         domains.add("settings")
     if has(r"\b(contact|contacts|phone|phone number|address book|vcard)\b"):
         domains.add("contacts")
+
+    # "write/edit/review ..." on a CODING turn means code, not the document
+    # editor — the generic verbs above over-fire and pull create_document/
+    # edit_document (+ their rule pack) into e.g. "write a function to…",
+    # nudging the model toward the wrong tool family. Keep `documents` only
+    # when an explicit document/prose noun is present; give coding turns the
+    # file tools instead.
+    if "documents" in domains and not has(
+            r"\b(documents?|docs?|essay|poem|story|letter|outline|proofread)\b"):
+        _is_codey = "files" in domains
+        if not _is_codey:
+            try:
+                from src.model_router import classify_heuristic as _clf_doc
+                _dcat, _dconf = _clf_doc(text)
+                _is_codey = (_dcat == "coding" and _dconf in ("high", "med"))
+            except Exception:
+                pass
+        if _is_codey:
+            domains.discard("documents")
+            domains.add("files")
 
     low_signal = not continuation and not domains
     return {
@@ -1400,13 +1368,19 @@ def _build_system_prompt(
             'that open draft is the target: use update_document/edit_document on it instead of creating another document.'
         )
 
-    # Coding persona on GENERAL chat/agent coding turns. The cowork + sandbox
-    # paths already prepend the coding brief (coding_prompt.coding_system_message)
-    # and have sandbox_build=True here, so gate those out to avoid a double
-    # injection. Everywhere else, a coding-classified turn gets the same
-    # senior-engineer discipline (read-before-edit -> plan -> verify -> iterate)
-    # plus self-todo tracking via the update_plan tool.
-    if not suppress_local_context and not sandbox_build:
+    # Coding persona on GENERAL chat/agent coding turns. The sandbox path sets
+    # sandbox_build=True; cowork prepends coding_system_message() itself
+    # (routes/cowork_routes.py) WITHOUT setting sandbox_build — so also detect
+    # the brief in the incoming messages, or every cowork coding turn would
+    # carry the ~1,150-token brief TWICE. Everywhere else, a coding-classified
+    # turn gets the same senior-engineer discipline (read-before-edit -> plan
+    # -> verify -> iterate) plus self-todo tracking via the update_plan tool.
+    _coding_brief_injected = bool(sandbox_build) or any(
+        m.get("role") == "system"
+        and "expert senior software engineer" in str(m.get("content") or "")
+        for m in (messages or [])
+    )
+    if not suppress_local_context and not _coding_brief_injected:
         try:
             if get_setting("coding_persona_enabled", True):
                 _coding_user = _extract_last_user_message(messages) or ""
@@ -1416,6 +1390,7 @@ def _build_system_prompt(
                     from src.coding_prompt import coding_general_brief
                     _todo_on = bool(get_setting("agent_self_todo_enabled", True))
                     agent_prompt += "\n\n" + coding_general_brief(include_todo=_todo_on)
+                    _coding_brief_injected = True
         except Exception:
             logger.debug("coding persona injection skipped (non-fatal)", exc_info=True)
 
@@ -1474,9 +1449,14 @@ def _build_system_prompt(
                 # Always-on ProForge Operating Protocol: the shared, repeatable
                 # loop the ENTIRE agent suite follows (not keyword-gated). The
                 # task-specific SME skill preload below layers depth on top.
+                # SKIPPED when the coding persona brief is in the prompt — the
+                # brief already carries the same understand→plan→implement→
+                # verify→iterate discipline, and duplicating it costs ~550
+                # tokens per turn on the context-constrained local models.
                 try:
                     from src.proforge_protocol import get_protocol_block
-                    _pf_protocol_block = get_protocol_block(last_user)
+                    _pf_protocol_block = ("" if _coding_brief_injected
+                                          else get_protocol_block(last_user))
                 except Exception:
                     _pf_protocol_block = ""
                 if _pf_protocol_block:
@@ -1620,12 +1600,8 @@ def _build_system_prompt(
     return merged, mcp_schemas
 
 
-_ADMIN_TOOLS = {
-    "manage_session", "manage_skills", "manage_tasks",
-    "manage_endpoints", "manage_mcp", "manage_webhooks", "manage_tokens",
-    "manage_documents", "manage_settings", "create_session", "list_sessions",
-    "send_to_session", "pipeline", "ask_teacher", "list_models",
-}
+# Same names as the schema filter — see the comment on _ADMIN_SCHEMA_NAMES.
+_ADMIN_TOOLS = set(_ADMIN_SCHEMA_NAMES)
 
 def _build_base_prompt(
     disabled_tools,
@@ -2069,6 +2045,15 @@ def _build_actions_snapshot(tool_events: list, limit: int = 8000) -> str:
         head = f"[{tool}] {cmd}" if cmd else f"[{tool}]"
         rc_s = f" (exit {rc})" if rc not in (None, 0) else ""
         body = (out[:1200] + " …") if len(out) > 1200 else (out or "(no output)")
+        # The actual diff is what a verifier judges SEMANTIC correctness from —
+        # "Edited foo.py (1 replacement)" alone says nothing about the change.
+        # File-tool diffs are dicts ({"text": ..., "added": ...}); take the text.
+        diff = ev.get("diff")
+        if isinstance(diff, dict):
+            diff = diff.get("text") or ""
+        diff = str(diff or "").strip()
+        if diff:
+            body += "\n" + (diff[:1600] + " …" if len(diff) > 1600 else diff)
         parts.append(f"{head}{rc_s}\n-> {body}")
     snap = "\n\n".join(parts)
     return snap[:limit] if len(snap) > limit else snap
@@ -2098,6 +2083,13 @@ async def _run_verifier_subagent(
         "2. Outputs/edits match what was asked — nothing missing, no extra or unrequested changes\n"
         "3. Tool results show success, not errors or empty output that got ignored\n"
         "4. Anything the request said to leave alone was left unchanged\n"
+        "5. SEMANTIC correctness, not just clean execution: work out from the REQUEST "
+        "itself what the correct result/behavior should be (e.g. the expected output "
+        "for the concrete input shown in the actions), and check the recorded outputs "
+        "actually match it. 'Ran without error' does not by itself satisfy a "
+        "correctness request.\n"
+        "6. If the request was to fix a specific problem, the diff addresses THAT "
+        "problem — not a different incidental issue found along the way\n"
         "</checklist>\n\n"
         "Reason briefly (2-3 sentences max). Then output EXACTLY one of:\n"
         "  VERIFICATION: SUCCESS\n"
@@ -2108,7 +2100,10 @@ async def _run_verifier_subagent(
         raw = await llm_call_async(
             url=endpoint_url, model=model,
             messages=[{"role": "user", "content": prompt}],
-            headers=headers, temperature=0.0, max_tokens=600, timeout=60,
+            # Reasoning-heavy local judges (gpt-oss 120B) spend most of the
+            # budget thinking; 600 tokens truncated the response BEFORE the
+            # verdict line, which parsed as a silent pass. Give headroom.
+            headers=headers, temperature=0.0, max_tokens=1200, timeout=150,
         )
     except Exception as e:
         logger.warning(f"[agent] verifier subagent failed: {e}")
@@ -2118,9 +2113,17 @@ async def _run_verifier_subagent(
     for line in raw.splitlines():
         if "VERIFICATION:" in line:
             last_v = line.strip()
-    if not last_v or "VERIFICATION: FAIL:" not in last_v:
+    # Log every outcome — a truncated/verdict-less response silently passing is
+    # indistinguishable from a real SUCCESS without this.
+    if not last_v:
+        logger.warning("[agent] verifier returned no VERIFICATION line (len=%d) — treating as pass",
+                       len(raw or ""))
+        return []
+    if "VERIFICATION: FAIL:" not in last_v:
+        logger.info("[agent] verifier verdict: %s", last_v[:200])
         return []
     reasons = last_v.split("VERIFICATION: FAIL:", 1)[1].strip()
+    logger.info("[agent] verifier verdict: FAIL — %s", reasons[:300])
     return [r.strip() for r in reasons.split(";") if r.strip()]
 
 
@@ -2613,6 +2616,18 @@ async def stream_agent_loop(
         active_email=active_email,
         sandbox_build=sandbox_build or trusted_execution,
     )
+    # Scaffold budget scaling: a 32k local model shouldn't spend the same
+    # scaffold (packs + corpus) as a 200k API model — on small windows the
+    # reference material crowds out the conversation it's meant to serve.
+    # 0 = no scaling (unknown window or big model). Fail-safe: full budget.
+    _scaffold_win = 0
+    try:
+        from src.settings import get_setting as _gs_scaf
+        if _gs_scaf("scaffold_budget_scaling", True):
+            from src.model_context import get_context_length
+            _scaffold_win = int(get_context_length(endpoint_url, model) or 0)
+    except Exception:
+        _scaffold_win = 0
     # Inject relevant local knowledge-pack reference for THIS query as a system
     # message (bounded; no-op when nothing matches). Central point — every flow
     # (chat, cowork, sandbox) routes through here, so the knowledge packs reach
@@ -2620,11 +2635,17 @@ async def stream_agent_loop(
     if _last_user and len(_last_user.split()) >= 3:
         try:
             from src.coding_knowledge import coding_knowledge_message
-            _kn_msg = coding_knowledge_message(_last_user)
+            _kn_cap = None  # None → module default (6000 chars)
+            if 0 < _scaffold_win <= 20480:
+                _kn_cap = 2800
+            elif 0 < _scaffold_win <= 40960:
+                _kn_cap = 4200
+            _kn_msg = coding_knowledge_message(_last_user, max_total_chars=_kn_cap)
             if _kn_msg:
                 _at = 1 if (messages and messages[0].get("role") == "system") else 0
                 messages.insert(_at, _kn_msg)
-                logger.info("[knowledge] injected %d chars of pack reference", len(_kn_msg.get("content", "")))
+                logger.info("[knowledge] injected %d chars of pack reference (cap=%s, win=%s)",
+                            len(_kn_msg.get("content", "")), _kn_cap or "default", _scaffold_win or "?")
         except Exception:
             logger.debug("[knowledge] injection skipped", exc_info=True)
     # Licensed external-knowledge corpus (bulk-RAG tier): inject the cited,
@@ -2637,7 +2658,8 @@ async def stream_agent_loop(
             if get_setting("corpus_chat_injection", True):
                 from src.knowledge_corpus import corpus_reference_block
                 _min = float(get_setting("corpus_injection_min_score", 0.45) or 0.45)
-                _corpus_msg = corpus_reference_block(_last_user, k=3, min_score=_min)
+                _corpus_k = 2 if 0 < _scaffold_win <= 40960 else 3
+                _corpus_msg = corpus_reference_block(_last_user, k=_corpus_k, min_score=_min)
                 if _corpus_msg:
                     _at = 1 if (messages and messages[0].get("role") == "system") else 0
                     messages.insert(_at, {"role": "system", "content": _corpus_msg})
@@ -2826,6 +2848,9 @@ async def stream_agent_loop(
     # at most once per completion (it re-arms only on fresh edits).
     _edited_paths: Set[str] = set()
     _autoverify_count = 0
+    # Whether any code-editing tool ran this turn (cumulative, never reset) —
+    # the strong-judge escalation only pays its latency for coding work.
+    _code_work_done = False
 
     for round_num in range(1, max_rounds + 1):
         round_response = ""
@@ -3269,7 +3294,9 @@ async def stream_agent_loop(
                         "content": (
                             "Your edits left these files with syntax errors. Fix them "
                             "before finishing — read the file, correct the cause, and "
-                            "re-check:\n\n" + "\n\n".join(_syntax_errors)
+                            "re-check:\n\n" + "\n\n".join(_syntax_errors) +
+                            "\n\nThe user has already seen your earlier summary — do not "
+                            "restate it; report only the fix, briefly."
                         ),
                     })
                     _edited_paths = set()  # require a fresh edit before re-checking
@@ -3284,16 +3311,40 @@ async def stream_agent_loop(
                 or (get_setting("agent_verifier_auto_strong", True)
                     and _model_is_strong(endpoint_url, model))
             )
+            # Strong-judge escalation: when the TURN model is weak (small local),
+            # run the verifier anyway — on the configured 'complex' model as an
+            # independent judge. Observed live: a weak executor ran the still-buggy
+            # code, looked at the wrong output, and declared it correct — it cannot
+            # self-derive expected behavior, so prompt-level discipline isn't
+            # enough; a stronger judge with fresh context can catch it. Fail-safe:
+            # judge missing/cold → the LLM call errors → verifier returns [] and
+            # the turn completes normally.
+            # Scoped to turns that actually CHANGED CODE: a weak-model judge
+            # pass costs 30-150s, which is worth it for an edited file but not
+            # for "add a note" / "send the email" effectful turns.
+            _judge_model = None
+            if (not _verifier_on and _code_work_done
+                    and get_setting("agent_verifier_strong_judge", True)):
+                try:
+                    _jm = (get_setting("auto_model_complex", "") or "").strip()
+                    if (_jm and _jm.lower() != (model or "").strip().lower()
+                            and _model_is_strong(endpoint_url, _jm)):
+                        _judge_model = _jm
+                except Exception:
+                    _judge_model = None
             if (_effectful_used and not _force_answer
                     and _claimed_done
                     and _verifier_rounds < _VERIFIER_MAX_ROUNDS
-                    and _verifier_on):
+                    and (_verifier_on or _judge_model)):
                 # Brief "working" indicator while the verifier runs.
                 yield f'data: {json.dumps({"type": "agent_step", "round": round_num})}\n\n'
+                if _judge_model:
+                    logger.info("[agent] verifier running on strong judge %r (turn model %r)",
+                                _judge_model, model)
                 _vfail = await _run_verifier_subagent(
                     _verifier_instruction,
                     _build_actions_snapshot(tool_events),
-                    endpoint_url=endpoint_url, model=model, headers=headers,
+                    endpoint_url=endpoint_url, model=(_judge_model or model), headers=headers,
                 )
                 if _vfail:
                     _verifier_rounds += 1
@@ -3307,7 +3358,9 @@ async def stream_agent_loop(
                             "An independent verifier reviewed your work against the "
                             "original request and found issues that must be fixed before "
                             "this is actually done:\n- " + "\n- ".join(_vfail) +
-                            "\n\nFix these now using tools, then finish."
+                            "\n\nFix these now using tools, then finish. The user has "
+                            "already seen your earlier summary — do not restate it; "
+                            "report only what you fixed, briefly."
                         ),
                     })
                     # Require fresh effectful work before verifying again, so we
@@ -3325,7 +3378,7 @@ async def stream_agent_loop(
                     and _claimed_done
                     and not _pf_verify_nudged
                     and get_setting("proforge_protocol_enabled", True)
-                    and not _verifier_on):
+                    and not (_verifier_on or _judge_model)):
                 _pf_verify_nudged = True
                 messages.append({
                     "role": "system",
@@ -3333,8 +3386,14 @@ async def stream_agent_loop(
                         "ProForge protocol — VERIFY before you finish: you changed "
                         "something this turn. Confirm each acceptance criterion with "
                         "concrete evidence now (read the file back, run it, or run the "
-                        "test). If you already verified, state the evidence in one line "
-                        "and then finish. If a check fails, fix it (REPAIR) and re-verify."
+                        "test). First state what the correct result SHOULD be — derived "
+                        "from the REQUEST, not from your code — then compare the actual "
+                        "result against it; running clean is not the same as correct. "
+                        "If you already verified, state the evidence in one line "
+                        "and then finish. If a check fails, fix it (REPAIR) and re-verify. "
+                        "The user has ALREADY SEEN your summary above — do NOT restate it. "
+                        "After verifying, reply with only the verification result "
+                        "(one or two lines), nothing more."
                     ),
                 })
                 continue
@@ -3878,6 +3937,11 @@ async def stream_agent_loop(
                 if isinstance(_ep, str) and _ep:
                     _edited_paths.add(_ep)
                     _autoverify_count = 0
+            # Cumulative "this turn changed code" flag (never reset within the
+            # turn, unlike _edited_paths) — scopes the strong-judge escalation
+            # to coding work so notes/email turns don't pay judge latency.
+            if block.tool_type in _CODE_EDIT_TOOLS or block.tool_type == "apply_patch":
+                _code_work_done = True
 
             formatted = format_tool_result(desc, result)
             tool_results.append(formatted)

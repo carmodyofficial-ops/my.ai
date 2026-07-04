@@ -90,7 +90,14 @@ def test_duplicate_route_is_attempted_only_once(monkeypatch):
         return out
 
     asyncio.run(run())
-    assert calls == [("u1", "m1"), ("u2", "m2")], f"duplicate route re-attempted: {calls}"
+    # Since eb4a58e a transient pre-content 503 is retried on the SAME endpoint
+    # up to MAX_RETRIES attempts before falling over, so each distinct route
+    # appears MAX_RETRIES times. The invariant under test is unchanged: the
+    # duplicate (u1, m1) candidate is deduped — the chain never sails back into
+    # the dead primary after moving on to u2.
+    n = llm_core.LLMConfig.MAX_RETRIES
+    assert calls == [("u1", "m1")] * n + [("u2", "m2")] * n, \
+        f"duplicate route re-attempted as a separate candidate: {calls}"
 
 
 def test_summarize_stream_error():

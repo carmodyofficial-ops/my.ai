@@ -191,18 +191,32 @@ def test_providers_disabled_without_endpoints():
     assert sh.providers_health([])["status"] == sh.DISABLED
 
 
+# providers_health now double-checks liveness with a dedicated reachability
+# probe (commit cc2afb2): _probe_endpoint returns curated model lists even for
+# an unreachable endpoint, so a non-empty model list is not proof of health.
+# Tests inject `reachable_probe` too, or the real _ping_endpoint is imported
+# and dials the fake URLs.
+def _reachable(base, key, timeout):
+    return {"reachable": True}
+
+
 def test_providers_ok_all_reachable():
     s = sh.providers_health([_ep("a")],
-                            probe=lambda base, key, timeout: ["m1", "m2"])
+                            probe=lambda base, key, timeout: ["m1", "m2"],
+                            reachable_probe=_reachable)
     assert s["status"] == sh.OK
     assert s["meta"]["endpoints"][0]["model_count"] == 2
 
 
-def test_providers_degraded_some_empty():
+def test_providers_degraded_some_unreachable():
     def probe(base, key, timeout):
         return ["m1"] if "good" in base else []
 
-    s = sh.providers_health([_ep("good"), _ep("bad")], probe=probe)
+    def ping(base, key, timeout):
+        return {"reachable": "good" in base}
+
+    s = sh.providers_health([_ep("good"), _ep("bad")], probe=probe,
+                            reachable_probe=ping)
     assert s["status"] == sh.DEGRADED
 
 
@@ -365,7 +379,7 @@ def test_providers_bounded_marks_slow_as_timeout(monkeypatch):
     eps = [{"name": "fast", "base_url": "http://fast", "api_key": "k"},
            {"name": "slow", "base_url": "http://slow", "api_key": "k"}]
     t0 = time.monotonic()
-    out = sh.providers_health(eps, probe=probe)
+    out = sh.providers_health(eps, probe=probe, reachable_probe=_reachable)
     elapsed = time.monotonic() - t0
     assert elapsed < 4, f"providers_health not bounded: took {elapsed:.1f}s"
     by = {e["name"]: e for e in out["meta"]["endpoints"]}

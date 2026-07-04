@@ -50,6 +50,12 @@ def _patch_common(monkeypatch, exec_calls):
     monkeypatch.setattr(al, "get_setting", lambda key, default=None: default, raising=False)
     monkeypatch.setattr(al, "get_mcp_manager", lambda: None, raising=False)
     monkeypatch.setattr(al, "estimate_tokens", lambda *a, **k: 10, raising=False)
+    # Since f46f4fb fenced blocks only parse as tool calls at all on an
+    # exec-capable turn (admin/single-user owner, bash/python not blocked).
+    # Simulate an exec-capable caller so these tests isolate the native-vs-
+    # textual model distinction (issue #3222) rather than the exec gate.
+    monkeypatch.setattr(al, "owner_is_admin_or_single_user", lambda owner: True, raising=False)
+    monkeypatch.setattr(al, "blocked_tools_for_owner", lambda owner: set(), raising=False)
 
     async def _fake_exec(block, *a, **k):
         exec_calls.append(block)

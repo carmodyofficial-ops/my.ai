@@ -41,27 +41,30 @@ def test_guest_seeded_after_admin_exists_and_login_works(tmp_path):
     assert mgr.is_admin("guest") is False
 
 
-def test_guest_is_repaired_to_low_privilege_non_admin(tmp_path):
+def test_guest_is_repaired_to_canonical_privileges_non_admin(tmp_path):
+    """A drifted guest record is repaired back to the CANONICAL builtin guest:
+    never an admin ACCOUNT, always exactly BUILTIN_GUEST_PRIVILEGES (which, per
+    the operator's 2026-06-29 decision, is currently the full admin privilege
+    map — the invariant tested here is the repair-to-canonical mechanic, not a
+    specific privilege level)."""
+    from core.auth import BUILTIN_GUEST_PRIVILEGES
+
     mgr = _make_manager(tmp_path)
     assert mgr.create_user("admin", "admin-password", is_admin=True) is True
     mgr._config["users"]["guest"] = {
         "password_hash": "hash:bad",
         "created": 1,
         "is_admin": True,
-        "privileges": {
-            "can_use_agent": True,
-            "can_use_bash": True,
-            "can_manage_memory": True,
-        },
+        "privileges": {"can_use_agent": False, "totally_bogus_privilege": True},
     }
 
     assert mgr.ensure_builtin_guest() is True
     assert mgr.is_admin("guest") is False
     assert mgr.verify_password("guest", "Guest123") is True
     privs = mgr.get_privileges("guest")
-    assert privs["can_use_agent"] is False
-    assert privs["can_use_bash"] is False
-    assert privs["can_manage_memory"] is False
+    for key, want in BUILTIN_GUEST_PRIVILEGES.items():
+        assert privs.get(key) == want, f"privilege {key!r} not repaired to canonical"
+    assert "totally_bogus_privilege" not in privs
 
 
 def test_guest_cannot_be_manually_created_deleted_renamed_promoted_or_privilege_edited(tmp_path):

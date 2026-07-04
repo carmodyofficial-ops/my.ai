@@ -138,6 +138,24 @@ class RunTestsTool:
             return {"framework": framework, "ok": False, "timed_out": True,
                     "error": f"tests timed out after {t}s — process killed",
                     "output": _truncate(combined, MAX_OUTPUT_CHARS)}
+        low = combined.lower()
+        # A missing test runner is an environment problem, not a failing test
+        # run — say so explicitly instead of a bare "exit 1".
+        if "no module named pytest" in low:
+            return {"framework": framework, "ok": False, "no_tests": True,
+                    "error": "pytest is not installed in this environment — "
+                             "cannot run Python tests. Verify another way "
+                             "(e.g. run the code directly).",
+                    "output": _truncate(combined, MAX_OUTPUT_CHARS)}
+        # "No tests exist here" is a NEUTRAL result, not a failure. Without this,
+        # pytest's exit 5 (nothing collected) reads as a failing test run and
+        # sends the model into pointless re-verify loops on test-less workspaces.
+        if (framework == "pytest" and rc == 5) or "no tests ran" in low or "no test files" in low:
+            return {"framework": framework, "exit_code": 0, "ok": True, "no_tests": True,
+                    "passed": 0, "failed": 0, "errors": 0,
+                    "summary": "no tests found in this workspace — nothing to run "
+                               "(verify another way, e.g. run the code directly)",
+                    "output": _truncate(combined, MAX_OUTPUT_CHARS) or "(no output)"}
         summary = _parse_test_summary(combined, rc)
         return {"framework": framework, "exit_code": rc or 0, **summary,
                 "output": _truncate(combined, MAX_OUTPUT_CHARS) or "(no output)"}

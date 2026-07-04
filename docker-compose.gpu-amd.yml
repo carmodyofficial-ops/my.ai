@@ -46,6 +46,10 @@ services:
       - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/app.db}
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
       - LOCALHOST_BYPASS=${LOCALHOST_BYPASS:-false}
+      # Open self-registration kill-switch. Default closed: on a LAN-reachable
+      # instance, leave this false and create accounts as an admin. Set to true
+      # only if you intentionally want anyone who can reach the UI to sign up.
+      - ODYSSEUS_OPEN_SIGNUP=${ODYSSEUS_OPEN_SIGNUP:-false}
       - ODYSSEUS_ADMIN_USER=${ODYSSEUS_ADMIN_USER:-admin}
       - ODYSSEUS_ADMIN_PASSWORD=${ODYSSEUS_ADMIN_PASSWORD:-}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost,http://127.0.0.1}

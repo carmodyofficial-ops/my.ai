@@ -232,7 +232,10 @@ def test_browse_is_admin_gated(monkeypatch):
     router = wr.setup_workspace_routes()
     browse = next(r.endpoint for r in router.routes if r.path == "/api/workspace/browse")
 
-    monkeypatch.setattr(wr, "get_current_user", lambda req: "bob")
+    # The endpoints resolve the caller via effective_user (so admin ody_
+    # Bearer tokens are attributed to their owner, commit 0a9323c) — patch
+    # the symbol the route actually calls.
+    monkeypatch.setattr(wr, "effective_user", lambda req: "bob")
     monkeypatch.setattr(wr, "owner_is_admin_or_single_user", lambda owner: False)
     with pytest.raises(HTTPException) as ei:
         browse(request=object(), path="/")
@@ -283,7 +286,8 @@ def test_browse_marks_root_unselectable_and_vet_endpoint(monkeypatch):
     browse = next(r.endpoint for r in router.routes if r.path == "/api/workspace/browse")
     vet = next(r.endpoint for r in router.routes if r.path == "/api/workspace/vet")
 
-    monkeypatch.setattr(wr, "get_current_user", lambda req: "admin")
+    # Routes resolve the caller via effective_user (commit 0a9323c).
+    monkeypatch.setattr(wr, "effective_user", lambda req: "admin")
     monkeypatch.setattr(wr, "owner_is_admin_or_single_user", lambda owner: True)
 
     out = browse(request=object(), path="/")

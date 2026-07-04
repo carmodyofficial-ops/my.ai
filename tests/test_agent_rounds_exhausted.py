@@ -35,6 +35,12 @@ def _patch_common(monkeypatch):
     monkeypatch.setattr(al, "get_setting", lambda key, default=None: default, raising=False)
     monkeypatch.setattr(al, "get_mcp_manager", lambda: None, raising=False)
     monkeypatch.setattr(al, "estimate_tokens", lambda *a, **k: 10, raising=False)
+    # Since f46f4fb fenced ```bash blocks only parse as tool calls on an
+    # exec-capable turn (admin/single-user owner, bash not blocked); otherwise
+    # they are illustrative content. Simulate an exec-capable caller so the
+    # fenced block keeps the loop busy every round.
+    monkeypatch.setattr(al, "owner_is_admin_or_single_user", lambda owner: True, raising=False)
+    monkeypatch.setattr(al, "blocked_tools_for_owner", lambda owner: set(), raising=False)
 
     async def _fake_exec(block, *a, **k):
         return ("bash", {"output": "ok", "exit_code": 0})

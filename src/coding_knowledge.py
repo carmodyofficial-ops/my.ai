@@ -317,13 +317,18 @@ _HOLLOW_MARKERS = ("to expand", "procedures to expand", "procedure for testing",
                    "practical playbook 1")
 # Substrings in a pack id that mark it as a guard/policy/governance contract.
 _DISCOVERY_SKIP_SUBSTR = ("guard", "policy", "_contract", "abstention", "protocol",
-                          "k2t_", "k2r_", "rubric")
+                          "k2t_", "k2r_", "rubric",
+                          # internal system/ops pack families (see skip-ids below)
+                          "system_architecture", "runbook")
 # Packs never auto-served: system self-awareness + security/auth internals + meta.
 _DISCOVERY_SKIP_IDS = {
     "skills_and_tools", "projectforge_sme", "my_ai_system_core",
     "auth_and_guest_access_model", "tool_and_agent_safety",
     "myai_system_architecture_runtime_brief", "testing_regression",
     "product_experience_and_ui_standards",
+    # Internal system/ops packs: host paths, model roster, auth/session file
+    # locations, LAN URLs, admin runbooks. Must not reach a user's chat context.
+    "odysseus_system_architecture", "ops_runbook_and_incident_response",
 }
 _DISC_CACHE: dict = {"sig": None, "entries": None}
 
@@ -335,12 +340,25 @@ def _is_hollow(text: str) -> bool:
 
 def _discovered_entries() -> list[dict]:
     """Allowlist-shaped entries for substantive, non-guard, non-curated packs,
-    discovered from the pack dirs + their manifests. Cached by dir mtime signature.
-    Fail-safe: returns [] on any problem."""
+    discovered from the pack dirs + their manifests. Cached by a signature over
+    each pack's manifest/knowledge/reference mtimes. Fail-safe: [] on any problem."""
     try:
         curated = {e["id"] for e in _CODING_KNOWLEDGE}
         dirs = sorted(p for p in _PACKS.iterdir() if p.is_dir())
-        sig = tuple((p.name, int(p.stat().st_mtime)) for p in dirs)
+
+        def _mt(f: Path) -> float:
+            try:
+                return f.stat().st_mtime
+            except OSError:
+                return 0.0
+
+        # Signature covers the routed FILES (manifest triggers, served content),
+        # not just the dir mtime — on POSIX editing a file does not touch the
+        # parent dir's mtime, so a dir-only signature went stale on content edits.
+        sig = tuple(
+            (p.name,) + tuple(_mt(p / n) for n in ("manifest.json", "knowledge.md", "reference.md"))
+            for p in dirs
+        )
         if _DISC_CACHE.get("sig") == sig and _DISC_CACHE.get("entries") is not None:
             return _DISC_CACHE["entries"]
         out: list[dict] = []
@@ -507,7 +525,11 @@ def coding_knowledge_block(query: str, *, max_total_chars: int = _MAX_TOTAL_CHAR
         return ""
 
 
-def coding_knowledge_message(query: str) -> dict | None:
-    """A system message carrying the reference block, or None if nothing matched."""
-    block = coding_knowledge_block(query)
+def coding_knowledge_message(query: str, max_total_chars: int | None = None) -> dict | None:
+    """A system message carrying the reference block, or None if nothing matched.
+
+    ``max_total_chars`` overrides the default pack budget — the caller scales it
+    down for small-context models so scaffold doesn't crowd out the request."""
+    block = coding_knowledge_block(
+        query, max_total_chars=int(max_total_chars or _MAX_TOTAL_CHARS))
     return {"role": "system", "content": block} if block else None

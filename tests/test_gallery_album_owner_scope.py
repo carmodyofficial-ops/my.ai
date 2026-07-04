@@ -58,6 +58,12 @@ def test_delete_album_cleanup_is_owner_scoped():
 
 def test_get_or_404_album_enforces_owner():
     # Guard the precedent we rely on: the helper rejects another user's album.
+    # The direct `album.owner != user` comparison was replaced by
+    # _owner_matches() (commit cc2afb2) so no-auth/localhost-bypass mode keeps
+    # the same fail-open behaviour as the list-route owner filters; the
+    # ownership guard itself is unchanged.
     fns = _function_sources()
     helper = fns["_get_or_404_album"]
-    assert "album.owner != user" in helper
+    assert "not _owner_matches(user, album.owner)" in helper
+    # And the helper must still 404 (not leak existence) on mismatch.
+    assert 'raise HTTPException(404, "Album not found")' in helper
