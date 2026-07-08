@@ -1,0 +1,11 @@
+{
+  "name": "Enterprise Product Management",
+  "pack_id": "enterprise_product_management",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["product management", "roadmap", "prioritization", "rice score", "wsjf", "cost of delay", "moscow", "okrs", "kpi", "north-star metric", "prd", "mvp scoping", "product discovery", "activation retention", "build vs buy", "technical debt", "stakeholder alignment", "experiment design"],
+  "topics": ["product-management", "roadmap", "prioritization", "okrs", "metrics", "discovery", "mvp", "stakeholders"],
+  "summary": "Enterprise PM playbook: discovery vs delivery, RICE/WSJF/MoSCoW prioritization, OKRs vs KPIs, PRDs, MVP scoping, product metrics, experiments, build-vs-buy, tech-debt, and common failure modes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

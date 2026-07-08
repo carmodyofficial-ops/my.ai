@@ -1,0 +1,11 @@
+{
+  "name": "Finance & Trading",
+  "pack_id": "finance_and_trading",
+  "trust_level": "high",
+  "guarded": true,
+  "triggers": ["position sizing", "risk per trade", "r-multiple", "kelly criterion", "fixed fractional", "stop loss", "sharpe ratio", "sortino", "max drawdown", "profit factor", "expectancy", "backtest", "look-ahead bias", "survivorship bias", "overfitting", "walk-forward", "slippage", "order types", "market structure"],
+  "topics": ["risk", "sizing", "backtesting", "metrics", "market-structure", "strategy-eval", "stops"],
+  "summary": "Trading risk management, position sizing, strategy evaluation metrics, backtesting hygiene, and market structure basics, framed analytically rather than as advice.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

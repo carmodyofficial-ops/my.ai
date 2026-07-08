@@ -1,0 +1,11 @@
+{
+  "name": "Phaser 3 Web Games",
+  "pack_id": "phaser_web_games",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["phaser", "phaser 3", "phaser scene", "preload create update", "arcade physics", "phaser sprite", "spritesheet animation", "phaser input", "cursor keys", "tilemap", "tiled map", "phaser camera", "camera follow", "scale manager", "phaser physics body", "setinteractive", "phaser game config", "html5 game"],
+  "topics": ["phaser", "scenes", "arcade-physics", "sprites", "tilemaps", "input", "camera"],
+  "summary": "Phaser 3 essentials: scene lifecycle, game config, asset loading, arcade physics, animations, input, Tiled tilemaps, camera/scale management, and the most common gotchas.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

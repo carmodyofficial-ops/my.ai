@@ -1,0 +1,11 @@
+{
+  "name": "Web Frontend Game Development",
+  "pack_id": "web_frontend_game_dev",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["canvas game", "html5 game", "browser game", "requestanimationframe", "game loop", "fixed timestep", "sprite sheet", "texture atlas", "aabb collision", "web audio", "audiocontext", "devicepixelratio", "touch controls", "virtual joystick", "object pooling", "pixijs", "phaser", "drawimage", "spatial hash", "gc stutter"],
+  "topics": ["canvas", "game loop", "input", "collision", "web audio", "sprites", "performance"],
+  "summary": "Browser game reference: requestAnimationFrame and fixed-timestep loops, Canvas 2D rendering and atlases, keyboard/mouse/touch input, collision, Web Audio, asset loading, and profiling/pooling performance patterns.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

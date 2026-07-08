@@ -1,0 +1,11 @@
+{
+  "name": "Game Math & Physics",
+  "pack_id": "game_math_physics",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["vector normalize", "dot product", "cross product", "lerp", "slerp", "easing function", "delta time damping", "atan2", "angle wrap", "aabb collision", "circle collision", "raycast", "platformer physics", "gravity jump", "coyote time", "jump buffering", "tunneling", "collision detection", "game math"],
+  "topics": ["vectors", "interpolation", "angles", "collision", "raycasting", "platformer", "physics"],
+  "summary": "Practical game math: vector operations, framerate-independent lerp/damping, angle handling, AABB/circle collision, raycasting, and platformer physics including coyote time and jump buffering.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

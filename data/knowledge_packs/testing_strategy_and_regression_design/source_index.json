@@ -1,0 +1,13 @@
+{
+  "id": "testing_strategy_and_regression_design",
+  "created_at": "2026-06-21T21:01:35.750057+00:00",
+  "sources": [
+    {
+      "path": "knowledge.md",
+      "kind": "markdown",
+      "title": "Testing Strategy and Regression Design",
+      "description": "Purpose: Improve the AI's ability to design meaningful validation.",
+      "retrieval_weight": 1.0
+    }
+  ]
+}

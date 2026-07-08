@@ -1,0 +1,11 @@
+{
+  "name": "Secure Coding",
+  "pack_id": "secure_coding",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["secure coding", "sql injection", "xss", "csrf", "input validation", "parameterized query", "path traversal", "command injection", "ssrf", "idor", "bcrypt", "argon2", "password hashing", "jwt security", "secrets management", "csp", "security headers", "deserialization", "timing attack", "owasp"],
+  "topics": ["security", "injection", "authentication", "authorization", "crypto", "secrets", "owasp"],
+  "summary": "Secure coding rules: input validation, injection defenses (SQL/command/path/XSS), authn/authz pitfalls, secrets handling, crypto do/don't, SSRF, and dependency risk.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

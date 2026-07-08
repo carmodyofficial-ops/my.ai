@@ -1,0 +1,11 @@
+{
+  "name": "Web Testing (Playwright)",
+  "pack_id": "web_testing_playwright",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["playwright", "getbyrole", "locator", "e2e test", "end-to-end test", "flaky test", "auto-waiting", "page.route", "network mock", "trace viewer", "vitest", "jest", "vi.mock", "testing library", "getbytestid", "userevent", "msw", "storagestate", "fixtures", "codegen"],
+  "topics": ["testing", "playwright", "vitest", "e2e", "mocking", "flakiness", "testing-library"],
+  "summary": "Web testing patterns: role-first Playwright locators, auto-waiting assertions, fixtures and auth state, network mocking, trace debugging, Vitest/Jest and Testing Library usage, and flaky-test fixes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

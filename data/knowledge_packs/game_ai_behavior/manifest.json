@@ -1,0 +1,11 @@
+{
+  "name": "Game AI & Behavior",
+  "pack_id": "game_ai_behavior",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["behavior tree", "behaviour tree", "finite state machine", "enemy ai", "npc ai", "steering behaviors", "seek flee", "flocking", "pathfinding", "a*", "a star", "astar", "navmesh", "utility ai", "aggro", "line of sight", "perception cone", "ai difficulty", "game ai"],
+  "topics": ["fsm", "behavior-trees", "steering", "pathfinding", "perception", "aggro", "difficulty"],
+  "summary": "Game AI patterns: choosing FSMs vs behavior trees, steering behaviors, A* and navmesh pathfinding, utility-based decisions, perception/aggro systems, and difficulty tuning via AI senses.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

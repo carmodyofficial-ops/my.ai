@@ -1,0 +1,11 @@
+{
+  "name": "Testing Strategy and Regression Design",
+  "pack_id": "testing_strategy_and_regression_design",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["test pyramid", "regression test", "flaky test", "unit test", "integration test", "mocking", "mock boundaries", "fixtures", "test factory", "pytest", "coverage", "branch coverage", "mutation testing", "property-based testing", "hypothesis", "fast-check", "negative test", "smoke test", "test isolation", "snapshot test"],
+  "topics": ["testing", "regression", "mocking", "fixtures", "flaky tests", "coverage", "property-based"],
+  "summary": "Test strategy reference: pyramid and layer selection, regression tests derived from bug reports, negative tests, mocking discipline at boundaries, fixtures/factories, flaky-test causes and fixes, coverage pitfalls, and property-based testing.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

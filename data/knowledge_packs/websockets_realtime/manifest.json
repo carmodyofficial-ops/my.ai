@@ -1,0 +1,11 @@
+{
+  "name": "WebSockets & Realtime",
+  "pack_id": "websockets_realtime",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["websocket", "websockets", "socket.io", "socketio", "sse", "server-sent events", "eventsource", "reconnect", "backoff", "heartbeat", "ping pong", "realtime", "real-time", "wss", "long polling", "pubsub", "pub/sub", "sticky sessions", "close code", "live updates"],
+  "topics": ["websocket", "realtime", "sse", "socket.io", "reconnection", "scaling", "auth"],
+  "summary": "Realtime web engineering: WebSocket lifecycle with reconnect/backoff/heartbeat, socket.io vs raw WS vs SSE, message schemas and versioning, auth over WS, and scaling with pub/sub.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

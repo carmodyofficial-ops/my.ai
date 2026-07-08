@@ -1,13 +1,11 @@
 {
-  "id": "typescript",
-  "title": "TypeScript (types/generics/narrowing)",
-  "source": "TypeScript Handbook (typescriptlang.org)",
-  "source_url": "https://www.typescriptlang.org/docs/handbook/intro.html",
-  "source_repo": "https://github.com/microsoft/TypeScript-Website",
-  "license": "CC-BY-4.0",
-  "license_verified_via": "GitHub license API, 2026-06-26",
-  "license_tier": "cc-by",
-  "attribution": "Distilled from the official TypeScript Handbook, (c) Microsoft, CC-BY-4.0.",
-  "method": "agent distillation, faithful to the official docs",
-  "redistribution_note": "CC-BY-4.0 requires attribution to Microsoft / the TypeScript Handbook if the pack is published."
+  "name": "TypeScript",
+  "pack_id": "typescript",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["typescript", "tsconfig", "narrowing", "type guard", "discriminated union", "utility types", "generics", "satisfies", "as const", "unknown vs any", "keyof", "mapped type", "conditional type", "ts2322", "tsc error", "strict mode typescript", "interface vs type", "declaration file", ".d.ts", "type inference"],
+  "topics": ["typescript", "types", "generics", "narrowing", "tsconfig", "compiler"],
+  "summary": "TypeScript day-to-day reference: narrowing, generics, utility types, satisfies/as-const, tsconfig, common tsc errors and gotcha fixes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
 }

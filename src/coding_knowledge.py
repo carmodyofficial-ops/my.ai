@@ -53,17 +53,20 @@ _CODING_KNOWLEDGE = [
                      "build a game", "breakout", "platformer", "snake game",
                      "browser game", "html game", "create a game", "pong"],
     },
-    # Creative problem-solving techniques — for design-significant tasks.
+    # Creative coding (p5.js / Canvas / generative art). Re-scoped 2026-07-08
+    # from generic "creative problem-solving" to generative art — the old
+    # catch-all triggers ("design", "how should", "approach") injected art
+    # content into ordinary design questions, so they went too.
     {
         "id": "creative_coding",
-        "title": "Creative problem-solving techniques",
+        "title": "Creative coding (p5.js/Canvas/generative art)",
         "files": ["knowledge.md"],
         "max_chars": 2000,
-        "triggers": ["design", "architecture", "approach", "from scratch",
-                     "greenfield", "new feature", "best way", "how should",
-                     "creative", "elegant", "novel", "unique", "rethink",
-                     "redesign", "build a system", "create a system",
-                     "implement a", "cleanest way", "what's the best"],
+        "triggers": ["p5.js", "p5js", "creative coding", "generative art",
+                     "perlin noise", "flow field", "particle system",
+                     "canvas 2d", "processing sketch", "createcanvas",
+                     "fragment shader", "glsl", "colormode", "hsb color",
+                     "creategraphics", "blendmode", "generative"],
     },
     # Platform references (specific mechanics).
     {
@@ -170,7 +173,9 @@ _CODING_KNOWLEDGE = [
      "triggers": ["css", "flexbox", "css grid", "dom ", "queryselector", "addeventlistener", "semantic html", "accessibility", "aria", "localstorage", "event delegation", "fetch api"]},
     # Distilled from official docs (license-verified — see each pack's manifest.json).
     {"id": "docker", "title": "Docker & containers", "files": ["knowledge.md"], "max_chars": 2600,
-     "triggers": ["docker", "dockerfile", "container", "docker compose", "docker run", "multi-stage", ".dockerignore", "entrypoint", "docker image"]},
+     # "container" alone matched CSS/DOM queries ("grid item overflows its
+     # container") and displaced the CSS pack from the budget — scope it.
+     "triggers": ["docker", "dockerfile", "containerize", "container image", "docker compose", "docker run", "multi-stage", ".dockerignore", "entrypoint", "docker image"]},
     {"id": "typescript", "title": "TypeScript (types/generics/narrowing)", "files": ["knowledge.md"], "max_chars": 2600,
      "triggers": ["typescript", "tsconfig", "type annotation", "interface vs type", "generic type", "utility type", "discriminated union", "type narrowing", ".d.ts", "tsc"]},
     {"id": "pandas_numpy", "title": "pandas + NumPy (data science)", "files": ["knowledge.md"], "max_chars": 2600,
@@ -216,8 +221,9 @@ _CODING_KNOWLEDGE = [
         "id": "devops_and_infrastructure",
         "title": "DevOps & infrastructure",
         "files": ["reference.md"],
-        "triggers": ["docker", "dockerfile", "compose", "container", "deploy",
-                     "ci ", "pipeline", "shell script", "bash script", "nginx",
+        # "container" alone matched CSS/DOM queries — scope it (see docker entry).
+        "triggers": ["docker", "dockerfile", "compose", "containerize", "container image",
+                     "deploy", "ci ", "pipeline", "shell script", "bash script", "nginx",
                      "healthcheck", "build image"],
     },
     {

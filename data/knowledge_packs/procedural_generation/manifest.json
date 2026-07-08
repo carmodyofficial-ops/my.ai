@@ -1,0 +1,11 @@
+{
+  "name": "Procedural Generation",
+  "pack_id": "procedural_generation",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["procedural generation", "procgen", "seeded random", "seedable rng", "perlin noise", "simplex noise", "noise octaves", "terrain generation", "cellular automata", "cave generation", "wave function collapse", "wfc", "dungeon generation", "bsp dungeon", "room and corridor", "loot table", "drop rates", "world generation", "map generator"],
+  "topics": ["rng", "noise", "terrain", "dungeons", "wfc", "loot", "validation"],
+  "summary": "Procedural generation techniques: seeded RNG discipline, Perlin/simplex noise terrain, cellular automata caves, BSP and room-corridor dungeons, wave function collapse, loot tables, and validating generated content.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

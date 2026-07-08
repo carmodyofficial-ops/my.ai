@@ -1,0 +1,45 @@
+{
+  "category": "industry_domain",
+  "created_at": "2026-06-21T12:37:32+00:00",
+  "created": "2026-07-08T00:00:00Z",
+  "deep_files": [
+    "decision_lenses.md",
+    "domain_eval_cases.json",
+    "domain_map.md",
+    "failure_modes.md",
+    "practical_playbooks.md"
+  ],
+  "depth_focus": [
+    "crew workflows",
+    "inflight systems",
+    "airport operations",
+    "onboard sales",
+    "safety",
+    "KPIs",
+    "reliability"
+  ],
+  "freshness": "living",
+  "guarded": false,
+  "last_domain_deepened_at": "2026-06-21T13:12:57+00:00",
+  "memory_write_allowed": true,
+  "name": "Aviation Operations",
+  "pack_id": "aviation_operations",
+  "priority": 82,
+  "required_files": [
+    "manifest.json",
+    "overview.md",
+    "core_concepts.md",
+    "procedures.md",
+    "decision_frameworks.md",
+    "eval_questions.md",
+    "memory_hooks.md",
+    "safety_boundaries.md",
+    "source_index.json"
+  ],
+  "requires_extra_caution": false,
+  "source": "authored",
+  "summary": "General-aviation operational knowledge: preflight/checklist discipline, weather, weight and balance, airspace, radio phraseology, ADM, and fuel planning.",
+  "topics": ["aviation", "preflight", "weather", "airspace", "weight-balance", "adm", "fuel-planning", "phraseology"],
+  "triggers": ["preflight", "checklist", "density altitude", "crosswind", "crosswind component", "metar", "taf", "weight and balance", "cg envelope", "airspace class", "class b airspace", "imsafe", "pave", "aeronautical decision", "fuel reserve", "vfr minimums", "runup", "radio phraseology"],
+  "trust_level": "high"
+}

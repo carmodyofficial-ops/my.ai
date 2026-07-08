@@ -1,12 +1,11 @@
 {
-  "id": "svelte",
-  "title": "Svelte (runes + classic)",
-  "source": "Svelte Documentation",
-  "source_url": "https://svelte.dev/docs",
-  "source_repo": "https://github.com/sveltejs/svelte",
-  "license": "MIT",
-  "license_verified_via": "GitHub license API, 2026-06-26",
-  "license_tier": "permissive",
-  "attribution": "Distilled from the official Svelte documentation (MIT).",
-  "method": "agent distillation, faithful to the official docs"
+  "name": "Svelte + SvelteKit",
+  "pack_id": "svelte",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["svelte", "sveltekit", "runes", "$state", "$derived", "$effect", "$props", "$bindable", "writable store", "svelte store", "onmount", "bind:value", "+page.svelte", "+page.server", "load function", "form actions", "use:enhance", "svelte transition", "each block", "snippet"],
+  "topics": ["svelte", "sveltekit", "runes", "stores", "reactivity", "routing", "forms"],
+  "summary": "Svelte 5 runes and classic Svelte 3/4 reactivity (labeled), stores, transitions, plus SvelteKit routing, load functions, form actions, and reactivity gotchas with fixes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
 }

@@ -1,0 +1,39 @@
+{
+  "name": "Creative Coding & Generative Art",
+  "pack_id": "creative_coding",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": [
+    "p5.js",
+    "p5js",
+    "creative coding",
+    "generative art",
+    "perlin noise",
+    "flow field",
+    "particle system",
+    "canvas 2d",
+    "processing sketch",
+    "createcanvas",
+    "fragment shader",
+    "glsl",
+    "easing",
+    "lerp",
+    "colormode",
+    "hsb color",
+    "creategraphics",
+    "blendmode",
+    "requestanimationframe art"
+  ],
+  "topics": [
+    "p5.js",
+    "generative art",
+    "canvas",
+    "shaders",
+    "particles",
+    "noise",
+    "animation"
+  ],
+  "summary": "p5.js and Canvas 2D creative-coding reference: Perlin noise and flow fields, particle systems, easing and motion, HSB color strategy, WebGL shader basics, and performance patterns for generative art.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

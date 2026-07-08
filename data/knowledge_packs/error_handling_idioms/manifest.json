@@ -1,0 +1,11 @@
+{
+  "name": "Error Handling Idioms",
+  "pack_id": "error_handling_idioms",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["error handling", "exception", "try catch", "try except", "raise from", "custom exception", "result type", "optional", "fail fast", "validate input", "retry", "backoff", "idempotency", "swallowed exception", "rethrow", "error message", "exceptiongroup", "unknown in catch", "error cause", "unhandled rejection"],
+  "topics": ["errors", "exceptions", "validation", "retries", "resilience", "python", "typescript"],
+  "summary": "Idioms for correct error handling: exceptions vs Result/Optional, boundary validation, context-preserving wrapping, safe retries, and Python/TypeScript specifics.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

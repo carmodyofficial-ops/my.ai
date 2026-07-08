@@ -1,0 +1,37 @@
+{
+  "name": "Worked Example: Next.js CRUD App",
+  "pack_id": "example_nextjs_crud_app",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": [
+    "crud app",
+    "next.js app",
+    "nextjs crud",
+    "next js notes app",
+    "app router",
+    "server action",
+    "server actions form",
+    "useactionstate",
+    "revalidatepath",
+    "server component",
+    "better-sqlite3",
+    "sqlite app",
+    "build a web app",
+    "notes app",
+    "next.js sqlite",
+    "create update delete",
+    "next.js form"
+  ],
+  "topics": [
+    "nextjs",
+    "react",
+    "typescript",
+    "crud",
+    "sqlite",
+    "server-actions",
+    "app-router"
+  ],
+  "summary": "Complete annotated Next.js App Router notes CRUD reference: server components reading better-sqlite3 directly, server actions with revalidatePath and redirect, one useActionState client form, loading/error files, and full package.json.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

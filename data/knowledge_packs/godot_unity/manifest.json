@@ -1,0 +1,11 @@
+{
+  "name": "Godot & Unity Game Development",
+  "pack_id": "godot_unity",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["godot", "gdscript", "unity", "monobehaviour", "unity3d", "scene tree", "node2d", "characterbody2d", "rigidbody", "prefab", "scriptableobject", "coroutine", "queue_free", "getcomponent", "fixedupdate", "_physics_process", "game engine", "signals godot", "tscn"],
+  "topics": ["godot", "unity", "game engine", "gdscript", "csharp", "physics", "scenes"],
+  "summary": "Godot 4 (nodes/scenes, GDScript, signals, lifecycle, resources) and Unity (MonoBehaviour lifecycle, prefabs, ScriptableObjects, physics, serialization) reference with cross-engine gotchas.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

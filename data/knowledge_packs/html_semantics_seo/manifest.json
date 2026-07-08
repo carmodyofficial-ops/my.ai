@@ -1,0 +1,11 @@
+{
+  "name": "HTML Semantics & SEO",
+  "pack_id": "html_semantics_seo",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["seo", "meta tags", "meta description", "open graph", "og:image", "title tag", "canonical", "robots.txt", "noindex", "sitemap", "json-ld", "structured data", "schema.org", "rich results", "hreflang", "semantic html", "heading structure", "ssr seo", "search console", "indexing"],
+  "topics": ["seo", "html", "semantics", "structured-data", "crawling", "meta", "ssr"],
+  "summary": "HTML semantics and technical SEO: document structure and landmarks, meta/OG tags, JSON-LD structured data, canonical/robots/sitemaps, SSR vs CSR indexing, and common indexing gotchas.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

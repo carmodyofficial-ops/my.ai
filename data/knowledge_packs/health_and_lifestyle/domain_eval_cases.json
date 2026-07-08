@@ -1,0 +1,26 @@
+{
+  "created_at": "2026-06-21T13:12:57+00:00",
+  "evals": [
+    {
+      "expected_guarded": true,
+      "expected_packs": [
+        "health_and_lifestyle"
+      ],
+      "id": "health_and_lifestyle_route",
+      "kind": "router",
+      "query": "Review health nutrition exercise sleep cholesterol TRT supplement biomarker wellness medical boundaries",
+      "top_k": 5
+    },
+    {
+      "expected_context_packs": [
+        "health_and_lifestyle"
+      ],
+      "id": "health_and_lifestyle_context",
+      "kind": "context",
+      "min_context_blocks": 1,
+      "query": "Review health nutrition exercise sleep cholesterol TRT supplement biomarker wellness medical boundaries",
+      "top_k": 5
+    }
+  ],
+  "pack_id": "health_and_lifestyle"
+}

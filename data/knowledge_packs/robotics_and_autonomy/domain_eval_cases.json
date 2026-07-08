@@ -1,0 +1,26 @@
+{
+  "created_at": "2026-06-21T13:12:57+00:00",
+  "evals": [
+    {
+      "expected_guarded": null,
+      "expected_packs": [
+        "robotics_and_autonomy"
+      ],
+      "id": "robotics_and_autonomy_route",
+      "kind": "router",
+      "query": "Design robotics autonomy UAV drone perception planning control simulation swarm safety assurance",
+      "top_k": 5
+    },
+    {
+      "expected_context_packs": [
+        "robotics_and_autonomy"
+      ],
+      "id": "robotics_and_autonomy_context",
+      "kind": "context",
+      "min_context_blocks": 1,
+      "query": "Design robotics autonomy UAV drone perception planning control simulation swarm safety assurance",
+      "top_k": 5
+    }
+  ],
+  "pack_id": "robotics_and_autonomy"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "macro_cross_asset_analysis",
+  "created_at": "2026-06-21T21:01:35.750057+00:00",
+  "sources": [
+    {
+      "path": "knowledge.md",
+      "kind": "markdown",
+      "title": "Macro and Cross-Asset Analysis",
+      "description": "Purpose: Support top-down market reasoning.",
+      "retrieval_weight": 1.0
+    }
+  ]
+}

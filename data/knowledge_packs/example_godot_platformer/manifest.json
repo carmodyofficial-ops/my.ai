@@ -1,0 +1,38 @@
+{
+  "name": "Example: Godot 4 2D Platformer",
+  "pack_id": "example_godot_platformer",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": [
+    "platformer",
+    "godot platformer",
+    "godot game",
+    "godot 4",
+    "characterbody2d",
+    "move_and_slide",
+    "coyote time",
+    "jump buffering",
+    "gdscript",
+    "player movement godot",
+    "coin pickup",
+    "area2d signal",
+    "autoload singleton",
+    "tilemap",
+    "make a platformer",
+    "2d game godot",
+    "godot respawn",
+    "godot score hud"
+  ],
+  "topics": [
+    "godot",
+    "gdscript",
+    "platformer",
+    "gamedev",
+    "physics",
+    "scenes",
+    "signals"
+  ],
+  "summary": "Complete annotated Godot 4.x 2D platformer reference: CharacterBody2D player with coyote time and jump buffering, Area2D coin pickups, autoload score singleton, HUD, and respawn.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

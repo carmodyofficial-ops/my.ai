@@ -1,0 +1,26 @@
+{
+  "created_at": "2026-06-21T13:12:57+00:00",
+  "evals": [
+    {
+      "expected_guarded": true,
+      "expected_packs": [
+        "finance_and_trading"
+      ],
+      "id": "finance_and_trading_route",
+      "kind": "router",
+      "query": "Evaluate finance trading crypto portfolio market risk backtest position sizing PnL bitcoin",
+      "top_k": 5
+    },
+    {
+      "expected_context_packs": [
+        "finance_and_trading"
+      ],
+      "id": "finance_and_trading_context",
+      "kind": "context",
+      "min_context_blocks": 1,
+      "query": "Evaluate finance trading crypto portfolio market risk backtest position sizing PnL bitcoin",
+      "top_k": 5
+    }
+  ],
+  "pack_id": "finance_and_trading"
+}

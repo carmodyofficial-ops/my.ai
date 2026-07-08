@@ -1,0 +1,11 @@
+{
+  "name": "Multiplayer Netcode",
+  "pack_id": "multiplayer_netcode",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["netcode", "multiplayer", "client server", "client prediction", "server reconciliation", "server authoritative", "interpolation buffer", "entity interpolation", "lag compensation", "rollback netcode", "lockstep", "deterministic simulation", "tickrate", "snapshot delta", "state sync", "interest management", "anti cheat", "desync", "websocket game", "webrtc datachannel"],
+  "topics": ["prediction", "reconciliation", "interpolation", "lag-compensation", "rollback", "lockstep", "anticheat"],
+  "summary": "Multiplayer networking patterns: authoritative servers, client prediction and reconciliation, interpolation buffers, lag compensation, tickrate/bandwidth tuning, choosing state sync vs lockstep vs rollback, and minimizing cheat surface.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

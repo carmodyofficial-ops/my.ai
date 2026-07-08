@@ -1,0 +1,11 @@
+{
+  "name": "React + Next.js",
+  "pack_id": "react_nextjs",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["react", "next.js", "nextjs", "usestate", "useeffect", "usememo", "usecallback", "usereducer", "useref", "react hook", "server component", "server action", "app router", "use client", "hydration mismatch", "revalidatepath", "revalidatetag", "suspense", "jsx", "next build"],
+  "topics": ["react", "nextjs", "hooks", "server-components", "app-router", "caching", "hydration"],
+  "summary": "React hooks, rendering, and Next.js App Router patterns: server components, server actions, caching/revalidation, streaming, middleware, and common gotchas with fixes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

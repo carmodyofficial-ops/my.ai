@@ -1,0 +1,11 @@
+{
+  "name": "Macro & Cross-Asset Analysis",
+  "pack_id": "macro_cross_asset_analysis",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["yield curve", "curve inversion", "2s10s", "credit spreads", "risk-on", "risk-off", "dollar liquidity", "dxy", "breakeven inflation", "real yields", "fed funds", "central bank", "stock-bond correlation", "copper gold ratio", "stagflation", "macro regime", "cross-asset", "reaction function", "net liquidity"],
+  "topics": ["macro", "rates", "yield-curve", "credit", "fx", "commodities", "regimes"],
+  "summary": "Top-down macro regime framing across rates, inflation, yield curve, credit spreads, the dollar, commodities, central banks, and cross-asset risk-on/off correlations.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

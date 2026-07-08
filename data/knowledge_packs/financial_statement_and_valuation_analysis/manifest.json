@@ -1,0 +1,11 @@
+{
+  "name": "Financial Statement & Valuation Analysis",
+  "pack_id": "financial_statement_and_valuation_analysis",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["dcf", "discounted cash flow", "free cash flow", "wacc", "terminal value", "ev/ebitda", "ebitda", "p/e ratio", "roic", "roe", "dupont", "earnings quality", "accruals", "cash flow statement", "working capital", "dso", "gordon growth", "comps", "valuation multiple"],
+  "topics": ["statements", "valuation", "dcf", "multiples", "ratios", "earnings-quality", "dupont"],
+  "summary": "Three-statement analysis, key financial ratios, DuPont, earnings-quality red flags, DCF, and comparable-multiples valuation with common errors and fixes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

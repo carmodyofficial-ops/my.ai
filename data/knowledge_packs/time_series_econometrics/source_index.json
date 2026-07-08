@@ -1,0 +1,13 @@
+{
+  "id": "time_series_econometrics",
+  "created_at": "2026-06-21T21:01:35.750057+00:00",
+  "sources": [
+    {
+      "path": "knowledge.md",
+      "kind": "markdown",
+      "title": "Time Series and Econometrics",
+      "description": "Purpose: Support quant-grade statistical reasoning.",
+      "retrieval_weight": 1.0
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "category": "technical_domain",
+  "created_at": "2026-06-21T12:37:32+00:00",
+  "created": "2026-07-08T00:00:00Z",
+  "deep_files": [
+    "decision_lenses.md",
+    "domain_eval_cases.json",
+    "domain_map.md",
+    "failure_modes.md",
+    "practical_playbooks.md"
+  ],
+  "depth_focus": [
+    "UAVs",
+    "robotics",
+    "perception",
+    "planning",
+    "control",
+    "simulation",
+    "safety assurance"
+  ],
+  "freshness": "living",
+  "guarded": false,
+  "last_domain_deepened_at": "2026-06-21T13:12:57+00:00",
+  "memory_write_allowed": true,
+  "name": "Robotics and Autonomy",
+  "pack_id": "robotics_and_autonomy",
+  "priority": 68,
+  "required_files": [
+    "manifest.json",
+    "overview.md",
+    "core_concepts.md",
+    "procedures.md",
+    "decision_frameworks.md",
+    "eval_questions.md",
+    "memory_hooks.md",
+    "safety_boundaries.md",
+    "source_index.json"
+  ],
+  "requires_extra_caution": false,
+  "source": "authored",
+  "summary": "Practical robotics and autonomy knowledge: coordinate frames/TF, ROS2, sensor fusion, localization, PID control, motion planning, kinematics, and safety.",
+  "topics": ["robotics", "ros2", "localization", "control", "planning", "kinematics", "sensor-fusion", "autonomy"],
+  "triggers": ["ros2", "ros topic", "tf transform", "coordinate frame", "slam", "amcl", "kalman filter", "ekf", "sensor fusion", "pid tuning", "inverse kinematics", "forward kinematics", "motion planning", "costmap", "rrt", "odometry drift", "e-stop", "nav2", "imu bias", "differential drive"],
+  "trust_level": "high"
+}

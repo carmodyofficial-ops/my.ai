@@ -1,0 +1,11 @@
+{
+  "name": "Model Evaluation Methods",
+  "pack_id": "model_evaluation_methods",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["llm eval", "model evaluation", "benchmark", "eval set", "pass@k", "llm-as-judge", "llm as judge", "rubric", "inter-annotator", "cohen's kappa", "calibration ece", "precision recall", "regression eval", "a/b test", "statistical significance", "confidence interval", "bleu rouge", "position bias"],
+  "topics": ["evaluation", "benchmarks", "metrics", "llm-judge", "statistics", "regression-testing", "calibration"],
+  "summary": "Practical methods for designing model evaluations: benchmark/eval-set design, metrics, LLM-as-judge, human eval, A/B vs offline, significance testing, and regression sets.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

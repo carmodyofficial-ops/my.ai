@@ -1,0 +1,11 @@
+{
+  "name": "Web Performance",
+  "pack_id": "web_performance",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["core web vitals", "lcp", "largest contentful paint", "inp", "cls", "layout shift", "lighthouse", "page speed", "pagespeed", "lazy loading", "srcset", "image optimization", "font loading", "font-display", "code splitting", "bundle size", "cache-control", "render-blocking", "web performance", "slow page"],
+  "topics": ["performance", "web-vitals", "images", "fonts", "caching", "bundling", "lighthouse"],
+  "summary": "Web performance causes and fixes: Core Web Vitals (LCP/INP/CLS), image and font loading, bundle splitting, caching headers, render-blocking resources, and how to measure.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

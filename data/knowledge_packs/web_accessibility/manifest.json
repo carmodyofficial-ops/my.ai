@@ -1,0 +1,11 @@
+{
+  "name": "Web Accessibility",
+  "pack_id": "web_accessibility",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["accessibility", "a11y", "aria label", "aria-label", "aria role", "screen reader", "keyboard navigation", "focus trap", "focus management", "wcag", "color contrast", "alt text", "semantic html", "tabindex", "aria-live", "live region", "axe", "focus-visible", "skip link", "voiceover"],
+  "topics": ["accessibility", "aria", "wcag", "keyboard", "screen-reader", "forms", "testing"],
+  "summary": "Practical web accessibility: semantic HTML first, keyboard and focus management, correct ARIA usage, accessible forms and errors, contrast rules, and axe-based testing.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

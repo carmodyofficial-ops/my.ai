@@ -1,0 +1,11 @@
+{
+  "name": "Frontend State Management",
+  "pack_id": "frontend_state_management",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["state management", "zustand", "redux", "redux toolkit", "rtk query", "tanstack query", "react query", "usequery", "stale time", "staletime", "invalidatequeries", "react context", "global state", "server state", "url state", "search params", "signals", "jotai", "form state", "react-hook-form"],
+  "topics": ["state", "react", "caching", "redux", "zustand", "tanstack-query", "forms"],
+  "summary": "Choosing and using frontend state tools: server vs client vs URL state, TanStack Query caching and invalidation, zustand and Redux Toolkit patterns, Context tradeoffs, and signals.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

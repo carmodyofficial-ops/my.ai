@@ -1,0 +1,11 @@
+{
+  "name": "Refactoring Patterns",
+  "pack_id": "refactoring_patterns",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["refactor", "refactoring", "extract function", "extract method", "extract variable", "inline function", "rename variable", "guard clause", "early return", "code smell", "long function", "nested if", "replace conditional", "polymorphism", "strangler fig", "legacy code", "clean up code", "technical debt", "parameter object"],
+  "topics": ["refactoring", "code-smells", "legacy-code", "design", "maintainability", "testing"],
+  "summary": "Catalog of safe refactoring moves, code smells with their fixes, small-steps-with-tests discipline, and when not to refactor.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

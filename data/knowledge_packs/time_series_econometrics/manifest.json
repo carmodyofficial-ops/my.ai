@@ -1,0 +1,11 @@
+{
+  "name": "Time Series Econometrics",
+  "pack_id": "time_series_econometrics",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["stationarity", "unit root", "adf test", "kpss", "acf", "pacf", "arima", "arma", "garch", "volatility clustering", "cointegration", "engle-granger", "johansen", "pairs trading", "regime switching", "spurious regression", "walk-forward", "look-ahead", "ljung-box"],
+  "topics": ["stationarity", "arima", "garch", "cointegration", "validation", "regimes", "diagnostics"],
+  "summary": "Applied time-series econometrics: stationarity testing, ARIMA identification, GARCH volatility, cointegration and pairs, regime switching, and leakage-safe validation.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

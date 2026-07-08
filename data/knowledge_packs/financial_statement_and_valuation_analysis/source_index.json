@@ -1,0 +1,13 @@
+{
+  "id": "financial_statement_and_valuation_analysis",
+  "created_at": "2026-06-21T21:01:35.750057+00:00",
+  "sources": [
+    {
+      "path": "knowledge.md",
+      "kind": "markdown",
+      "title": "Financial Statement and Valuation Analysis",
+      "description": "Purpose: Support equity/business analysis.",
+      "retrieval_weight": 1.0
+    }
+  ]
+}

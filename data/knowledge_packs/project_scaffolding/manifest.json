@@ -1,0 +1,11 @@
+{
+  "name": "Project Scaffolding",
+  "pack_id": "project_scaffolding",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["scaffold", "project structure", "boilerplate", "new project", "repo layout", "src layout", "pyproject", "monorepo", "lockfile", "pin dependencies", "makefile", "justfile", "env vars", "dotenv", "config file", "editorconfig", "eslint", "prettier", "ci pipeline", "starter template"],
+  "topics": ["scaffolding", "project-layout", "configuration", "dependencies", "tooling", "ci", "templates"],
+  "summary": "Conventions for starting projects right: directory layouts, config layering, lockfile discipline, task runners, lint/format baseline, CI skeleton, and per-stack starter checklists.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

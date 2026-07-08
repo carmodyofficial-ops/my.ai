@@ -1,0 +1,26 @@
+{
+  "created_at": "2026-06-21T13:12:57+00:00",
+  "evals": [
+    {
+      "expected_guarded": null,
+      "expected_packs": [
+        "aviation_operations"
+      ],
+      "id": "aviation_operations_route",
+      "kind": "router",
+      "query": "Plan aviation airline inflight airport crew flight onboard aircraft operations KPIs",
+      "top_k": 5
+    },
+    {
+      "expected_context_packs": [
+        "aviation_operations"
+      ],
+      "id": "aviation_operations_context",
+      "kind": "context",
+      "min_context_blocks": 1,
+      "query": "Plan aviation airline inflight airport crew flight onboard aircraft operations KPIs",
+      "top_k": 5
+    }
+  ],
+  "pack_id": "aviation_operations"
+}

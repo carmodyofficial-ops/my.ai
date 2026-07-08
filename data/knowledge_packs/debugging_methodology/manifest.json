@@ -1,0 +1,11 @@
+{
+  "name": "Debugging Methodology",
+  "pack_id": "debugging_methodology",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["debug", "debugging", "stack trace", "traceback", "root cause", "reproduce bug", "minimal repro", "git bisect", "bisect", "heisenbug", "race condition", "off by one", "breakpoint", "flaky test", "intermittent failure", "print debugging", "debugger", "rubber duck", "works on my machine", "hung process"],
+  "topics": ["debugging", "bisection", "stack-traces", "reproduction", "race-conditions", "root-cause", "testing"],
+  "summary": "Repro-first debugging discipline: minimal repro construction, bisection of inputs/commits/code paths, stack-trace reading, tool choice, and common bug classes with their signatures.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

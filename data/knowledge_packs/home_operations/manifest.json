@@ -1,0 +1,11 @@
+{
+  "name": "Home Operations",
+  "pack_id": "home_operations",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["home maintenance", "hvac filter", "furnace filter", "water heater", "flush water heater", "circuit breaker", "breaker tripping", "gfci", "smoke detector", "co detector", "water shutoff", "water hammer", "clogged drain", "gutters", "sump pump", "gas leak", "diy vs pro", "seasonal home prep"],
+  "topics": ["home-maintenance", "hvac", "plumbing", "electrical", "safety", "appliances", "seasonal-prep"],
+  "summary": "Practical, safety-first home operations: maintenance schedules, electrical/plumbing basics, appliance and seasonal care, and clear DIY-vs-pro and hazard boundaries.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

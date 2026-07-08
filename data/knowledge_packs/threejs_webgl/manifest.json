@@ -1,0 +1,11 @@
+{
+  "name": "Three.js & WebGL",
+  "pack_id": "threejs_webgl",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["three.js", "threejs", "webgl", "scene camera renderer", "perspectivecamera", "webglrenderer", "mesh material", "gltf", "gltfloader", "raycaster", "object picking", "dispose geometry", "memory leak three", "instancedmesh", "draw calls", "shadermaterial", "animation mixer", "requestanimationframe delta", "3d web"],
+  "topics": ["threejs", "webgl", "rendering", "gltf", "raycasting", "performance", "shaders"],
+  "summary": "Three.js working knowledge: scene/camera/renderer setup, delta-based animation loops, materials and lights, GLTF loading, raycast picking, resource disposal, performance via instancing, and ShaderMaterial basics.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

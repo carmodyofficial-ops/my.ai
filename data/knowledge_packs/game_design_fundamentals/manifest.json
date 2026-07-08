@@ -1,0 +1,11 @@
+{
+  "name": "Game Design Fundamentals",
+  "pack_id": "game_design_fundamentals",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["game design", "core loop", "gameplay loop", "difficulty curve", "game balance", "onboarding", "tutorial design", "game economy", "sources and sinks", "progression system", "game feel", "juice", "screenshake", "hitstop", "playtesting", "playtest", "scope creep", "solo game dev", "game feedback"],
+  "topics": ["core-loop", "difficulty", "onboarding", "economy", "progression", "game-feel", "playtesting", "scope"],
+  "summary": "Game design fundamentals: core loop design, difficulty curves, tutorialization, economy sources/sinks, progression systems, juice and game feel, playtesting method, and scope control for solo developers.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

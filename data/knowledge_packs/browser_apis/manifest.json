@@ -1,0 +1,11 @@
+{
+  "name": "Browser APIs",
+  "pack_id": "browser_apis",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["fetch api", "abortcontroller", "localstorage", "sessionstorage", "indexeddb", "web worker", "service worker", "intersection observer", "intersectionobserver", "resize observer", "resizeobserver", "mutationobserver", "clipboard api", "navigator.clipboard", "history api", "popstate", "urlsearchparams", "notification permission", "permissions api", "broadcastchannel"],
+  "topics": ["browser", "fetch", "storage", "workers", "observers", "clipboard", "permissions"],
+  "summary": "Browser platform APIs in practice: fetch with AbortController, localStorage vs IndexedDB, workers, intersection/resize observers, clipboard, history/URL, and permission gotchas.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

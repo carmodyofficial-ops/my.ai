@@ -1,0 +1,11 @@
+{
+  "name": "CSS Layout",
+  "pack_id": "css_layout",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["css grid", "grid-template", "flexbox", "flex-wrap", "justify-content", "align-items", "container query", "container queries", "position sticky", "z-index", "stacking context", "center a div", "centering css", "media query", "responsive layout", "overflow css", "minmax", "aspect-ratio", "logical properties", "subgrid"],
+  "topics": ["css", "grid", "flexbox", "layout", "responsive", "stacking", "positioning"],
+  "summary": "CSS layout recipes and bug fixes: grid, flexbox, container queries, stacking contexts, logical properties, and responsive patterns without media queries.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

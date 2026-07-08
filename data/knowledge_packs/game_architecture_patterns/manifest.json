@@ -1,0 +1,11 @@
+{
+  "name": "Game Architecture Patterns",
+  "pack_id": "game_architecture_patterns",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["game loop", "fixed timestep", "delta time", "entity component", "ecs", "entity component system", "game state machine", "state machine", "object pooling", "object pool", "event bus", "scene management", "scene manager", "save system", "save game", "game architecture", "update render loop", "spiral of death"],
+  "topics": ["game-loop", "ecs", "state-machines", "pooling", "events", "scenes", "saves"],
+  "summary": "Core game architecture patterns: fixed-timestep loops with interpolation, ECS vs inheritance, state machines, object pooling, event buses, scene lifecycle, and save systems.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

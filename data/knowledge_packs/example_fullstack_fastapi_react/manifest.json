@@ -1,0 +1,39 @@
+{
+  "name": "Worked Example: Full-Stack FastAPI + React App",
+  "pack_id": "example_fullstack_fastapi_react",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": [
+    "full stack",
+    "fastapi react",
+    "fastapi frontend",
+    "build a web app",
+    "crud app",
+    "react vite app",
+    "tanstack query",
+    "react query",
+    "sqlmodel",
+    "fastapi crud",
+    "sqlite app",
+    "api client typescript",
+    "cors fastapi",
+    "vite proxy",
+    "python backend react frontend",
+    "fetch wrapper",
+    "usemutation",
+    "fastapi sqlite"
+  ],
+  "topics": [
+    "fastapi",
+    "react",
+    "typescript",
+    "sqlmodel",
+    "tanstack-query",
+    "vite",
+    "fullstack",
+    "crud"
+  ],
+  "summary": "Complete annotated full-stack notes CRUD reference: FastAPI + sqlmodel + SQLite backend with CORS, React (Vite + TypeScript) frontend with a typed fetch client and TanStack Query hooks, wired together in dev via the Vite proxy.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

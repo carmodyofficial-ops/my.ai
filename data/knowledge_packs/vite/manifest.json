@@ -1,12 +1,11 @@
 {
-  "id": "vite",
-  "title": "Vite (build tool)",
-  "source": "Vite Documentation",
-  "source_url": "https://vitejs.dev/guide/",
-  "source_repo": "https://github.com/vitejs/vite",
-  "license": "MIT",
-  "license_verified_via": "GitHub license API, 2026-06-26",
-  "license_tier": "permissive",
-  "attribution": "Distilled from the official Vite documentation (MIT).",
-  "method": "agent distillation, faithful to the official docs"
+  "name": "Vite",
+  "pack_id": "vite",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["vite", "vite config", "vite.config", "import.meta.env", "vite_", "vite build", "vite dev", "vite preview", "hmr", "hot module", "optimizedeps", "import.meta.glob", "vite plugin", "vite proxy", "vite alias", "library mode", "rollupoptions", "esbuild", "base url deploy"],
+  "topics": ["vite", "bundler", "config", "env-vars", "hmr", "plugins", "build"],
+  "summary": "Vite reference: config essentials, env vars, aliases, dev proxy, assets, glob imports, library mode, plugin basics, and HMR/build gotchas with fixes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
 }

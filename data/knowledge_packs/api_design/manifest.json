@@ -1,0 +1,11 @@
+{
+  "name": "API Design",
+  "pack_id": "api_design",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["rest api", "api design", "status code", "http status", "pagination", "cursor pagination", "api versioning", "idempotency key", "error envelope", "openapi", "swagger", "webhook", "bearer token", "api key", "rate limit", "etag", "patch vs put", "resource modeling", "endpoint naming", "problem+json"],
+  "topics": ["api", "rest", "http", "openapi", "webhooks", "versioning", "auth"],
+  "summary": "REST API design reference: resource modeling, status codes, pagination, versioning, idempotency, error envelopes, auth patterns, webhooks, and OpenAPI habits.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

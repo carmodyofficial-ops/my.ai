@@ -1,0 +1,11 @@
+{
+  "name": "Node.js + Express",
+  "pack_id": "node_express",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["express", "express middleware", "node.js", "nodejs", "express router", "req.body", "error handler express", "eaddrinuse", "unhandled rejection", "helmet", "cors", "express-rate-limit", "graceful shutdown", "worker_threads", "node streams", "pipeline stream", "process.env", "dotenv", "express 5", "body parser"],
+  "topics": ["nodejs", "express", "middleware", "streams", "backend", "production"],
+  "summary": "Node.js and Express server reference: middleware order, async error handling, routers, streams, env config, security middleware, and production gotchas.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

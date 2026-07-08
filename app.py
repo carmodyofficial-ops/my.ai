@@ -1172,6 +1172,36 @@ async def _startup_event():
 
     _startup_tasks.append(asyncio.create_task(_skill_audit_nightly_loop()))
 
+    # Nightly knowledge-pack audit — the pack-side sibling of the skill audit
+    # (structural checks + flag-only LLM review; never rewrites pack content).
+    # Runs at ~03:00 local (after the 02:00 skill audit) so the two never
+    # compete for the utility model. Gated by `pack_audit_nightly` (default on);
+    # hour via `pack_audit_hour` (3), batch via `pack_audit_batch` (6).
+    async def _pack_audit_nightly_loop():
+        from datetime import timedelta
+        while True:
+            try:
+                from src.settings import get_setting
+                hour = int(get_setting("pack_audit_hour", 3) or 3)
+            except Exception:
+                hour = 3
+            now = datetime.now()
+            nxt = now.replace(hour=hour % 24, minute=0, second=0, microsecond=0)
+            if nxt <= now:
+                nxt += timedelta(days=1)
+            await asyncio.sleep(max(60, (nxt - now).total_seconds()))
+            try:
+                from src.settings import get_setting
+                if not get_setting("pack_audit_nightly", True):
+                    continue
+                batch = int(get_setting("pack_audit_batch", 6) or 6)
+                from src.pack_audit import run_scheduled_pack_audit
+                await run_scheduled_pack_audit(max_packs=batch)
+            except Exception as e:
+                logger.warning(f"Nightly pack audit failed: {e}")
+
+    _startup_tasks.append(asyncio.create_task(_pack_audit_nightly_loop()))
+
     # Cookbook serve lifecycle — kills scheduler-launched serves whose
     # window-end has passed. Paired with the cookbook_serve builtin
     # action; both are no-ops unless a scheduled task actually launches

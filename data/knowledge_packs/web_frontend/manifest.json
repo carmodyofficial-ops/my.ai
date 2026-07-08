@@ -1,0 +1,11 @@
+{
+  "name": "Web Frontend (HTML / CSS / DOM)",
+  "pack_id": "web_frontend",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["html", "css", "dom", "queryselector", "addeventlistener", "event delegation", "fetch api", "formdata", "localstorage", "sessionstorage", "flexbox", "css grid", "z-index", "semantic html", "aria", "accessibility", "xss", "innerhtml", "abortcontroller", "media query"],
+  "topics": ["html", "css", "dom", "events", "fetch", "forms", "accessibility", "performance"],
+  "summary": "Vanilla web frontend reference: semantic HTML, DOM and event delegation, fetch and forms, CSS layout, storage, accessibility, and common layout/XSS gotchas with fixes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

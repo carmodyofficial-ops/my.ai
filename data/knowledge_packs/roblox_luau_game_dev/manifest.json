@@ -3,8 +3,9 @@
   "pack_id": "roblox_luau_game_dev",
   "trust_level": "high",
   "guarded": false,
-  "topics": ["roblox", "luau", "lua", "game development", "datastore", "remoteevent", "services", "client-server"],
-  "summary": "Practical Roblox/Luau reference: service tree, server-authoritative client-server via RemoteEvents, DataStore persistence, leaderstats, instance/event patterns, and common pitfalls.",
+  "triggers": ["roblox", "luau", "remoteevent", "remotefunction", "datastore", "roblox studio", "localscript", "modulescript", "filteringenabled", "tweenservice", "collectionservice", "streamingenabled", "exploiter", "server-side validation", "leaderstats", "playeradded", "characteradded", "gamepass", "devproduct", "task.wait"],
+  "topics": ["roblox", "luau", "game development", "client-server security", "datastore", "remotes", "exploits"],
+  "summary": "Practical Roblox/Luau reference: server-authoritative security and exploit-vector validation, RemoteEvent/Function patterns with rate limiting, CollectionService tags, TweenService, StreamingEnabled, DataStore persistence, and common pitfalls.",
   "source": "authored",
-  "created": "2026-06-26T00:00:00Z"
+  "created": "2026-07-08T00:00:00Z"
 }

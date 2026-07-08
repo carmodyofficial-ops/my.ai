@@ -1,0 +1,38 @@
+{
+  "name": "Example: Phaser 3 Arcade Game",
+  "pack_id": "example_phaser_game",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": [
+    "phaser game",
+    "phaser 3",
+    "phaser typescript",
+    "arcade game",
+    "browser game",
+    "2d game",
+    "make a game",
+    "javascript game",
+    "html5 game",
+    "asteroid dodger",
+    "arcade physics",
+    "generatetexture",
+    "phaser scene",
+    "phaser vite",
+    "game over restart",
+    "spawner timer",
+    "canvas game",
+    "dodge game"
+  ],
+  "topics": [
+    "phaser",
+    "typescript",
+    "gamedev",
+    "arcade-physics",
+    "vite",
+    "browser",
+    "canvas"
+  ],
+  "summary": "Complete annotated Phaser 3 + TypeScript single-scene arcade dodger: generated textures with no external assets, arcade physics overlap, timed spawner with difficulty ramp, score text, game-over/restart, and a Vite setup.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

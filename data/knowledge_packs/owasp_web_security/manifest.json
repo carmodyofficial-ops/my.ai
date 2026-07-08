@@ -1,0 +1,11 @@
+{
+  "name": "OWASP Web Security",
+  "pack_id": "owasp_web_security",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["owasp", "xss", "cross-site scripting", "csrf", "csp", "content security policy", "sql injection", "injection", "idor", "access control", "ssrf", "security headers", "samesite", "httponly", "jwt security", "file upload security", "dompurify", "clickjacking", "path traversal", "sanitize html"],
+  "topics": ["security", "owasp", "xss", "csrf", "injection", "authentication", "headers"],
+  "summary": "OWASP Top 10 in practice: XSS types and CSP, CSRF defenses, injection prevention, broken access control and IDOR, SSRF, security headers, cookie and JWT pitfalls, and safe file uploads.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

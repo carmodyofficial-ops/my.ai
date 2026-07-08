@@ -1,0 +1,11 @@
+{
+  "name": "JavaScript/TypeScript Idioms",
+  "pack_id": "javascript_typescript_idioms",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["javascript", "optional chaining", "nullish coalescing", "destructuring", "spread operator", "promise.all", "async await", "event loop", "microtask", "this binding", "arrow function", "array methods", "for of", "structuredclone", "coercion", "triple equals", "nan", "floating promise", "closure", "es2023"],
+  "topics": ["javascript", "idioms", "async", "promises", "coercion", "event-loop"],
+  "summary": "Modern JavaScript/TypeScript idioms: syntax patterns, array methods, promise/async patterns, equality and coercion gotchas, this-binding, and event loop basics.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}
