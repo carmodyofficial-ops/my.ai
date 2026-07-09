@@ -155,11 +155,11 @@ _CODING_KNOWLEDGE = [
      "triggers": ["secure coding", "security vulnerability", "sql injection", "xss", "csrf", "ssrf", "owasp", "sanitize input", "idor", "path traversal", "secure"]},
     # General-purpose (Wave B) — broadly useful on coding turns too.
     {"id": "writing_and_communication", "title": "Technical writing & communication", "files": ["knowledge.md"], "max_chars": 2000,
-     "triggers": ["documentation", "readme", "commit message", "pr description", "code comment", "docstring", "write docs", "technical writing", "write a comment", "write up"]},
+     "triggers": ["documentation", "readme", "commit message", "pr description", "code comment", "docstring", "write docs", "technical writing", "write up", "write an email", "write a report", "prose", "proofread", "reword", "rephrase", "plain language", "concise writing", "bluf", "tone of voice", "explain clearly", "improve my writing"]},
     {"id": "research_methods", "title": "Investigation & research methods", "files": ["knowledge.md"], "max_chars": 2000,
      "triggers": ["research", "investigate", "investigation", "look into", "evaluate options", "compare options", "due diligence", "find out which"]},
     {"id": "reasoning_and_learning", "title": "Structured reasoning & rapid learning", "files": ["knowledge.md"], "max_chars": 2000,
-     "triggers": ["first principles", "think through", "reason about", "break down the problem", "trade-off analysis", "how should i approach", "decision framework", "learn a new"]},
+     "triggers": ["first principles", "think through", "reason about", "reasoning", "reflect on", "reflection", "break down the problem", "trade-off analysis", "how should i approach", "decision framework", "learn a new", "how to learn", "hypothesis", "falsify", "think step by step", "mental model", "sanity check my thinking", "verify my reasoning"]},
     {"id": "product_management", "title": "Product management (request -> spec)", "files": ["knowledge.md"], "max_chars": 2000,
      "triggers": ["requirements", "user story", "acceptance criteria", "scope the", "mvp", "prioritize", "feature spec", "product requirements", "prd"]},
     # Frameworks (Wave A tail).
