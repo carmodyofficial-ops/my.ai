@@ -1,0 +1,13 @@
+{
+  "id": "rag_memory_retrieval_discipline_guard",
+  "title": "RAG memory retrieval discipline guard",
+  "kind": "remediation_knowledge_pack",
+  "priority": "P1",
+  "files": [
+    "knowledge.md",
+    "metadata.json",
+    "manifest.json",
+    "source_index.json"
+  ],
+  "created_at": "2026-06-22T01:00:24.487450+00:00"
+}

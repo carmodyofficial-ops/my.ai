@@ -1,0 +1,1146 @@
+# 38 CFR § 4.71a — § 4.71a Schedule of ratings—musculoskeletal system.
+
+> Source (authoritative, public domain): https://www.ecfr.gov/current/title-38/section-4.71a
+> eCFR Title 38, Part 4, issue date 2026-01-26. Verify against current eCFR.
+
+Rating
+
+5000 Osteomyelitis, acute, subacute, or chronic:
+
+Of the pelvis, vertebrae, or extending into major joints, or with multiple localization or with long history of intractability and debility, anemia, amyloid liver changes, or other continuous constitutional symptoms | 100
+
+Frequent episodes, with constitutional symptoms | 60
+
+With definite involucrum or sequestrum, with or without discharging sinus | 30
+
+With discharging sinus or other evidence of active infection within the past 5 years | 20
+
+Inactive, following repeated episodes, without evidence of active infection in past 5 years | 10
+
+Note (1): A rating of 10 percent, as an exception to the amputation rule, is to be assigned in any case of active osteomyelitis where the amputation rating for the affected part is no percent. This 10 percent rating and the other partial ratings of 30 percent or less are to be combined with ratings for ankylosis, limited motion, nonunion or malunion, shortening, etc., subject, of course, to the amputation rule. The 60 percent rating, as it is based on constitutional symptoms, is not subject to the amputation rule. A rating for osteomyelitis will not be applied following cure by removal or radical resection of the affected bone.
+
+Note (2): The 20 percent rating on the basis of activity within the past 5 years is not assignable following the initial infection of active osteomyelitis with no subsequent reactivation. The prerequisite for this historical rating is an established recurrent osteomyelitis. To qualify for the 10 percent rating, 2 or more episodes following the initial infection are required. This 20 percent rating or the 10 percent rating, when applicable, will be assigned once only to cover disability at all sites of previously active infection with a future ending date in the case of the 20 percent rating.
+
+5001 Bones and joints, tuberculosis of, active or inactive:
+
+Active | 100
+
+Inactive: See §§ 4.88c and 4.89
+
+5002 Multi-joint arthritis (except post-traumatic and gout), 2 or more joints, as an active process:
+
+With constitutional manifestations associated with active joint involvement, totally incapacitating | 100
+
+Less than criteria for 100% but with weight loss and anemia productive of severe impairment of health or severely incapacitating exacerbations occurring 4 or more times a year or a lesser number over prolonged periods | 60
+
+Symptom combinations productive of definite impairment of health objectively supported by examination findings or incapacitating exacerbations occurring 3 or more times a year | 40
+
+One or two exacerbations a year in a well-established diagnosis | 20
+
+Note (1): Examples of conditions rated using this diagnostic code include, but are not limited to, rheumatoid arthritis, psoriatic arthritis, and spondyloarthropathies.
+
+Note (2): For chronic residuals, rate under diagnostic code 5003.
+
+Note (3): The ratings for the active process will not be combined with the residual ratings for limitation of motion, ankylosis, or diagnostic code 5003. Instead, assign the higher evaluation.
+
+5003 Degenerative arthritis, other than post-traumatic:
+
+Degenerative arthritis established by X-ray findings will be rated on the basis of limitation of motion under the appropriate diagnostic codes for the specific joint or joints involved (DC 5200 etc.). When however, the limitation of motion of the specific joint or joints involved is noncompensable under the appropriate diagnostic codes, a rating of 10 pct is for application for each such major joint or group of minor joints affected by limitation of motion, to be combined, not added under diagnostic code 5003. Limitation of motion must be objectively confirmed by findings such as swelling, muscle spasm, or satisfactory evidence of painful motion. In the absence of limitation of motion, rate as below:
+
+With X-ray evidence of involvement of 2 or more major joints or 2 or more minor joint groups, with occasional incapacitating exacerbations | 20
+
+With X-ray evidence of involvement of 2 or more major joints or 2 or more minor joint groups | 10
+
+Note (1): The 20 pct and 10 pct ratings based on X-ray findings, above, will not be combined with ratings based on limitation of motion.
+
+Note (2): The 20 pct and 10 pct ratings based on X-ray findings, above, will not be utilized in rating conditions listed under diagnostic codes 5013 to 5024, inclusive.
+
+5004 Arthritis, gonorrheal.
+
+5005 Arthritis, pneumococcic.
+
+5006 Arthritis, typhoid.
+
+5007 Arthritis, syphilitic.
+
+5008 Arthritis, streptococcic.
+
+5009 Other specified forms of arthropathy (excluding gout).
+
+Note (1): Other specified forms of arthropathy include, but are not limited to, Charcot neuropathic, hypertrophic, crystalline, and other autoimmune arthropathies.
+
+Note (2): With the types of arthritis, diagnostic codes 5004 through 5009, rate the acute phase under diagnostic code 5002; rate any chronic residuals under diagnostic code 5003.
+
+5010 Post-traumatic arthritis: Rate as limitation of motion, dislocation, or other specified instability under the affected joint. If there are 2 or more joints affected, each rating shall be combined in accordance with § 4.25.
+
+5011 Decompression illness: Rate manifestations under the appropriate diagnostic code within the affected body system, such as arthritis for musculoskeletal residuals; auditory system for vestibular residuals; respiratory system for pulmonary barotrauma residuals; and neurologic system for cerebrovascular accident residuals.
+
+5012 Bones, neoplasm, malignant, primary or secondary | 100
+
+Note: The 100 percent rating will be continued for 1 year following the cessation of surgical, X-ray, antineoplastic chemotherapy or other prescribed therapeutic procedure. If there has been no local recurrence or metastases, rate based on residuals.
+
+5013 Osteoporosis, residuals of.
+
+5014 Osteomalacia, residuals of.
+
+5015 Bones, neoplasm, benign.
+
+5016 Osteitis deformans.
+
+5017 Gout.
+
+5018 [Removed]
+
+5019 Bursitis.
+
+5020 [Removed]
+
+5021 Myositis.
+
+5022 [Removed]
+
+5023 Heterotopic ossification.
+
+5024 Tenosynovitis, tendinitis, tendinosis or tendinopathy.
+
+Note to DCs 5013 through 5024: Evaluate the diseases under diagnostic codes 5013 through 5024 as degenerative arthritis, based on limitation of motion of affected parts.
+
+5025 Fibromyalgia (fibrositis, primary fibromyalgia syndrome)
+
+With widespread musculoskeletal pain and tender points, with or without associated fatigue, sleep disturbance, stiffness, paresthesias, headache, irritable bowel symptoms, depression, anxiety, or Raynaud's-like symptoms:
+
+That are constant, or nearly so, and refractory to therapy | 40
+
+That are episodic, with exacerbations often precipitated by environmental or emotional stress or by overexertion, but that are present more than one-third of the time | 20
+
+That require continuous medication for control | 10
+
+Note: Widespread pain means pain in both the left and right sides of the body, that is both above and below the waist, and that affects both the axial skeleton ( i.e. , cervical spine, anterior chest, thoracic spine, or low back) and the extremities.
+
+Rating
+
+Major | Minor
+
+Note (1): When an evaluation is assigned for joint resurfacing or the prosthetic replacement of a joint under diagnostic codes 5051-5056, an additional rating under § 4.71a may not also be assigned for that joint, unless otherwise directed.
+
+Note (2): Only evaluate a revision procedure in the same manner as the original procedure under diagnostic codes 5051-5056 if all the original components are replaced.
+
+Note (3): The term “prosthetic replacement” in diagnostic codes 5051-5053 and 5055-5056 means a total replacement of the named joint. However, in DC 5054, “prosthetic replacement” means a total replacement of the head of the femur or of the acetabulum.
+
+Note (4): The 100 percent rating for 1 year following implantation of prosthesis will commence after initial grant of the 1-month total rating assigned under § 4.30 following hospital discharge.
+
+Note (5): The 100 percent rating for 4 months following implantation of prosthesis or resurfacing under DCs 5054 and 5055 will commence after initial grant of the 1-month total rating assigned under § 4.30 following hospital discharge.
+
+Note (6): Special monthly compensation is assignable during the 100 percent rating period the earliest date permanent use of crutches is established.
+
+5051 Shoulder replacement (prosthesis).
+
+Prosthetic replacement of the shoulder joint:
+
+For 1 year following implantation of prosthesis | 100 | 100
+
+With chronic residuals consisting of severe, painful motion or weakness in the affected extremity | 60 | 50
+
+With intermediate degrees of residual weakness, pain or limitation of motion, rate by analogy to diagnostic codes 5200 and 5203.
+
+Minimum rating | 30 | 20
+
+5052 Elbow replacement (prosthesis).
+
+Prosthetic replacement of the elbow joint:
+
+For 1 year following implantation of prosthesis | 100 | 100
+
+With chronic residuals consisting of severe painful motion or weakness in the affected extremity | 50 | 40
+
+With intermediate degrees of residual weakness, pain or limitation of motion rate by analogy to diagnostic codes 5205 through 5208.
+
+Minimum evaluation | 30 | 20
+
+5053 Wrist replacement (prosthesis).
+
+Prosthetic replacement of wrist joint:
+
+For 1 year following implantation of prosthesis | 100 | 100
+
+With chronic residuals consisting of severe, painful motion or weakness in the affected extremity | 40 | 30
+
+With intermediate degrees of residual weakness, pain or limitation of motion, rate by analogy to diagnostic code 5214.
+
+Minimum rating | 20 | 20
+
+5054 Hip, resurfacing or replacement (prosthesis):
+
+For 4 months following implantation of prosthesis or resurfacing | 100
+
+Prosthetic replacement of the head of the femur or of the acetabulum:
+
+Following implantation of prosthesis with painful motion or weakness such as to require the use of crutches | 1 90
+
+Markedly severe residual weakness, pain or limitation of motion following implantation of prosthesis | 70
+
+Moderately severe residuals of weakness, pain or limitation of motion | 50
+
+Minimum evaluation, total replacement only | 30
+
+Note: At the conclusion of the 100 percent evaluation period, evaluate resurfacing under diagnostic codes 5250 through 5255; there is no minimum evaluation for resurfacing.
+
+5055 Knee, resurfacing or replacement (prosthesis):
+
+For 4 months following implantation of prosthesis or resurfacing | 100
+
+Prosthetic replacement of knee joint:
+
+With chronic residuals consisting of severe painful motion or weakness in the affected extremity | 60
+
+With intermediate degrees of residual weakness, pain or limitation of motion rate by analogy to diagnostic codes 5256, 5261, or 5262.
+
+Minimum evaluation, total replacement only | 30
+
+Note: At the conclusion of the 100 percent evaluation period, evaluate resurfacing under diagnostic codes 5256 through 5262; there is no minimum evaluation for resurfacing.
+
+5056 Ankle replacement (prosthesis).
+
+Prosthetic replacement of ankle joint:
+
+For 1 year following implantation of prosthesis | 100
+
+With chronic residuals consisting of severe painful motion or weakness | 40
+
+With intermediate degrees of residual weakness, pain or limitation of motion rate by analogy to 5270 or 5271.
+
+Minimum rating | 20
+
+combinations of disabilities
+
+5104 Anatomical loss of one hand and loss of use of one foot | 1 100
+
+5105 Anatomical loss of one foot and loss of use of one hand | 1 100
+
+5106 Anatomical loss of both hands | 1 100
+
+5107 Anatomical loss of both feet | 1 100
+
+5108 Anatomical loss of one hand and one foot | 1 100
+
+5109 Loss of use of both hands | 1 100
+
+5110 Loss of use of both feet | 1 100
+
+5111 Loss of use of one hand and one foot | 1 100
+
+1 Also entitled to special monthly compensation.
+
+Impairment of one extremity | Impairment of other extremity
+
+Anatomical loss or loss of use below elbow | Anatomical loss or loss of use below knee | Anatomical loss or loss of use above elbow (preventing use of prosthesis) | Anatomical loss or loss of use above knee (preventing use of prosthesis) | Anatomical loss near shoulder (preventing use of prosthesis) | Anatomical loss near hip (preventing use of prosthesis)
+
+Anatomical loss or loss of use below elbow | M Codes M-1 a, b, or c, 38 CFR 3.350 (c)(1)(i) | L Codes L-1 d, e, f, or g, 38 CFR 3.350(b) | M 1 ⁄ 2 Code M-5, 38 CFR 3.350 (f)(1)(x) | L 1 ⁄ 2 Code L-2 c, 38 CFR 3.350 (f)(1)(vi) | N Code N-3, 38 CFR 3.350 (f)(1)(xi) | M Code M-3 c, 38 CFR 3.350 (f)(1)(viii)
+
+Anatomical loss or loss of use below knee | L Codes L-1 a, b, or c, 38 CFR 3.350(b) | L 1 ⁄ 2 Code L-2 b, 38 CFR 3.350 (f)(1)(iii) | L 1 ⁄ 2 Code L-2 a, 38 CFR 3.350 (f)(1)(i) | M Code M-3 b, 38 CFR 3.350 (f)(1)(iv) | M Code M-3 a, 38 CFR 3.350 (f)(1)(ii)
+
+Anatomical loss or loss of use above elbow (preventing use of prosthesis) | N Code N-1, 38 CFR 3.350 (d)(1) | M Code M-2 a, 38 CFR 3.350 (c)(1)(iii) | N 1 ⁄ 2 Code N-4, 38 CFR 3.350 (f)(1)(ix) | M 1 ⁄ 2 Code M-4 c, 38 CFR 3.350 (f)(1)(xi)
+
+Anatomical loss or loss of use above knee (preventing use of prosthesis) | M Code M-2 a, 38 CFR 3.350 (c)(1)(ii) | M 1 ⁄ 2 Code M-4 b, 38 CFR 3.350 (f)(1)(vii) | M 1 ⁄ 2 Code M-4 a, 38 CFR 3.350 (f)(1)(v)
+
+Anatomical loss near shoulder (preventing use of prosthesis) | O Code O-1, 38 CFR 3.350 (e)(1)(i) | N Code N-2 b, 38 CFR 3.350 (d)(3)
+
+Anatomical loss near hip (preventing use of prosthesis) | N Code N-2 a, 38 CFR 3.350 (d)(2)
+
+Note. —Need for aid attendance or permanently bedridden qualifies for subpar. L. Code L-1 h, i (38 CFR 3.350(b)). Paraplegia with loss of use of both lower extremities and loss of anal and bladder sphincter control qualifies for subpar. O. Code O-2 (38 CFR 3.350(e)(2)). Where there are additional disabilities rated 50% or 100%, or anatomical or loss of use of a third extremity see 38 CFR 3.350(f) (3), (4) or (5).
+
+Rating
+
+Major | Minor
+
+Arm, amputation of:
+
+5120 Complete amputation, upper extremity:
+
+Forequarter amputation (involving complete removal of the humerus along with any portion of the scapula, clavicle, and/or ribs) | 1 100 | 1 100
+
+Disarticulation (involving complete removal of the humerus only) | 1 90 | 1 90
+
+5121 Above insertion of deltoid | 1 90 | 1 80
+
+5122 Below insertion of deltoid | 1 80 | 1 70
+
+Forearm, amputation of:
+
+5123 Above insertion of pronator teres | 1 80 | 1 70
+
+5124 Below insertion of pronator teres | 1 70 | 1 60
+
+5125 Hand, loss of use of | 1 70 | 1 60
+
+multiple finger amputations
+
+5126 Five digits of one hand, amputation of | 1 70 | 1 60
+
+Four digits of one hand, amputation of:
+
+5127 Thumb, index, long and ring | 1 70 | 1 60
+
+5128 Thumb, index, long and little | 1 70 | 1 60
+
+5129 Thumb, index, ring and little | 1 70 | 1 60
+
+5130 Thumb, long, ring and little | 1 70 | 1 60
+
+5131 Index, long, ring and little | 60 | 50
+
+Three digits of one hand, amputation of:
+
+5132 Thumb, index and long | 60 | 50
+
+5133 Thumb, index and ring | 60 | 50
+
+5134 Thumb, index and little | 60 | 50
+
+5135 Thumb, long and ring | 60 | 50
+
+5136 Thumb, long and little | 60 | 50
+
+5137 Thumb, ring and little | 60 | 50
+
+5138 Index, long and ring | 50 | 40
+
+5139 Index, long and little | 50 | 40
+
+5140 Index, ring and little | 50 | 40
+
+5141 Long, ring and little | 40 | 30
+
+Two digits of one hand, amputation of:
+
+5142 Thumb and index | 50 | 40
+
+5143 Thumb and long | 50 | 40
+
+5144 Thumb and ring | 50 | 40
+
+5145 Thumb and little | 50 | 40
+
+5146 Index and long | 40 | 30
+
+5147 Index and ring | 40 | 30
+
+5148 Index and little | 40 | 30
+
+5149 Long and ring | 30 | 20
+
+5150 Long and little | 30 | 20
+
+5151 Ring and little | 30 | 20
+
+(a) The ratings for multiple finger amputations apply to amputations at the proximal interphalangeal joints or through proximal phalanges.
+
+(b) Amputation through middle phalanges will be rated as prescribed for unfavorable ankylosis of the fingers.
+
+(c) Amputations at distal joints, or through distal phalanges, other than negligible losses, will be rated as prescribed for favorable ankylosis of the fingers.
+
+(d) Amputation or resection of metacarpal bones (more than one-half the bone lost) in multiple fingers injuries will require a rating of 10 percent added to (not combined with) the ratings, multiple finger amputations, subject to the amputation rule applied to the forearm.
+
+(e) Combinations of finger amputations at various levels, or finger amputations with ankylosis or limitation of motion of the fingers will be rated on the basis of the grade of disability; i.e. , amputation, unfavorable ankylosis, most representative of the levels or combinations. With an even number of fingers involved, and adjacent grades of disability, select the higher of the two grades.
+
+(f) Loss of use of the hand will be held to exist when no effective function remains other than that which would be equally well served by an amputation stump with a suitable prosthetic appliance.
+
+single finger amputations
+
+5152 Thumb, amputation of:
+
+With metacarpal resection | 40 | 30
+
+At metacarpophalangeal joint or through proximal phalanx | 30 | 20
+
+At distal joint or through distal phalanx | 20 | 20
+
+5153 Index finger, amputation of
+
+With metacarpal resection (more than one-half the bone lost) | 30 | 20
+
+Without metacarpal resection, at proximal interphalangeal joint or proximal thereto | 20 | 20
+
+Through middle phalanx or at distal joint | 10 | 10
+
+5154 Long finger, amputation of:
+
+With metacarpal resection (more than one-half the bone lost) | 20 | 20
+
+Without metacarpal resection, at proximal interphalangeal joint or proximal thereto | 10 | 10
+
+5155 Ring finger, amputation of:
+
+With metacarpal resection (more than one-half the bone lost) | 20 | 20
+
+Without metacarpal resection, at proximal interphalangeal joint or proximal thereto | 10 | 10
+
+5156 Little finger, amputation of:
+
+With metacarpal resection (more than one-half the bone lost) | 20 | 20
+
+Without metacarpal resection, at proximal interphalangeal joint or proximal thereto | 10 | 10
+
+Note: The single finger amputation ratings are the only applicable ratings for amputations of whole or part of single fingers.
+
+1 Entitled to special monthly compensation.
+
+Rating
+
+Thigh, amputation of:
+
+5160 Complete amputation, lower extremity:
+
+Trans-pelvic amputation (involving complete removal of the femur and intrinsic pelvic musculature along with any portion of the pelvic bones) | 2 100
+
+Disarticulation (involving complete removal of the femur and intrinsic pelvic musculature only) | 2 90
+
+Note: Separately evaluate residuals involving other body systems ( e.g., bowel impairment, bladder impairment) under the appropriate diagnostic code.
+
+5161 Upper third, one-third of the distance from perineum to knee joint measured from perineum | 2 80
+
+5162 Middle or lower thirds | 2 60
+
+Leg, amputation of:
+
+5163 With defective stump, thigh amputation recommended | 2 60
+
+5164 Amputation not improvable by prosthesis controlled by natural knee action | 2 60
+
+5165 At a lower level, permitting prosthesis | 2 40
+
+5166 Forefoot, amputation proximal to metatarsal bones (more than one-half of metatarsal loss) | 2 40
+
+5167 Foot, loss of use of | 2 40
+
+5170 Toes, all, amputation of, without metatarsal loss or transmetatarsal, amputation of, with up to half of metatarsal loss | 30
+
+5171 Toe, great, amputation of:
+
+With removal of metatarsal head | 30
+
+Without metatarsal involvement | 10
+
+5172 Toes, other than great, amputation of, with removal of metatarsal head:
+
+One or two | 20
+
+Without metatarsal involvement | 0
+
+5173 Toes, three or four, amputation of, without metatarsal involvement:
+
+Including great toe | 20
+
+Not including great toe | 10
+
+2 Also entitled to special monthly compensation.
+
+Rating
+
+Major | Minor
+
+5200 Scapulohumeral articulation, ankylosis of:
+
+Note: The scapula and humerus move as one piece.
+
+Unfavorable, abduction limited to 25° from side | 50 | 40
+
+Intermediate between favorable and unfavorable | 40 | 30
+
+Favorable, abduction to 60°, can reach mouth and head | 30 | 20
+
+5201 Arm, limitation of motion of:
+
+Flexion and/or abduction limited to 25° from side | 40 | 30
+
+Midway between side and shoulder level (flexion and/or abduction limited to 45°) | 30 | 20
+
+At shoulder level (flexion and/or abduction limited to 90°) | 20 | 20
+
+5202 Humerus, other impairment of:
+
+Loss of head of (flail shoulder) | 80 | 70
+
+Nonunion of (false flail joint) | 60 | 50
+
+Fibrous union of | 50 | 40
+
+Recurrent dislocation of at scapulohumeral joint:
+
+With frequent episodes and guarding of all arm movements | 30 | 20
+
+With infrequent episodes and guarding of movement only at shoulder level (flexion and/or abduction at 90 °) | 20 | 20
+
+Malunion of:
+
+Marked deformity | 30 | 20
+
+Moderate deformity | 20 | 20
+
+5203 Clavicle or scapula, impairment of:
+
+Dislocation of | 20 | 20
+
+Nonunion of:
+
+With loose movement | 20 | 20
+
+Without loose movement | 10 | 10
+
+Malunion of | 10 | 10
+
+Or rate on impairment of function of contiguous joint.
+
+Rating
+
+Major | Minor
+
+5205 Elbow, ankylosis of:
+
+Unfavorable, at an angle of less than 50° or with complete loss of supination or pronation | 60 | 50
+
+Intermediate, at an angle of more than 90°, or between 70° and 50° | 50 | 40
+
+Favorable, at an angle between 90° and 70° | 40 | 30
+
+5206 Forearm, limitation of flexion of:
+
+Flexion limited to 45° | 50 | 40
+
+Flexion limited to 55° | 40 | 30
+
+Flexion limited to 70° | 30 | 20
+
+Flexion limited to 90° | 20 | 20
+
+Flexion limited to 100° | 10 | 10
+
+Flexion limited to 110° | 0 | 0
+
+5207 Forearm, limitation of extension of:
+
+Extension limited to 110° | 50 | 40
+
+Extension limited to 100° | 40 | 30
+
+Extension limited to 90° | 30 | 20
+
+Extension limited to 75° | 20 | 20
+
+Extension limited to 60° | 10 | 10
+
+Extension limited to 45° | 10 | 10
+
+5208 Forearm, flexion limited to 100° and extension to 45° | 20 | 20
+
+5209 Elbow, other impairment of Flail joint | 60 | 50
+
+Joint fracture, with marked cubitus varus or cubitus valgus deformity or with ununited fracture of head of radius | 20 | 20
+
+5210 Radius and ulna, nonunion of, with flail false joint | 50 | 40
+
+5211 Ulna, impairment of:
+
+Nonunion in upper half, with false movement:
+
+With loss of bone substance (1 inch (2.5 cms.) or more) and marked deformity | 40 | 30
+
+Without loss of bone substance or deformity | 30 | 20
+
+Nonunion in lower half | 20 | 20
+
+Malunion of, with bad alignment | 10 | 10
+
+5212 Radius, impairment of:
+
+Nonunion in lower half, with false movement:
+
+With loss of bone substance (1 inch (2.5 cms.) or more) and marked deformity | 40 | 30
+
+Without loss of bone substance or deformity | 30 | 20
+
+Nonunion in upper half | 20 | 20
+
+Malunion of, with bad alignment | 10 | 10
+
+5213 Supination and pronation, impairment of:
+
+Loss of (bone fusion):
+
+The hand fixed in supination or hyperpronation | 40 | 30
+
+The hand fixed in full pronation | 30 | 20
+
+The hand fixed near the middle of the arc or moderate pronation | 20 | 20
+
+Limitation of pronation:
+
+Motion lost beyond middle of arc | 30 | 20
+
+Motion lost beyond last quarter of arc, the hand does not approach full pronation | 20 | 20
+
+Limitation of supination:
+
+To 30° or less | 10 | 10
+
+Note: In all the forearm and wrist injuries, codes 5205 through 5213, multiple impaired finger movements due to tendon tie-up, muscle or nerve injury, are to be separately rated and combined not to exceed rating for loss of use of hand.
+
+Rating
+
+Major | Minor
+
+5214 Wrist, ankylosis of:
+
+Unfavorable, in any degree of palmar flexion, or with ulnar or radial deviation | 50 | 40
+
+Any other position, except favorable | 40 | 30
+
+Favorable in 20° to 30° dorsiflexion | 30 | 20
+
+Note: Extremely unfavorable ankylosis will be rated as loss of use of hands under diagnostic code 5125.
+
+5215 Wrist, limitation of motion of:
+
+Dorsiflexion less than 15° | 10 | 10
+
+Palmar flexion limited in line with forearm | 10 | 10
+
+Rating
+
+Major | Minor
+
+(1) For the index, long, ring, and little fingers (digits II, III, IV, and V), zero degrees of flexion represents the fingers fully extended, making a straight line with the rest of the hand. The position of function of the hand is with the wrist dorsiflexed 20 to 30 degrees, the metacarpophalangeal and proximal interphalangeal joints flexed to 30 degrees, and the thumb (digit I) abducted and rotated so that the thumb pad faces the finger pads. Only joints in these positions are considered to be in favorable position. For digits II through V, the metacarpophalangeal joint has a range of zero to 90 degrees of flexion, the proximal interphalangeal joint has a range of zero to 100 degrees of flexion, and the distal (terminal) interphalangeal joint has a range of zero to 70 or 80 degrees of flexion
+
+(2) When two or more digits of the same hand are affected by any combination of amputation, ankylosis, or limitation of motion that is not otherwise specified in the rating schedule, the evaluation level assigned will be that which best represents the overall disability ( i.e. , amputation, unfavorable or favorable ankylosis, or limitation of motion), assigning the higher level of evaluation when the level of disability is equally balanced between one level and the next higher level
+
+(3) Evaluation of ankylosis of the index, long, ring, and little fingers:
+
+(i) If both the metacarpophalangeal and proximal interphalangeal joints of a digit are ankylosed, and either is in extension or full flexion, or there is rotation or angulation of a bone, evaluate as amputation without metacarpal resection, at proximal interphalangeal joint or proximal thereto
+
+(ii) If both the metacarpophalangeal and proximal interphalangeal joints of a digit are ankylosed, evaluate as unfavorable ankylosis, even if each joint is individually fixed in a favorable position
+
+(iii) If only the metacarpophalangeal or proximal interphalangeal joint is ankylosed, and there is a gap of more than two inches (5.1 cm.) between the fingertip(s) and the proximal transverse crease of the palm, with the finger(s) flexed to the extent possible, evaluate as unfavorable ankylosis
+
+(iv) If only the metacarpophalangeal or proximal interphalangeal joint is ankylosed, and there is a gap of two inches (5.1 cm.) or less between the fingertip(s) and the proximal transverse crease of the palm, with the finger(s) flexed to the extent possible, evaluate as favorable ankylosis
+
+(4) Evaluation of ankylosis of the thumb:
+
+(i) If both the carpometacarpal and interphalangeal joints are ankylosed, and either is in extension or full flexion, or there is rotation or angulation of a bone, evaluate as amputation at metacarpophalangeal joint or through proximal phalanx
+
+(ii) If both the carpometacarpal and interphalangeal joints are ankylosed, evaluate as unfavorable ankylosis, even if each joint is individually fixed in a favorable position
+
+(iii) If only the carpometacarpal or interphalangeal joint is ankylosed, and there is a gap of more than two inches (5.1 cm.) between the thumb pad and the fingers, with the thumb attempting to oppose the fingers, evaluate as unfavorable ankylosis
+
+(iv) If only the carpometacarpal or interphalangeal joint is ankylosed, and there is a gap of two inches (5.1 cm.) or less between the thumb pad and the fingers, with the thumb attempting to oppose the fingers, evaluate as favorable ankylosis
+
+(5) If there is limitation of motion of two or more digits, evaluate each digit separately and combine the evaluations
+
+I. Multiple Digits: Unfavorable Ankylosis
+
+5216 Five digits of one hand, unfavorable ankylosis of | 60 | 50
+
+Note: Also consider whether evaluation as amputation is warranted.
+
+5217 Four digits of one hand, unfavorable ankylosis of:
+
+Thumb and any three fingers | 60 | 50
+
+Index, long, ring, and little fingers | 50 | 40
+
+Note: Also consider whether evaluation as amputation is warranted.
+
+5218 Three digits of one hand, unfavorable ankylosis of:
+
+Thumb and any two fingers | 50 | 40
+
+Index, long, and ring; index, long, and little; or index, ring, and little fingers | 40 | 30
+
+Long, ring, and little fingers | 30 | 20
+
+Note: Also consider whether evaluation as amputation is warranted.
+
+5219 Two digits of one hand, unfavorable ankylosis of:
+
+Thumb and any finger | 40 | 30
+
+Index and long; index and ring; or index and little fingers | 30 | 20
+
+Long and ring; long and little; or ring and little fingers | 20 | 20
+
+Note: Also consider whether evaluation as amputation is warranted.
+
+II. Multiple Digits: Favorable Ankylosis
+
+5220 Five digits of one hand, favorable ankylosis of | 50 | 40
+
+5221 Four digits of one hand, favorable ankylosis of:
+
+Thumb and any three fingers | 50 | 40
+
+Index, long, ring, and little fingers | 40 | 30
+
+5222 Three digits of one hand, favorable ankylosis of:
+
+Thumb and any two fingers | 40 | 30
+
+Index, long, and ring; index, long, and little; or index, ring, and little fingers | 30 | 20
+
+Long, ring and little fingers | 20 | 20
+
+5223 Two digits of one hand, favorable ankylosis of:
+
+Thumb and any finger | 30 | 20
+
+Index and long; index and ring; or index and little fingers | 20 | 20
+
+Long and ring; long and little; or ring and little fingers | 10 | 10
+
+III. Ankylosis of Individual Digits
+
+5224 Thumb, ankylosis of:
+
+Unfavorable | 20 | 20
+
+Favorable | 10 | 10
+
+Note: Also consider whether evaluation as amputation is warranted and whether an additional evaluation is warranted for resulting limitation of motion of other digits or interference with overall function of the hand.
+
+5225 Index finger, ankylosis of:
+
+Unfavorable or favorable | 10 | 10
+
+Note: Also consider whether evaluation as amputation is warranted and whether an additional evaluation is warranted for resulting limitation of motion of other digits or interference with overall function of the hand.
+
+5226 Long finger, ankylosis of:
+
+Unfavorable or favorable | 10 | 10
+
+Note: Also consider whether evaluation as amputation is warranted and whether an additional evaluation is warranted for resulting limitation of motion of other digits or interference with overall function of the hand.
+
+5227 Ring or little finger, ankylosis of:
+
+Unfavorable or favorable | 0 | 0
+
+Note: Also consider whether evaluation as amputation is warranted and whether an additional evaluation is warranted for resulting limitation of motion of other digits or interference with overall function of the hand.
+
+IV. Limitation of Motion of Individual Digits
+
+5228 Thumb, limitation of motion:
+
+With a gap of more than two inches (5.1 cm.) between the thumb pad and the fingers, with the thumb attempting to oppose the fingers | 20 | 20
+
+With a gap of one to two inches (2.5 to 5.1 cm.) between the thumb pad and the fingers, with the thumb attempting to oppose the fingers | 10 | 10
+
+With a gap of less than one inch (2.5 cm.) between the thumb pad and the fingers, with the thumb attempting to oppose the fingers | 0 | 0
+
+5229 Index or long finger, limitation of motion:
+
+With a gap of one inch (2.5 cm.) or more between the fingertip and the proximal transverse crease of the palm, with the finger flexed to the extent possible, or; with extension limited by more than 30 degrees | 10 | 10
+
+With a gap of less than one inch (2.5 cm.) between the fingertip and the proximal transverse crease of the palm, with the finger flexed to the extent possible, and; extension is limited by no more than 30 degrees | 0 | 0
+
+5230 Ring or little finger, limitation of motion:
+
+Any limitation of motion | 0 | 0
+
+Rating
+
+General Rating Formula for Diseases and Injuries of the Spine
+
+(For diagnostic codes 5235 to 5243 unless 5243 is evaluated under the Formula for Rating Intervertebral Disc Syndrome Based on Incapacitating Episodes):
+
+With or without symptoms such as pain (whether or not it radiates), stiffness, or aching in the area of the spine affected by residuals of injury or disease
+
+Unfavorable ankylosis of the entire spine | 100
+
+Unfavorable ankylosis of the entire thoracolumbar spine | 50
+
+Unfavorable ankylosis of the entire cervical spine; or, forward flexion of the thoracolumbar spine 30 degrees or less; or, favorable ankylosis of the entire thoracolumbar spine | 40
+
+Forward flexion of the cervical spine 15 degrees or less; or, favorable ankylosis of the entire cervical spine | 30
+
+Forward flexion of the thoracolumbar spine greater than 30 degrees but not greater than 60 degrees; or, forward flexion of the cervical spine greater than 15 degrees but not greater than 30 degrees; or, the combined range of motion of the thoracolumbar spine not greater than 120 degrees; or, the combined range of motion of the cervical spine not greater than 170 degrees; or, muscle spasm or guarding severe enough to result in an abnormal gait or abnormal spinal contour such as scoliosis, reversed lordosis, or abnormal kyphosis | 20
+
+Forward flexion of the thoracolumbar spine greater than 60 degrees but not greater than 85 degrees; or, forward flexion of the cervical spine greater than 30 degrees but not greater than 40 degrees; or, combined range of motion of the thoracolumbar spine greater than 120 degrees but not greater than 235 degrees; or, combined range of motion of the cervical spine greater than 170 degrees but not greater than 335 degrees; or, muscle spasm, guarding, or localized tenderness not resulting in abnormal gait or abnormal spinal contour; or, vertebral body fracture with loss of 50 percent or more of the height | 10
+
+Note (1): Evaluate any associated objective neurologic abnormalities, including, but not limited to, bowel or bladder impairment, separately, under an appropriate diagnostic code.
+
+Note (2): (See also Plate V.) For VA compensation purposes, normal forward flexion of the cervical spine is zero to 45 degrees, extension is zero to 45 degrees, left and right lateral flexion are zero to 45 degrees, and left and right lateral rotation are zero to 80 degrees. Normal forward flexion of the thoracolumbar spine is zero to 90 degrees, extension is zero to 30 degrees, left and right lateral flexion are zero to 30 degrees, and left and right lateral rotation are zero to 30 degrees. The combined range of motion refers to the sum of the range of forward flexion, extension, left and right lateral flexion, and left and right rotation. The normal combined range of motion of the cervical spine is 340 degrees and of the thoracolumbar spine is 240 degrees. The normal ranges of motion for each component of spinal motion provided in this note are the maximum that can be used for calculation of the combined range of motion.
+
+Note (3): In exceptional cases, an examiner may state that because of age, body habitus, neurologic disease, or other factors not the result of disease or injury of the spine, the range of motion of the spine in a particular individual should be considered normal for that individual, even though it does not conform to the normal range of motion stated in Note (2). Provided that the examiner supplies an explanation, the examiner's assessment that the range of motion is normal for that individual will be accepted.
+
+Note (4): Round each range of motion measurement to the nearest five degrees.
+
+Note (5): For VA compensation purposes, unfavorable ankylosis is a condition in which the entire cervical spine, the entire thoracolumbar spine, or the entire spine is fixed in flexion or extension, and the ankylosis results in one or more of the following: difficulty walking because of a limited line of vision; restricted opening of the mouth and chewing; breathing limited to diaphragmatic respiration; gastrointestinal symptoms due to pressure of the costal margin on the abdomen; dyspnea or dysphagia; atlantoaxial or cervical subluxation or dislocation; or neurologic symptoms due to nerve root stretching. Fixation of a spinal segment in neutral position (zero degrees) always represents favorable ankylosis.
+
+Note (6): Separately evaluate disability of the thoracolumbar and cervical spine segments, except when there is unfavorable ankylosis of both segments, which will be rated as a single disability.
+
+5235 Vertebral fracture or dislocation
+
+5236 Sacroiliac injury and weakness
+
+5237 Lumbosacral or cervical strain
+
+5238 Spinal stenosis
+
+5239 Spondylolisthesis or segmental instability
+
+5240 Ankylosing spondylitis
+
+5241 Spinal fusion
+
+5242 Degenerative arthritis, degenerative disc disease other than intervertebral disc syndrome (also, see either DC 5003 or 5010)
+
+5243 Intervertebral disc syndrome: Assign this diagnostic code only when there is disc herniation with compression and/or irritation of the adjacent nerve root; assign diagnostic code 5242 for all other disc diagnoses.
+
+Evaluate intervertebral disc syndrome (preoperatively or postoperatively) either under the General Rating Formula for Diseases and Injuries of the Spine or under the Formula for Rating Intervertebral Disc Syndrome Based on Incapacitating Episodes, whichever method results in the higher evaluation when all disabilities are combined under § 4.25.
+
+5244 Traumatic paralysis, complete:
+
+Paraplegia: Rate under diagnostic code 5110.
+
+Quadriplegia: Rate separately under diagnostic codes 5109 and 5110 and combine evaluations in accordance with § 4.25.
+
+Note: If traumatic paralysis does not cause loss of use of both hands or both feet, it is incomplete paralysis. Evaluate residuals of incomplete traumatic paralysis under the appropriate diagnostic code ( e.g., § 4.124a, Diseases of the Peripheral Nerves).
+
+Formula for Rating Intervertebral Disc Syndrome Based on Incapacitating Episodes
+
+With incapacitating episodes having a total duration of at least 6 weeks during the past 12 months | 60
+
+With incapacitating episodes having a total duration of at least 4 weeks but less than 6 weeks during the past 12 months | 40
+
+With incapacitating episodes having a total duration of at least 2 weeks but less than 4 weeks during the past 12 months | 20
+
+With incapacitating episodes having a total duration of at least one week but less than 2 weeks during the past 12 months | 10
+
+Note (1): For purposes of evaluations under diagnostic code 5243, an incapacitating episode is a period of acute signs and symptoms due to intervertebral disc syndrome that requires bed rest prescribed by a physician and treatment by a physician.
+
+Note (2): If intervertebral disc syndrome is present in more than one spinal segment, provided that the effects in each spinal segment are clearly distinct, evaluate each segment on the basis of incapacitating episodes or under the General Rating Formula for Diseases and Injuries of the Spine, whichever method results in a higher evaluation for that segment.
+
+Rating
+
+5250 Hip, ankylosis of:
+
+Unfavorable, extremely unfavorable ankylosis, the foot not reaching ground, crutches necessitated | 3 90
+
+Intermediate | 70
+
+Favorable, in flexion at an angle between 20° and 40°, and slight adduction or abduction | 60
+
+5251 Thigh, limitation of extension of:
+
+Extension limited to 5° | 10
+
+5252 Thigh, limitation of flexion of:
+
+Flexion limited to 10° | 40
+
+Flexion limited to 20° | 30
+
+Flexion limited to 30° | 20
+
+Flexion limited to 45° | 10
+
+5253 Thigh, impairment of:
+
+Limitation of abduction of, motion lost beyond 10° | 20
+
+Limitation of adduction of, cannot cross legs | 10
+
+Limitation of rotation of, cannot toe-out more than 15°, affected leg | 10
+
+5254 Hip, flail joint | 80
+
+5255 Femur, impairment of:
+
+Fracture of shaft or anatomical neck of:
+
+With nonunion, with loose motion (spiral or oblique fracture) | 80
+
+With nonunion, without loose motion, weight bearing preserved with aid of brace | 60
+
+Fracture of surgical neck of, with false joint | 60
+
+Malunion of:
+
+Evaluate under diagnostic codes 5256, 5257, 5260, or 5261 for the knee, or 5250-5254 for the hip, whichever results in the highest evaluation.
+
+3 Entitled to special monthly compensation.
+
+Rating
+
+5256 Knee, ankylosis of:
+
+Extremely unfavorable, in flexion at an angle of 45° or more | 60
+
+In flexion between 20° and 45° | 50
+
+In flexion between 10° and 20° | 40
+
+Favorable angle in full extension, or in slight flexion between 0° and 10° | 30
+
+5257 Knee, other impairment of:
+
+Recurrent subluxation or instability:
+
+Unrepaired or failed repair of complete ligament tear causing persistent instability, and a medical provider prescribes both an assistive device ( e.g., cane(s), crutch(es), walker) and bracing for ambulation | 30
+
+One of the following:
+
+(a) Sprain, incomplete ligament tear, or repaired complete ligament tear causing persistent instability, and a medical provider prescribes a brace and/or assistive device ( e.g., cane(s), crutch(es), walker) for ambulation.
+
+(b) Unrepaired or failed repair of complete ligament tear causing persistent instability, and a medical provider prescribes either an assistive device ( e.g., cane(s), crutch(es), walker) or bracing for ambulation | 20
+
+Sprain, incomplete ligament tear, or complete ligament tear (repaired, unrepaired, or failed repair) causing persistent instability, without a prescription from a medical provider for an assistive device ( e.g., cane(s), crutch(es), walker) or bracing for ambulation | 10
+
+Patellar instability:
+
+A diagnosed condition involving the patellofemoral complex with recurrent instability after surgical repair that requires a prescription by a medical provider for a brace and either a cane or a walker | 30
+
+A diagnosed condition involving the patellofemoral complex with recurrent instability after surgical repair that requires a prescription by a medical provider for one of the following: A brace, cane, or walker | 20
+
+A diagnosed condition involving the patellofemoral complex with recurrent instability (with or without history of surgical repair) that does not require a prescription from a medical provider for a brace, cane, or walker | 10
+
+Note (1): For patellar instability, the patellofemoral complex consists of the quadriceps tendon, the patella, and the patellar tendon.
+
+Note (2): A surgical procedure that does not involve repair of one or more patellofemoral components that contribute to the underlying instability shall not qualify as surgical repair for patellar instability (including, but not limited to, arthroscopy to remove loose bodies and joint aspiration).
+
+5258 Cartilage, semilunar, dislocated, with frequent episodes of “locking,” pain, and effusion into the joint | 20
+
+5259 Cartilage, semilunar, removal of, symptomatic | 10
+
+5260 Leg, limitation of flexion of:
+
+Flexion limited to 15° | 30
+
+Flexion limited to 30° | 20
+
+Flexion limited to 45° | 10
+
+Flexion limited to 60° | 0
+
+5261 Leg, limitation of extension of:
+
+Extension limited to 45° | 50
+
+Extension limited to 30° | 40
+
+Extension limited to 20° | 30
+
+Extension limited to 15° | 20
+
+Extension limited to 10° | 10
+
+Extension limited to 5° | 0
+
+5262 Tibia and fibula, impairment of:
+
+Nonunion of, with loose motion, requiring brace | 40
+
+Malunion of:
+
+Evaluate under diagnostic codes 5256, 5257, 5260, or 5261 for the knee, or 5270 or 5271 for the ankle, whichever results in the highest evaluation.
+
+Medial tibial stress syndrome (MTSS), or shin splints:
+
+Requiring treatment for no less than 12 consecutive months, and unresponsive to surgery and either shoe orthotics or other conservative treatment, both lower extremities | 30
+
+Requiring treatment for no less than 12 consecutive months, and unresponsive to surgery and either shoe orthotics or other conservative treatment, one lower extremity | 20
+
+Requiring treatment for no less than 12 consecutive months, and unresponsive to either shoe orthotics or other conservative treatment, one or both lower extremities | 10
+
+Treatment less than 12 consecutive months, one or both lower extremities | 0
+
+5263 Genu recurvatum (acquired, traumatic, with weakness and insecurity in weight-bearing objectively demonstrated) | 10
+
+Rating
+
+5270 Ankle, ankylosis of:
+
+In plantar flexion at more than 40°, or in dorsiflexion at more than 10° or with abduction, adduction, inversion or eversion deformity | 40
+
+In plantar flexion, between 30° and 40°, or in dorsiflexion, between 0° and 10° | 30
+
+In plantar flexion, less than 30° | 20
+
+5271 Ankle, limited motion of:
+
+Marked (less than 5 degrees dorsiflexion or less than 10 degrees plantar flexion) | 20
+
+Moderate (less than 15 degrees dorsiflexion or less than 30 degrees plantar flexion) | 10
+
+5272 Subastragalar or tarsal joint, ankylosis of:
+
+In poor weight-bearing position | 20
+
+In good weight-bearing position | 10
+
+5273 Os calcis or astragalus, malunion of:
+
+Marked deformity | 20
+
+Moderate deformity | 10
+
+5274 Astragalectomy | 20
+
+Rating
+
+5275 Bones, of the lower extremity, shortening of:
+
+Over 4 inches (10.2 cms.) | 3 60
+
+3 1 ⁄ 2 to 4 inches (8.9 cms. to 10.2 cms.) | 3 50
+
+3 to 3 1 ⁄ 2 inches (7.6 cms. to 8.9 cms.) | 40
+
+2 1 ⁄ 2 to 3 inches (6.4 cms. to 7.6 cms.) | 30
+
+2 to 2 1 ⁄ 2 inches (5.1 cms. to 6.4 cms.) | 20
+
+1 1 ⁄ 4 to 2 inches (3.2 cms. to 5.1 cms.) | 10
+
+Note: Measure both lower extremities from anterior superior spine of the ilium to the internal malleolus of the tibia. Not to be combined with other ratings for fracture or faulty union in the same extremity.
+
+3 Also entitled to special monthly compensation.
+
+Rating
+
+5269 Plantar fasciitis:
+
+No relief from both non-surgical and surgical treatment, bilateral | 30
+
+No relief from both non-surgical and surgical treatment, unilateral | 20
+
+Otherwise, unilateral or bilateral | 10
+
+Note (1): With actual loss of use of the foot, rate 40 percent
+
+Note (2): If a veteran has been recommended for surgical intervention, but is not a surgical candidate, evaluate under the 20 percent or 30 percent criteria, whichever is applicable
+
+5276 Flatfoot, acquired:
+
+Pronounced; marked pronation, extreme tenderness of plantar surfaces of the feet, marked inward displacement and severe spasm of the tendo achillis on manipulation, not improved by orthopedic shoes or appliances
+
+Bilateral | 50
+
+Unilateral | 30
+
+Severe; objective evidence of marked deformity (pronation, abduction, etc.), pain on manipulation and use accentuated, indication of swelling on use, characteristic callosities:
+
+Bilateral | 30
+
+Unilateral | 20
+
+Moderate; weight-bearing line over or medial to great toe, inward bowing of the tendo achillis, pain on manipulation and use of the feet, bilateral or unilateral | 10
+
+Mild; symptoms relieved by built-up shoe or arch support | 0
+
+5277 Weak foot, bilateral:
+
+A symptomatic condition secondary to many constitutional conditions, characterized by atrophy of the musculature, disturbed circulation, and weakness:
+
+Rate the underlying condition, minimum rating | 10
+
+5278 Claw foot (pes cavus), acquired:
+
+Marked contraction of plantar fascia with dropped forefoot, all toes hammer toes, very painful callosities, marked varus deformity:
+
+Bilateral | 50
+
+Unilateral | 30
+
+All toes tending to dorsiflexion, limitation of dorsiflexion at ankle to right angle, shortened plantar fascia, and marked tenderness under metatarsal heads:
+
+Bilateral | 30
+
+Unilateral | 20
+
+Great toe dorsiflexed, some limitation of dorsiflexion at ankle, definite tenderness under metatarsal heads:
+
+Bilateral | 10
+
+Unilateral | 10
+
+Slight | 0
+
+5279 Metatarsalgia, anterior (Morton's disease), unilateral, or bilateral | 10
+
+5280 Hallux valgus, unilateral:
+
+Operated with resection of metatarsal head | 10
+
+Severe, if equivalent to amputation of great toe | 10
+
+5281 Hallux rigidus, unilateral, severe:
+
+Rate as hallux valgus, severe.
+
+Note: Not to be combined with claw foot ratings.
+
+5282 Hammer toe:
+
+All toes, unilateral without claw foot | 10
+
+Single toes | 0
+
+5283 Tarsal, or metatarsal bones, malunion of, or nonunion of:
+
+Severe | 30
+
+Moderately severe | 20
+
+Moderate | 10
+
+Note: With actual loss of use of the foot, rate 40 percent.
+
+5284 Foot injuries, other:
+
+Severe | 30
+
+Moderately severe | 20
+
+Moderate | 10
+
+Note: With actual loss of use of the foot, rate 40 percent.
+
+Rating
+
+5296 Skull, loss of part of, both inner and outer tables:
+
+With brain hernia | 80
+
+Without brain hernia:
+
+Area larger than size of a 50-cent piece or 1.140 in 2 (7.355 cm 2 ) | 50
+
+Area intermediate | 30
+
+Area smaller than the size of a 25-cent piece or 0.716 in 2 (4.619 cm 2 ) | 10
+
+Note: Rate separately for intracranial complications.
+
+Rating
+
+5297 Ribs, removal of:
+
+More than six | 50
+
+Five or six | 40
+
+Three or four | 30
+
+Two | 20
+
+One or resection of two or more ribs without regeneration | 10
+
+Note (1): The rating for rib resection or removal is not to be applied with ratings for purrulent pleurisy, lobectomy, pneumonectomy or injuries of pleural cavity.
+
+Note (2): However, rib resection will be considered as rib removal in thoracoplasty performed for collapse therapy or to accomplish obliteration of space and will be combined with the rating for lung collapse, or with the rating for lobectomy, pneumonectomy or the graduated ratings for pulmonary tuberculosis.
+
+Rating
+
+5298 Coccyx, removal of:
+
+Partial or complete, with painful residuals | 10
+
+Without painful residuals | 0

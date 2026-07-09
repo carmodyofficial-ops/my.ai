@@ -1,0 +1,55 @@
+{
+  "pack_id": "va_disability_compensation",
+  "trust_level": "authoritative",
+  "primary_authority": "38 CFR Part 4 \u2014 Schedule for Rating Disabilities (VASRD)",
+  "sources": [
+    {
+      "file": "knowledge.md",
+      "purpose": "Served summary: framework + high-frequency rating criteria (the chat-injected excerpt)"
+    },
+    {
+      "id": "ecfr_t38_p4",
+      "title": "eCFR Title 38, Chapter I, Part 4 (Schedule for Rating Disabilities)",
+      "url": "https://www.ecfr.gov/current/title-38/chapter-I/part-4",
+      "kind": "us_federal_regulation_public_domain",
+      "use": "all rating criteria, diagnostic codes, percentages"
+    },
+    {
+      "id": "ecfr_4_130",
+      "title": "38 CFR 4.130 \u2014 Schedule of ratings, mental disorders",
+      "url": "https://www.ecfr.gov/current/title-38/section-4.130",
+      "kind": "us_federal_regulation_public_domain",
+      "use": "mental disorders general rating formula"
+    },
+    {
+      "id": "ecfr_4_25",
+      "title": "38 CFR 4.25 \u2014 Combined ratings table",
+      "url": "https://www.ecfr.gov/current/title-38/section-4.25",
+      "kind": "us_federal_regulation_public_domain",
+      "use": "combining multiple ratings"
+    },
+    {
+      "id": "ecfr_4_26",
+      "title": "38 CFR 4.26 \u2014 Bilateral factor",
+      "url": "https://www.ecfr.gov/current/title-38/section-4.26",
+      "kind": "us_federal_regulation_public_domain",
+      "use": "paired-extremity bonus"
+    },
+    {
+      "id": "ecfr_4_16",
+      "title": "38 CFR 4.16 \u2014 Total disability ratings (TDIU)",
+      "url": "https://www.ecfr.gov/current/title-38/section-4.16",
+      "kind": "us_federal_regulation_public_domain",
+      "use": "individual unemployability"
+    },
+    {
+      "id": "va_gov_comp",
+      "title": "VA.gov \u2014 Disability compensation",
+      "url": "https://www.va.gov/disability/",
+      "kind": "us_gov_public",
+      "use": "plain-language framework, rates, process"
+    }
+  ],
+  "excluded": "No third-party blogs, law-firm marketing, forums, or unofficial 'rating estimators'. Authoritative government sources only.",
+  "verification_note": "Rating values must be confirmed against the current eCFR (the schedule is periodically amended)."
+}

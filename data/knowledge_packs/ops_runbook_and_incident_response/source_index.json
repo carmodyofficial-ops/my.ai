@@ -1,0 +1,13 @@
+{
+  "id": "ops_runbook_and_incident_response",
+  "created_at": "2026-06-21T21:01:35.750057+00:00",
+  "sources": [
+    {
+      "path": "knowledge.md",
+      "kind": "markdown",
+      "title": "Ops Runbook and Incident Response",
+      "description": "Purpose: Help the AI operate my.ai like a local production system.",
+      "retrieval_weight": 1.0
+    }
+  ]
+}

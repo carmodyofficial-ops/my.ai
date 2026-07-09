@@ -1,0 +1,10 @@
+{
+  "id": "immutable_guest_boundary_guard",
+  "sources": [
+    {
+      "type": "internal_eval_gap_analysis",
+      "path": "data/projectforge_sme/evals/k2o_r3_industry_quant_benchmark/analysis/k2o_r3_gap_analysis_and_remediation_backlog.md",
+      "milestone": "K2O_R3_E"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "category": "engineering_project_memory",
+  "created_at": "2026-06-21T12:37:32+00:00",
+  "depth_focus": [
+    "agent harness",
+    "workspace envelopes",
+    "tool guards",
+    "validation reports",
+    "Claude review",
+    "boundary failures",
+    "lessons learned"
+  ],
+  "freshness": "living",
+  "memory_write_allowed": true,
+  "name": "ProjectForge SME",
+  "pack_id": "projectforge_sme",
+  "priority": 96,
+  "required_files": [
+    "manifest.json",
+    "overview.md",
+    "core_concepts.md",
+    "procedures.md",
+    "decision_frameworks.md",
+    "eval_questions.md",
+    "memory_hooks.md",
+    "safety_boundaries.md",
+    "source_index.json"
+  ],
+  "requires_extra_caution": false,
+  "trust_level": "high"
+}

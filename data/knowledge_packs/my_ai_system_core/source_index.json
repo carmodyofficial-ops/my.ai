@@ -1,0 +1,56 @@
+{
+  "external_sources": [],
+  "local_project_sources": [],
+  "pack_id": "my_ai_system_core",
+  "sources": [
+    {
+      "file": "overview.md",
+      "purpose": "Purpose and scope"
+    },
+    {
+      "file": "core_concepts.md",
+      "purpose": "Concept map"
+    },
+    {
+      "file": "procedures.md",
+      "purpose": "Procedural guidance"
+    },
+    {
+      "file": "decision_frameworks.md",
+      "purpose": "Tradeoff analysis"
+    },
+    {
+      "file": "eval_questions.md",
+      "purpose": "Evaluation prompts"
+    },
+    {
+      "file": "memory_hooks.md",
+      "purpose": "Memory rules"
+    },
+    {
+      "file": "safety_boundaries.md",
+      "purpose": "Safety and trust limits"
+    },
+    {
+      "file": "operating_model.md",
+      "purpose": "K1B deepening file for my_ai_system_core: Operating Model"
+    },
+    {
+      "file": "service_topology.md",
+      "purpose": "K1B deepening file for my_ai_system_core: Service Topology"
+    },
+    {
+      "file": "local_security_model.md",
+      "purpose": "K1B deepening file for my_ai_system_core: Local Security Model"
+    },
+    {
+      "file": "diagnostics_playbook.md",
+      "purpose": "K1B deepening file for my_ai_system_core: Diagnostics Playbook"
+    },
+    {
+      "file": "self_awareness_boundaries.md",
+      "purpose": "K1B deepening file for my_ai_system_core: Self Awareness Boundaries"
+    }
+  ],
+  "updated_at": "2026-06-21T12:49:11+00:00"
+}

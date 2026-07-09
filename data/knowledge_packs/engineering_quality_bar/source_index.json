@@ -1,0 +1,13 @@
+{
+  "id": "engineering_quality_bar",
+  "created_at": "2026-06-21T21:01:35.750057+00:00",
+  "sources": [
+    {
+      "path": "knowledge.md",
+      "kind": "markdown",
+      "title": "Engineering Quality Bar",
+      "description": "Purpose: Define what good engineering behavior looks like.",
+      "retrieval_weight": 1.0
+    }
+  ]
+}

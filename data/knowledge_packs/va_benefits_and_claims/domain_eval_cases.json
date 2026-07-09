@@ -1,0 +1,42 @@
+{
+  "pack_id": "va_benefits_and_claims",
+  "evals": [
+    {
+      "id": "va_benefits_route",
+      "kind": "router",
+      "query": "How do I file a VA claim and appeal a denial?",
+      "top_k": 5,
+      "expected_packs": [
+        "va_benefits_and_claims"
+      ]
+    },
+    {
+      "id": "va_giibill_route",
+      "kind": "router",
+      "query": "Post-9/11 GI Bill housing allowance and Yellow Ribbon eligibility",
+      "top_k": 5,
+      "expected_packs": [
+        "va_benefits_and_claims"
+      ]
+    },
+    {
+      "id": "va_homeloan_route",
+      "kind": "router",
+      "query": "VA home loan certificate of eligibility and funding fee waiver",
+      "top_k": 5,
+      "expected_packs": [
+        "va_benefits_and_claims"
+      ]
+    },
+    {
+      "id": "va_appeals_context",
+      "kind": "context",
+      "query": "higher-level review vs supplemental claim vs board appeal",
+      "top_k": 5,
+      "min_context_blocks": 1,
+      "expected_context_packs": [
+        "va_benefits_and_claims"
+      ]
+    }
+  ]
+}

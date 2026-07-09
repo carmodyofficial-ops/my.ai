@@ -1,0 +1,13 @@
+{
+  "id": "backtesting_data_quality_guard",
+  "title": "Backtesting and market data quality guard",
+  "kind": "remediation_knowledge_pack",
+  "priority": "P2",
+  "files": [
+    "knowledge.md",
+    "metadata.json",
+    "manifest.json",
+    "source_index.json"
+  ],
+  "created_at": "2026-06-22T01:00:24.487450+00:00"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "backtesting_data_quality_guard",
+  "title": "Backtesting and market data quality guard",
+  "priority": "P2",
+  "purpose": "Improve backtesting, market-data, and strategy-validation rigor.",
+  "created_at": "2026-06-22T01:00:24.487450+00:00",
+  "updated_at": "2026-06-22T01:00:24.487450+00:00",
+  "source_milestone": "K2P_A",
+  "remediates": [
+    "K2O_R3_FIX_001",
+    "K2O_R3_FIX_002",
+    "K2O_R3_FIX_003",
+    "K2O_R3_FIX_004",
+    "K2O_R3_FIX_005",
+    "K2O_R3_FIX_006"
+  ]
+}

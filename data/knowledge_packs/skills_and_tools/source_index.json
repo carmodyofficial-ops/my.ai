@@ -1,0 +1,52 @@
+{
+  "external_sources": [],
+  "local_project_sources": [],
+  "pack_id": "skills_and_tools",
+  "sources": [
+    {
+      "file": "overview.md",
+      "purpose": "Purpose and scope"
+    },
+    {
+      "file": "core_concepts.md",
+      "purpose": "Concept map"
+    },
+    {
+      "file": "procedures.md",
+      "purpose": "Procedural guidance"
+    },
+    {
+      "file": "decision_frameworks.md",
+      "purpose": "Tradeoff analysis"
+    },
+    {
+      "file": "eval_questions.md",
+      "purpose": "Evaluation prompts"
+    },
+    {
+      "file": "memory_hooks.md",
+      "purpose": "Memory rules"
+    },
+    {
+      "file": "safety_boundaries.md",
+      "purpose": "Safety and trust limits"
+    },
+    {
+      "file": "skill_selection_matrix.md",
+      "purpose": "K1B deepening file for skills_and_tools: Skill Selection Matrix"
+    },
+    {
+      "file": "tool_guard_policy.md",
+      "purpose": "K1B deepening file for skills_and_tools: Tool Guard Policy"
+    },
+    {
+      "file": "action_protocol.md",
+      "purpose": "K1B deepening file for skills_and_tools: Action Protocol"
+    },
+    {
+      "file": "skill_authoring_standard.md",
+      "purpose": "K1B deepening file for skills_and_tools: Skill Authoring Standard"
+    }
+  ],
+  "updated_at": "2026-06-21T12:49:11+00:00"
+}

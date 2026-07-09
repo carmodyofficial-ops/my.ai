@@ -1,0 +1,29 @@
+{
+  "id": "odysseus_system_architecture",
+  "name": "Odysseus / my.ai System Architecture",
+  "description": "Purpose: Give the local AI durable awareness of what this system is, how it is deployed, and how major components interact.",
+  "version": "1.0.0",
+  "status": "active",
+  "created_at": "2026-06-21T20:58:01.901843+00:00",
+  "kind": "knowledge_pack",
+  "source": "K2N/K2Q local capability expansion",
+  "intended_use": "retrieval_context",
+  "contains_benchmark_answers": false,
+  "files": [
+    "knowledge.md"
+  ],
+  "entrypoint": "knowledge.md",
+  "pack_id": "odysseus_system_architecture",
+  "title": "Odysseus / my.ai System Architecture",
+  "triggers": [
+    "how does my.ai work",
+    "system architecture",
+    "how is this deployed",
+    "odysseus architecture",
+    "what is odysseus",
+    "how does this app work",
+    "system components",
+    "my.ai architecture"
+  ],
+  "served_via": "src/coding_knowledge.py registry-discovery lane"
+}

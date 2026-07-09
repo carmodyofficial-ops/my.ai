@@ -1,0 +1,36 @@
+{
+  "external_sources": [],
+  "local_project_sources": [],
+  "pack_id": "projectforge_sme",
+  "sources": [
+    {
+      "file": "overview.md",
+      "purpose": "Purpose and scope"
+    },
+    {
+      "file": "core_concepts.md",
+      "purpose": "Concept map"
+    },
+    {
+      "file": "procedures.md",
+      "purpose": "Procedural guidance"
+    },
+    {
+      "file": "decision_frameworks.md",
+      "purpose": "Tradeoff analysis"
+    },
+    {
+      "file": "eval_questions.md",
+      "purpose": "Evaluation prompts"
+    },
+    {
+      "file": "memory_hooks.md",
+      "purpose": "Memory rules"
+    },
+    {
+      "file": "safety_boundaries.md",
+      "purpose": "Safety and trust limits"
+    }
+  ],
+  "updated_at": "2026-06-21T12:37:32+00:00"
+}

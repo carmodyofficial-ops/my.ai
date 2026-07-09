@@ -1,0 +1,13 @@
+{
+  "id": "local_only_public_exposure_guard",
+  "title": "Local-only public exposure guard",
+  "kind": "remediation_knowledge_pack",
+  "priority": "P0",
+  "files": [
+    "knowledge.md",
+    "metadata.json",
+    "manifest.json",
+    "source_index.json"
+  ],
+  "created_at": "2026-06-22T01:00:24.487450+00:00"
+}

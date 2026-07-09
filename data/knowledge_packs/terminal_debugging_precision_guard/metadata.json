@@ -1,0 +1,17 @@
+{
+  "id": "terminal_debugging_precision_guard",
+  "title": "Terminal debugging precision guard",
+  "priority": "P1",
+  "purpose": "Improve terminal-output interpretation, paste-noise detection, and next-command precision.",
+  "created_at": "2026-06-22T01:00:24.487450+00:00",
+  "updated_at": "2026-06-22T01:00:24.487450+00:00",
+  "source_milestone": "K2P_A",
+  "remediates": [
+    "K2O_R3_FIX_001",
+    "K2O_R3_FIX_002",
+    "K2O_R3_FIX_003",
+    "K2O_R3_FIX_004",
+    "K2O_R3_FIX_005",
+    "K2O_R3_FIX_006"
+  ]
+}

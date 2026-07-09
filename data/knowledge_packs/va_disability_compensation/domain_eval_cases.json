@@ -1,0 +1,14 @@
+{
+  "created_at": "2026-06-28T00:00:00+00:00",
+  "pack_id": "va_disability_compensation",
+  "evals": [
+    {"id": "va_rating_route", "kind": "router", "query": "What VA disability rating do I get for recurrent tinnitus?", "expected_packs": ["va_disability_compensation"], "top_k": 5, "expected_guarded": null},
+    {"id": "va_rating_context", "kind": "context", "query": "What VA disability rating do I get for recurrent tinnitus?", "expected_context_packs": ["va_disability_compensation"], "min_context_blocks": 1, "top_k": 5},
+    {"id": "va_migraine_route", "kind": "router", "query": "VA rating criteria for migraines with prostrating attacks", "expected_packs": ["va_disability_compensation"], "top_k": 5, "expected_guarded": null},
+    {"id": "va_combined_route", "kind": "router", "query": "How does the VA combine a 50% and a 30% rating?", "expected_packs": ["va_disability_compensation"], "top_k": 5, "expected_guarded": null},
+    {"id": "va_ptsd_context", "kind": "context", "query": "What symptoms support a 70% PTSD rating?", "expected_context_packs": ["va_disability_compensation"], "min_context_blocks": 1, "top_k": 5},
+    {"id": "va_rate_amount_route", "kind": "router", "query": "How much is VA disability compensation per month at 100% with a spouse?", "expected_packs": ["va_disability_compensation"], "top_k": 5, "expected_guarded": null},
+    {"id": "va_sleep_apnea_context", "kind": "context", "query": "VA rating for sleep apnea requiring a CPAP machine", "expected_context_packs": ["va_disability_compensation"], "min_context_blocks": 1, "top_k": 5},
+    {"id": "va_tdiu_route", "kind": "router", "query": "What is TDIU and when can I get the 100% rate without a 100% rating?", "expected_packs": ["va_disability_compensation"], "top_k": 5, "expected_guarded": null}
+  ]
+}

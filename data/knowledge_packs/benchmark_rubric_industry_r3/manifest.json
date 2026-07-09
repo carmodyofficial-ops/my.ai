@@ -1,0 +1,16 @@
+{
+  "id": "benchmark_rubric_industry_r3",
+  "name": "K2O-R3 Industry Benchmark Rubric",
+  "description": "Purpose: Define the next deep benchmark without leaking answers.",
+  "version": "1.0.0",
+  "status": "active",
+  "created_at": "2026-06-21T20:58:01.901843+00:00",
+  "kind": "knowledge_pack",
+  "source": "K2N/K2Q local capability expansion",
+  "intended_use": "retrieval_context",
+  "contains_benchmark_answers": false,
+  "files": [
+    "knowledge.md"
+  ],
+  "entrypoint": "knowledge.md"
+}

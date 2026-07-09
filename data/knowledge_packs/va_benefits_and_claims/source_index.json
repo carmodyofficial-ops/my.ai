@@ -1,0 +1,46 @@
+{
+  "pack_id": "va_benefits_and_claims",
+  "external_sources": [
+    {
+      "source": "VA.gov",
+      "url": "https://www.va.gov",
+      "kind": "us_federal_public_domain",
+      "purpose": "Benefit eligibility, forms, rates, claims & appeals"
+    },
+    {
+      "source": "38 U.S.C.",
+      "url": "https://uscode.house.gov",
+      "kind": "us_federal_public_domain",
+      "purpose": "Statutory basis for VA benefits"
+    },
+    {
+      "source": "38 CFR",
+      "url": "https://www.ecfr.gov/current/title-38",
+      "kind": "us_federal_public_domain",
+      "purpose": "Implementing regulations"
+    }
+  ],
+  "sources": [
+    {
+      "file": "knowledge.md",
+      "purpose": "Served summary: claims/appeals process + benefit programs (the chat-injected excerpt)"
+    },
+    {
+      "file": "overview.md",
+      "purpose": "Purpose and scope"
+    },
+    {
+      "file": "safety_boundaries.md",
+      "purpose": "Safety and trust limits"
+    },
+    {
+      "file": "domain_eval_cases.json",
+      "purpose": "Routing/coverage eval cases"
+    },
+    {
+      "file": "eval_questions.md",
+      "purpose": "Evaluation prompts"
+    }
+  ],
+  "updated_at": "2026-06-28"
+}

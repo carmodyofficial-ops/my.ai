@@ -1,0 +1,28 @@
+{
+  "id": "ops_runbook_and_incident_response",
+  "name": "Ops Runbook and Incident Response",
+  "description": "Purpose: Help the AI operate my.ai like a local production system.",
+  "version": "1.0.0",
+  "status": "active",
+  "created_at": "2026-06-21T20:58:01.901843+00:00",
+  "kind": "knowledge_pack",
+  "source": "K2N/K2Q local capability expansion",
+  "intended_use": "retrieval_context",
+  "contains_benchmark_answers": false,
+  "files": [
+    "knowledge.md"
+  ],
+  "entrypoint": "knowledge.md",
+  "pack_id": "ops_runbook_and_incident_response",
+  "title": "Ops Runbook and Incident Response",
+  "triggers": [
+    "incident response",
+    "ops runbook",
+    "service is down",
+    "restart the container",
+    "production incident",
+    "health check failing",
+    "docker compose logs"
+  ],
+  "served_via": "src/coding_knowledge.py registry-discovery lane"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "data_quality_and_market_data_policy",
+  "created_at": "2026-06-21T21:01:35.750057+00:00",
+  "sources": [
+    {
+      "path": "knowledge.md",
+      "kind": "markdown",
+      "title": "Data Quality and Market Data Policy",
+      "description": "Purpose: Prevent bad finance conclusions from bad data.",
+      "retrieval_weight": 1.0
+    }
+  ]
+}
