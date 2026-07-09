@@ -25,7 +25,13 @@
     "what technical details",
     "implementation detail",
     "story implementation notes",
-    "api contract"
+    "api contract",
+    "data model changes",
+    "file paths",
+    "which files",
+    "affected files",
+    "file paths in story",
+    "data changes"
   ],
   "topics": [
     "technical-specification",
