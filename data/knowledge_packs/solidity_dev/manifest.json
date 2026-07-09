@@ -1,0 +1,38 @@
+{
+  "name": "Solidity Smart Contracts",
+  "pack_id": "solidity_dev",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": [
+    "solidity",
+    "smart contract",
+    "reentrancy",
+    "erc-20",
+    "erc-721",
+    "erc-1155",
+    "gas optimization",
+    "checks-effects-interactions",
+    "openzeppelin",
+    "foundry",
+    "hardhat",
+    "proxy upgrade",
+    "delegatecall",
+    "storage packing",
+    "access control",
+    "modifier solidity",
+    "tx.origin",
+    "reentrancy guard"
+  ],
+  "topics": [
+    "solidity",
+    "smart-contracts",
+    "erc-standards",
+    "gas-optimization",
+    "contract-security",
+    "upgradeability",
+    "testing"
+  ],
+  "summary": "Solidity contract structure, types, storage/gas semantics, ERC-20/721/1155 standards, security patterns, upgradeable proxies, testing, and vulnerability fixes.",
+  "source": "authored",
+  "created": "2026-07-09T00:00:00Z"
+}

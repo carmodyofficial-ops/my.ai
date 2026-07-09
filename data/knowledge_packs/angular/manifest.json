@@ -1,0 +1,38 @@
+{
+  "name": "Angular",
+  "pack_id": "angular",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": [
+    "angular",
+    "standalone component",
+    "angular signals",
+    "rxjs",
+    "observable subscribe",
+    "switchmap mergemap",
+    "dependency injection angular",
+    "inject function",
+    "change detection onpush",
+    "zone.js",
+    "reactive forms",
+    "angular router guards",
+    "httpclient interceptor",
+    "providerouter",
+    "ngfor ngif",
+    "takeuntildestroyed",
+    "angular pipe",
+    "providedin root"
+  ],
+  "topics": [
+    "angular",
+    "signals",
+    "rxjs",
+    "dependency injection",
+    "change detection",
+    "forms",
+    "routing"
+  ],
+  "summary": "Angular standalone components, signals and RxJS interop, hierarchical DI, change detection (zone.js/OnPush/zoneless), templates/control-flow, reactive forms, routing guards/resolvers, HttpClient interceptors, and common gotchas with fixes.",
+  "source": "authored",
+  "created": "2026-07-09T00:00:00Z"
+}

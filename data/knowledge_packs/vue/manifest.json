@@ -1,0 +1,39 @@
+{
+  "name": "Vue 3",
+  "pack_id": "vue",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": [
+    "vue",
+    "vue 3",
+    "vue composition api",
+    "script setup",
+    "ref reactive",
+    "ref value",
+    "computed vue",
+    "watch watcheffect",
+    "defineprops",
+    "defineemits",
+    "definemodel",
+    "v-model vue",
+    "pinia",
+    "vue router",
+    "provide inject",
+    "storetorefs",
+    "nuxt",
+    "vue slots",
+    "torefs"
+  ],
+  "topics": [
+    "vue",
+    "composition api",
+    "reactivity",
+    "pinia",
+    "vue router",
+    "components",
+    "nuxt"
+  ],
+  "summary": "Vue 3 Composition API reactivity (ref/reactive/computed/watch, script setup), props/emits/v-model, slots, lifecycle, provide/inject, Pinia, Vue Router, Nuxt, and reactivity gotchas with fixes.",
+  "source": "authored",
+  "created": "2026-07-09T00:00:00Z"
+}
