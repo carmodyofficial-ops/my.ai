@@ -1,0 +1,40 @@
+{
+  "name": "Worked Example Dev Stories",
+  "pack_id": "example_dev_stories",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": [
+    "story example",
+    "example user story",
+    "story template",
+    "sample story",
+    "well-written story example",
+    "example acceptance criteria",
+    "story format example",
+    "bug ticket example",
+    "feature story example",
+    "refactor story",
+    "api endpoint story",
+    "ui component story",
+    "copy a story template",
+    "reference story",
+    "good story example",
+    "implementable story example",
+    "example story",
+    "story examples",
+    "bug fix story",
+    "well-written story",
+    "example of a story"
+  ],
+  "topics": [
+    "stories",
+    "templates",
+    "examples",
+    "acceptance criteria",
+    "backlog",
+    "specs"
+  ],
+  "summary": "A library of complete, exemplary, implementable development stories usable as copy-ready templates.",
+  "source": "authored",
+  "created": "2026-07-09T00:00:00Z"
+}

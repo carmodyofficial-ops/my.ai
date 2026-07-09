@@ -1,0 +1,43 @@
+{
+  "name": "Implementable Development Stories",
+  "pack_id": "implementable_dev_stories",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": [
+    "write a story",
+    "user story",
+    "development story",
+    "implementable story",
+    "story template",
+    "how to write a good story",
+    "story ready for development",
+    "detailed story",
+    "story with acceptance criteria",
+    "backlog item",
+    "work item",
+    "ticket",
+    "story anatomy",
+    "well-formed story",
+    "story for implementation",
+    "spec a feature",
+    "break down a feature",
+    "definition of ready",
+    "break down an epic",
+    "epic into stories",
+    "turn this into a story",
+    "write a good story"
+  ],
+  "topics": [
+    "user-stories",
+    "implementable-specs",
+    "acceptance-criteria",
+    "invest",
+    "story-splitting",
+    "definition-of-ready",
+    "traceability",
+    "backlog-refinement"
+  ],
+  "summary": "How to write detailed, implementable development stories a human dev or autonomous coding agent can build with zero clarifying questions: full anatomy, template, INVEST, right-sizing, a worked example, and pitfalls.",
+  "source": "authored",
+  "created": "2026-07-09T00:00:00Z"
+}

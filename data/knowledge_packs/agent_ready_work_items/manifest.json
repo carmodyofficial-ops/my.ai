@@ -1,0 +1,11 @@
+{
+  "name": "Agent-Ready Work Items",
+  "pack_id": "agent_ready_work_items",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["agent task", "work item for ai agent", "autonomous coding agent", "agent-ready story", "task for coding agent", "machine verifiable acceptance", "verification steps", "repro steps", "scope boundary for agent", "explicit file paths", "coding agent instructions", "agent guardrails", "self-verifiable task", "prompt for coding task", "task decomposition for agent", "definition of done for agent", "how to brief an ai coder"],
+  "topics": ["agent-tasks", "machine-verifiable-acceptance", "verification-first", "guardrails", "scope-boundaries", "repro-steps", "task-templates", "right-sizing"],
+  "summary": "How to write work items for autonomous coding agents: explicit scope and paths, runnable verification-first done checks, guardrails, context, and templates.",
+  "source": "authored",
+  "created": "2026-07-09T00:00:00Z"
+}

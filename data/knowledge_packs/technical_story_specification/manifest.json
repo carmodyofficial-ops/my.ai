@@ -1,0 +1,43 @@
+{
+  "name": "Technical Story Specification",
+  "pack_id": "technical_story_specification",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": [
+    "technical spec",
+    "technical story",
+    "api contract in story",
+    "data model change",
+    "affected components",
+    "implementation notes",
+    "technical approach",
+    "interface first",
+    "story technical details",
+    "schema change",
+    "non-functional requirements",
+    "engineering spec",
+    "design notes in story",
+    "spike outcome",
+    "dependencies in story",
+    "how much technical detail",
+    "technical detail",
+    "technical details",
+    "what technical details",
+    "implementation detail",
+    "story implementation notes",
+    "api contract"
+  ],
+  "topics": [
+    "technical-specification",
+    "api-contracts",
+    "data-migration",
+    "nfrs",
+    "design-notes",
+    "out-of-scope",
+    "dependencies",
+    "test-plan"
+  ],
+  "summary": "The technical detail layer that makes a story implementable: affected file paths, API contracts, data model + migrations, UI states, integration points, NFRs, design notes with rejected alternatives, spikes, out-of-scope, and verification.",
+  "source": "authored",
+  "created": "2026-07-09T00:00:00Z"
+}

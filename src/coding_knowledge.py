@@ -160,6 +160,14 @@ _CODING_KNOWLEDGE = [
      "triggers": ["research", "investigate", "investigation", "look into", "evaluate options", "compare options", "due diligence", "find out which"]},
     {"id": "reasoning_and_learning", "title": "Structured reasoning & rapid learning", "files": ["knowledge.md"], "max_chars": 2000,
      "triggers": ["first principles", "think through", "reason about", "reasoning", "reflect on", "reflection", "break down the problem", "trade-off analysis", "how should i approach", "decision framework", "learn a new", "how to learn", "hypothesis", "falsify", "think step by step", "mental model", "sanity check my thinking", "verify my reasoning"]},
+    # Implementable dev stories — flagship for story-writing intent; curated so it
+    # leads over product_management on "write a story" queries (priority = order).
+    {"id": "implementable_dev_stories", "title": "Implementable development stories", "files": ["knowledge.md"], "max_chars": 2800,
+     "triggers": ["write a story", "user story", "development story", "implementable story", "story template",
+                  "how to write a story", "write a good story", "detailed story", "story with acceptance criteria",
+                  "backlog item", "work item", "story for implementation", "spec a feature", "break down a feature",
+                  "break down an epic", "well-formed story", "ready for development", "write a ticket", "story anatomy",
+                  "user stories", "implementable stories", "development stories", "write stories"]},
     {"id": "product_management", "title": "Product management (request -> spec)", "files": ["knowledge.md"], "max_chars": 2000,
      "triggers": ["requirements", "user story", "acceptance criteria", "scope the", "mvp", "prioritize", "feature spec", "product requirements", "prd"]},
     # Frameworks (Wave A tail).
