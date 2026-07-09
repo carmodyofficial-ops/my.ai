@@ -1,0 +1,11 @@
+{
+  "name": "Level Design",
+  "pack_id": "level_design",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["level design", "blockout", "greybox", "whitebox", "game pacing", "tension curve", "player guidance", "breadcrumbing", "gating", "encounter design", "difficulty pacing", "playtesting", "interest curve", "leading lines", "landmarks", "level metrics", "level flow", "greyboxing"],
+  "topics": ["level design", "pacing", "blockout", "guidance", "encounters", "playtesting", "iteration"],
+  "summary": "Level design: pacing and tension curves, blockout-first workflow, guiding players with light/lines/landmarks, encounter and difficulty design, metrics, and playtesting.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Progressive Web Apps",
+  "pack_id": "progressive_web_apps",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["pwa", "service worker", "web manifest", "web app manifest", "offline", "cache-first", "network-first", "stale-while-revalidate", "beforeinstallprompt", "install prompt", "background sync", "push notifications", "workbox", "skipwaiting", "app shell", "add to home screen", "sw lifecycle"],
+  "topics": ["pwa", "service-worker", "caching", "offline", "manifest", "push", "install"],
+  "summary": "Web app manifest, service worker lifecycle, caching strategies, offline support, install prompts, background sync, push, and update-flow gotchas.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Project Risk Management",
+  "pack_id": "project_risk_management",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["risk register", "raid log", "risk mitigation", "risk vs issue", "probability impact matrix", "expected monetary value", "emv", "monte carlo", "decision tree", "risk response", "contingency reserve", "management reserve", "residual risk", "secondary risk", "risk trigger", "risk owner", "qualitative risk analysis"],
+  "topics": ["risk", "mitigation", "raid", "emv", "contingency", "monte-carlo", "response"],
+  "summary": "Managing project risk: register, qualitative P×I and quantitative EMV/Monte Carlo, response strategies, RAID log, reserves, and triggers.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

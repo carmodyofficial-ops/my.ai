@@ -1,0 +1,11 @@
+{
+  "name": "Roadmapping",
+  "pack_id": "roadmapping",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["roadmap", "product roadmap", "now next later", "roadmapping", "rice prioritization", "wsjf", "moscow", "opportunity solution tree", "roadmap vs backlog", "release plan", "outcome-based roadmap", "okr roadmap", "roadmap types", "prioritization framework", "theme-based roadmap", "product strategy"],
+  "topics": ["roadmap", "prioritization", "strategy", "okr", "product", "planning", "stakeholders"],
+  "summary": "Product roadmapping: roadmap types, prioritization frameworks, strategy alignment, stakeholder communication, and common mistakes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Requirements Engineering",
+  "pack_id": "requirements_engineering",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["requirements", "functional requirement", "non-functional", "nfr", "requirements engineering", "moscow", "moscow prioritization", "kano model", "wsjf", "traceability matrix", "rtm", "requirements validation", "srs", "quality attributes", "requirement prioritization", "managing changing requirements", "ieee 830", "requirement specification", "cost of delay"],
+  "topics": ["requirements", "non-functional", "prioritization", "traceability", "validation", "specification", "change-control"],
+  "summary": "Requirements engineering: functional vs non-functional, the elicit-analyze-specify-validate cycle, prioritization (MoSCoW/Kano/WSJF), traceability, change management, and pitfalls.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

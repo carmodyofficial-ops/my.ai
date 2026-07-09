@@ -1,0 +1,11 @@
+{
+  "name": "Kanban and Lean",
+  "pack_id": "kanban_and_lean",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["kanban", "wip limit", "lean", "cumulative flow", "cumulative flow diagram", "little's law", "lead time", "cycle time", "throughput", "pull system", "kanban board", "classes of service", "scrumban", "flow metrics", "eliminate waste", "aging wip", "kanban vs scrum"],
+  "topics": ["kanban", "lean", "wip", "flow", "cycle-time", "cfd", "throughput", "pull"],
+  "summary": "Kanban boards, WIP limits and pull systems, flow metrics and Little's Law, Lean principles, classes of service, Kanban vs Scrum, and flow anti-patterns.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Prototyping",
+  "pack_id": "prototyping",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["prototype", "prototyping", "wireframe", "mockup", "mvp", "proof of concept", "poc", "figma", "lo-fi", "hi-fi", "throwaway prototype", "code spike", "tracer bullet", "riskiest assumption", "wizard of oz", "rapid prototyping", "user testing"],
+  "topics": ["prototyping", "wireframe", "mvp", "fidelity", "spike", "ux-testing", "feasibility"],
+  "summary": "Prototyping: fidelity levels, PoC/prototype/MVP/pilot distinctions, code spikes vs tracer bullets, riskiest-assumption testing, and pitfalls.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

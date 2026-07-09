@@ -1,0 +1,11 @@
+{
+  "name": "GraphQL APIs",
+  "pack_id": "graphql_apis",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["graphql", "resolver", "n+1 query", "dataloader", "apollo", "urql", "graphql schema", "graphql mutation", "graphql subscription", "cursor pagination", "relay connection", "graphql caching", "graphql auth", "sdl", "over-fetching", "query complexity", "graphql errors"],
+  "topics": ["graphql", "resolvers", "dataloader", "pagination", "caching", "schema", "apollo"],
+  "summary": "GraphQL schema design, resolvers, N+1 batching with DataLoader, cursor pagination, error handling, auth, and client caching.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

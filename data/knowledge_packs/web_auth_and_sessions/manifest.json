@@ -1,0 +1,11 @@
+{
+  "name": "Web Auth and Sessions",
+  "pack_id": "web_auth_and_sessions",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["jwt", "oauth", "oauth2", "oidc", "session cookie", "httponly", "samesite", "refresh token", "access token", "pkce", "bcrypt", "argon2", "password hashing", "csrf", "authentication", "login flow", "session vs token", "token revocation"],
+  "topics": ["authentication", "sessions", "jwt", "oauth", "cookies", "csrf", "passwords"],
+  "summary": "Session vs token auth, secure cookies, JWT signing and refresh, OAuth2/OIDC with PKCE, password hashing, and common auth vulnerabilities.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

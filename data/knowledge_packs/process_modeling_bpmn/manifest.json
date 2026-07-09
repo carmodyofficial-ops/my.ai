@@ -1,0 +1,11 @@
+{
+  "name": "Process Modeling and BPMN",
+  "pack_id": "process_modeling_bpmn",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["bpmn", "process model", "process modeling", "swimlane", "swimlane diagram", "pools and lanes", "use case", "use case diagram", "as-is to-be process", "happy path", "process flow", "gateway", "xor gateway", "parallel gateway", "business process", "flowchart vs bpmn", "user journey map", "process mapping"],
+  "topics": ["bpmn", "process-modeling", "swimlanes", "use-cases", "gateways", "as-is-to-be", "workflow"],
+  "summary": "Process modeling with BPMN: core elements (events, tasks, gateways, pools/lanes), swimlanes, as-is vs to-be, exception paths, use case modeling, notation choice, and pitfalls.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

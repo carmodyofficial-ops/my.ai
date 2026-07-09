@@ -1,0 +1,11 @@
+{
+  "name": "Estimation and Planning",
+  "pack_id": "estimation_and_planning",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["estimation", "story points", "planning poker", "three point estimate", "pert estimate", "t-shirt sizing", "reference-class forecasting", "noestimates", "capacity planning", "critical chain", "velocity forecasting", "relative estimation", "planning fallacy", "estimation bias", "cone of uncertainty", "project buffer"],
+  "topics": ["estimation", "planning", "forecasting", "story-points", "pert", "capacity", "buffers"],
+  "summary": "Estimation techniques and planning: relative vs absolute sizing, story points, PERT, reference-class forecasting, capacity, and critical-chain buffers.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

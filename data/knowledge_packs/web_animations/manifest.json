@@ -1,0 +1,11 @@
+{
+  "name": "Web Animations",
+  "pack_id": "web_animations",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["css animation", "css transition", "keyframes", "framer motion", "gsap", "web animations api", "waapi", "flip technique", "will-change", "prefers-reduced-motion", "scroll-driven animation", "animation-timeline", "transform opacity", "layout thrash", "animation jank", "compositor", "requestanimationframe"],
+  "topics": ["animation", "transitions", "keyframes", "performance", "framer-motion", "gsap", "accessibility"],
+  "summary": "CSS transitions and keyframes, compositor-only transform/opacity, FLIP, Web Animations API, scroll-driven animation, libraries, reduced-motion, and jank fixes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

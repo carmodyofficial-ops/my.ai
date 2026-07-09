@@ -1,0 +1,11 @@
+{
+  "name": "Release Management",
+  "pack_id": "release_management",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["release management", "semver", "semantic versioning", "feature flag", "feature toggle", "release train", "trunk based", "gitflow", "github flow", "blue-green deployment", "canary release", "rolling deployment", "rollback", "hotfix", "staging environment", "change management", "release checklist"],
+  "topics": ["release", "semver", "branching", "deployment", "feature-flags", "rollback", "environments"],
+  "summary": "Semantic versioning, branching strategies, release trains, feature flags, deployment strategies (canary/blue-green/rolling), rollback/hotfix, environments, and release pitfalls.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

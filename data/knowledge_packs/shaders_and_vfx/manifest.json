@@ -1,0 +1,11 @@
+{
+  "name": "Shaders & VFX",
+  "pack_id": "shaders_and_vfx",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["shader", "glsl", "hlsl", "fragment shader", "vertex shader", "vfx", "particle system", "gpu particles", "dissolve effect", "fresnel", "outline shader", "water shader", "billboard", "shader debugging", "overdraw", "draw calls", "uv coordinates", "clip space"],
+  "topics": ["shaders", "vfx", "particles", "rendering", "gpu", "materials", "performance"],
+  "summary": "Shaders and VFX: vertex/fragment pipeline, coordinate spaces, UVs, common effects (dissolve/fresnel/outline/water), particle systems, performance, and shader debugging.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

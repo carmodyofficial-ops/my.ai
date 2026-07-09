@@ -1,0 +1,11 @@
+{
+  "name": "Acceptance Criteria and BDD",
+  "pack_id": "acceptance_criteria_and_bdd",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["acceptance criteria", "gherkin", "given when then", "bdd", "behavior driven development", "three amigos", "example mapping", "scenario outline", "cucumber", "testable acceptance criteria", "acceptance criteria vs definition of done", "how to write acceptance criteria", "rule based criteria", "negative test cases", "specflow", "living documentation", "definition of done", "edge cases criteria"],
+  "topics": ["acceptance-criteria", "bdd", "gherkin", "three-amigos", "example-mapping", "testing", "definition-of-done"],
+  "summary": "Writing acceptance criteria and doing BDD: rule vs scenario styles, Given/When/Then, three amigos, example mapping, testable criteria, and common mistakes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

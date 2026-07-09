@@ -1,0 +1,11 @@
+{
+  "name": "Business Analysis Fundamentals",
+  "pack_id": "business_analysis_fundamentals",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["business analysis", "babok", "what does a business analyst do", "elicitation", "elicitation techniques", "stakeholder analysis", "requirement types", "as-is to-be", "gap analysis", "solution scoping", "ba deliverables", "raci", "document analysis", "jad workshop", "context diagram", "business analyst", "iiba", "power interest grid"],
+  "topics": ["business-analysis", "elicitation", "babok", "stakeholders", "gap-analysis", "scoping", "requirements"],
+  "summary": "Foundations of business analysis: BABOK knowledge areas, elicitation techniques, requirement types, gap analysis, scoping, deliverables, and common BA mistakes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

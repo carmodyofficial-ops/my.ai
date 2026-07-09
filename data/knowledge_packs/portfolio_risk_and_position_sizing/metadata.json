@@ -1,0 +1,10 @@
+{
+  "id": "portfolio_risk_and_position_sizing",
+  "created_at": "2026-06-21T20:58:01.901843+00:00",
+  "kind": "knowledge_pack",
+  "status": "draft",
+  "source": "K2N/K2Q local capability expansion",
+  "intended_use": "retrieval_context",
+  "contains_benchmark_answers": false,
+  "path": "data/knowledge_packs/portfolio_risk_and_position_sizing/knowledge.md"
+}

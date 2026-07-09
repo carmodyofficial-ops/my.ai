@@ -1,0 +1,13 @@
+{
+  "id": "backtesting_and_strategy_validation",
+  "created_at": "2026-06-21T21:01:35.750057+00:00",
+  "sources": [
+    {
+      "path": "knowledge.md",
+      "kind": "markdown",
+      "title": "Backtesting and Strategy Validation",
+      "description": "Purpose: Prevent false confidence in trading strategies.",
+      "retrieval_weight": 1.0
+    }
+  ]
+}

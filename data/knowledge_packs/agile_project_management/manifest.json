@@ -1,0 +1,11 @@
+{
+  "name": "Agile Project Management",
+  "pack_id": "agile_project_management",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["agile project", "safe framework", "velocity", "release planning", "iteration planning", "scaling agile", "less framework", "scrum at scale", "hybrid agile", "wagile", "burn-up chart", "cycle time", "cumulative flow", "servant leadership", "distributed teams", "agile metrics", "wip limits"],
+  "topics": ["agile", "scaling", "velocity", "forecasting", "flow", "metrics", "distributed"],
+  "summary": "Managing adaptive delivery: planning horizons, velocity forecasting, scaling frameworks, agile metrics, and anti-patterns.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

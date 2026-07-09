@@ -1,0 +1,11 @@
+{
+  "name": "User Story Writing",
+  "pack_id": "user_story_writing",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["user story", "invest criteria", "story splitting", "how to write a user story", "as a i want so that", "epic vs feature vs story", "spidr", "story mapping", "story points", "definition of ready", "persona", "vertical slice", "planning poker", "story sizing", "backlog refinement", "splitting stories", "agile story", "3 cs story"],
+  "topics": ["user-stories", "invest", "story-splitting", "personas", "story-mapping", "sizing", "agile"],
+  "summary": "How to write and split user stories: format, INVEST, SPIDR splitting, personas, story mapping, sizing, definition of ready, and anti-patterns.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

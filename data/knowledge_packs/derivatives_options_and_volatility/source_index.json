@@ -1,0 +1,13 @@
+{
+  "id": "derivatives_options_and_volatility",
+  "created_at": "2026-06-21T21:01:35.750057+00:00",
+  "sources": [
+    {
+      "path": "knowledge.md",
+      "kind": "markdown",
+      "title": "Derivatives, Options, and Volatility",
+      "description": "Purpose: Support rigorous options and volatility analysis.",
+      "retrieval_weight": 1.0
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "name": "Web Security (Advanced)",
+  "pack_id": "web_security_advanced",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": [
+    "csp",
+    "content security policy",
+    "nonce",
+    "strict-dynamic",
+    "trusted types",
+    "dom xss",
+    "subresource integrity",
+    "cors",
+    "cors preflight",
+    "samesite cookie",
+    "__host cookie",
+    "clickjacking",
+    "prototype pollution",
+    "dom clobbering",
+    "dependency confusion",
+    "supply chain security",
+    "postmessage origin",
+    "jwt alg confusion",
+    "dompurify",
+    "secure headers"
+  ],
+  "topics": [
+    "csp",
+    "trusted-types",
+    "cors",
+    "cookies",
+    "supply-chain",
+    "jwt",
+    "prototype-pollution",
+    "sanitization"
+  ],
+  "summary": "Expert web security: CSP L3 nonces/strict-dynamic and bypasses, Trusted Types, CORS credential misconfig, cookie prefixes/CHIPS, prototype pollution, DOM clobbering, supply-chain, JWT alg confusion, and header hardening.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

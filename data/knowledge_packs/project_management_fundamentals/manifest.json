@@ -1,0 +1,11 @@
+{
+  "name": "Project Management Fundamentals",
+  "pack_id": "project_management_fundamentals",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["project management", "project charter", "triple constraint", "iron triangle", "work breakdown", "wbs", "critical path", "gantt", "earned value", "pmbok", "project lifecycle", "baseline", "scope creep", "spi cpi", "predictive vs adaptive", "project milestone", "float slack"],
+  "topics": ["project", "planning", "scheduling", "scope", "baselines", "earned-value", "lifecycle"],
+  "summary": "Core project delivery fundamentals: lifecycle phases, triple constraint, charter, WBS, critical path/Gantt, baselines, and earned value.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

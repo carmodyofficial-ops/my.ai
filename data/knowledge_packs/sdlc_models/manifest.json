@@ -1,0 +1,11 @@
+{
+  "name": "SDLC Models",
+  "pack_id": "sdlc_models",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["sdlc", "software development lifecycle", "waterfall", "v-model", "spiral model", "iterative development", "incremental delivery", "rup", "rational unified process", "verification vs validation", "phase gate", "cost of change", "choosing a process model", "software process model", "requirements phase", "maintenance phase", "risk-driven development"],
+  "topics": ["sdlc", "waterfall", "v-model", "spiral", "iterative", "agile", "rup", "process"],
+  "summary": "Comparison of software development lifecycle models (Waterfall, V-model, iterative, Spiral, Agile, RUP) with phases, strengths, weaknesses, and selection guidance.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

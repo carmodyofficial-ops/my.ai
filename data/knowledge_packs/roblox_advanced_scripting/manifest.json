@@ -1,0 +1,11 @@
+{
+  "name": "Roblox Advanced Scripting",
+  "pack_id": "roblox_advanced_scripting",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["roblox", "luau", "metatable", "profileservice", "knit framework", "roblox-ts", "parallel luau", "datastore session locking", "updateasync", "remoteevent", "unreliable remote event", "rojo", "wally", "task.desynchronize", "strict luau", "microprofiler", "ordereddatastore", "roblox oop"],
+  "topics": ["roblox", "luau", "datastore", "networking", "parallel", "metatables", "tooling", "performance"],
+  "summary": "Advanced Roblox Luau: strict typing, metatable OOP, session-locked DataStores, networking authority, parallel Luau, profiling, and tooling.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

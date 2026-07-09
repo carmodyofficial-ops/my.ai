@@ -1,0 +1,11 @@
+{
+  "name": "Game UI/UX",
+  "pack_id": "game_ui_ux",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["game hud", "game menu", "diegetic ui", "non-diegetic ui", "game ui", "game ux", "menu navigation", "controller navigation", "input feedback", "game feel", "ui readability", "safe zones", "canvas rebuild", "ui performance", "colorblind mode", "subtitles", "control remapping", "touch targets"],
+  "topics": ["ui", "ux", "hud", "menus", "accessibility", "readability", "input"],
+  "summary": "Game UI/UX: HUD design, menu navigation across input schemes, diegetic vs non-diegetic UI, game feel, readability, UI performance, and accessibility.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

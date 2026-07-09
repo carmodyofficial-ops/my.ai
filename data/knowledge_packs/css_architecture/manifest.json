@@ -1,0 +1,11 @@
+{
+  "name": "CSS Architecture",
+  "pack_id": "css_architecture",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["design tokens", "cascade layers", "css layers", "bem", "css modules", "utility-first", "tailwind", "css scoping", "specificity", "specificity wars", "css variables", "theming", "dark mode css", "component variants", "spacing scale", "dead css", "container queries", "css architecture"],
+  "topics": ["css", "design-tokens", "theming", "cascade-layers", "scoping", "methodologies", "variants"],
+  "summary": "Design tokens, theming, cascade layers, BEM vs CSS Modules vs utility-first, scoping, variants, scales, and avoiding specificity wars and dead CSS.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

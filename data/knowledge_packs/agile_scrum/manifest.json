@@ -1,0 +1,11 @@
+{
+  "name": "Agile Scrum",
+  "pack_id": "agile_scrum",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["agile", "scrum", "sprint", "product backlog", "sprint backlog", "sprint retrospective", "sprint planning", "daily standup", "story points", "velocity", "definition of done", "definition of ready", "burndown", "sprint goal", "backlog refinement", "product owner", "scrum master", "planning poker"],
+  "topics": ["agile", "scrum", "sprint", "backlog", "velocity", "retrospective", "estimation"],
+  "summary": "Scrum roles, the five events, artifacts and commitments, estimation and velocity, Definition of Done/Ready, and common Scrum anti-patterns with fixes.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

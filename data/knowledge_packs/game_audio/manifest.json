@@ -1,0 +1,11 @@
+{
+  "name": "Game Audio",
+  "pack_id": "game_audio",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["game audio", "sound effects", "sfx", "adaptive music", "dynamic music", "fmod", "wwise", "audio middleware", "3d spatial audio", "audio attenuation", "audio occlusion", "audio bus", "audio mixing", "web audio api", "voice limit", "audio streaming", "diegetic sound", "audio ducking"],
+  "topics": ["audio", "sound", "music", "mixing", "middleware", "spatial", "performance"],
+  "summary": "Game audio design and implementation: SFX layering, buses/mixing, adaptive and dynamic music, 3D spatial audio, FMOD/Wwise middleware, Web Audio, and performance.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}

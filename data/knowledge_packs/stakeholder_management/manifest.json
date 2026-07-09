@@ -1,0 +1,11 @@
+{
+  "name": "Stakeholder Management",
+  "pack_id": "stakeholder_management",
+  "trust_level": "high",
+  "guarded": false,
+  "triggers": ["stakeholder", "stakeholder management", "power interest grid", "mendelow matrix", "raci", "raci matrix", "communication plan", "stakeholder register", "engagement level", "influence without authority", "managing expectations", "escalation", "manage up", "difficult stakeholders", "stakeholder analysis", "responsible accountable"],
+  "topics": ["stakeholders", "communication", "raci", "engagement", "influence", "escalation", "expectations"],
+  "summary": "Stakeholder management: identification, power/interest analysis, RACI, communication planning, engagement levels, influence, and escalation.",
+  "source": "authored",
+  "created": "2026-07-08T00:00:00Z"
+}
