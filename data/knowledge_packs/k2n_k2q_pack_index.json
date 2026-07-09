@@ -1,0 +1,38 @@
+{
+  "created_at": "2026-06-21T20:58:01.901843+00:00",
+  "pack_root": "/home/vc_wrkstn/odysseus/data/knowledge_packs",
+  "count": 26,
+  "packs": [
+    "auth_and_guest_access_model",
+    "backtesting_and_strategy_validation",
+    "benchmark_rubric_industry_r3",
+    "calculation_tooling_policy",
+    "crypto_market_structure",
+    "data_memory_rag_policy",
+    "data_quality_and_market_data_policy",
+    "derivatives_options_and_volatility",
+    "engineering_quality_bar",
+    "enterprise_product_management",
+    "financial_statement_and_valuation_analysis",
+    "local_ai_security_policy",
+    "macro_cross_asset_analysis",
+    "market_microstructure",
+    "model_evaluation_methods",
+    "odysseus_system_architecture",
+    "ops_runbook_and_incident_response",
+    "portfolio_risk_and_position_sizing",
+    "product_experience_and_ui_standards",
+    "projectforge_safe_coding_workflow",
+    "quant_benchmark_rubric",
+    "quantitative_finance_foundations",
+    "testing_strategy_and_regression_design",
+    "time_series_econometrics",
+    "tool_and_agent_safety",
+    "trading_systems_and_execution"
+  ],
+  "notes": [
+    "K2N packs cover system architecture, security, auth, ProjectForge workflow, ops, testing, tool safety, UX, RAG/memory, and evaluation methods.",
+    "K2Q packs cover quant finance, market microstructure, portfolio risk, derivatives, econometrics, backtesting, trading systems, macro, crypto, valuation, data quality, quant rubric, and calculation tooling.",
+    "These packs intentionally define standards, policies, and methods, not benchmark answers."
+  ]
+}
