@@ -167,7 +167,8 @@ _CODING_KNOWLEDGE = [
                   "how to write a story", "write a good story", "detailed story", "story with acceptance criteria",
                   "backlog item", "work item", "story for implementation", "spec a feature", "break down a feature",
                   "break down an epic", "well-formed story", "ready for development", "write a ticket", "story anatomy",
-                  "user stories", "implementable stories", "development stories", "write stories"]},
+                  "user stories", "implementable stories", "development stories", "write stories",
+                  "dev story", "write a dev story", "story to add", "story for adding", "story to implement"]},
     {"id": "product_management", "title": "Product management (request -> spec)", "files": ["knowledge.md"], "max_chars": 2800,
      "triggers": ["requirements", "user story", "acceptance criteria", "scope the", "mvp", "prioritize", "feature spec", "product requirements", "prd"]},
     # Frameworks (Wave A tail).
