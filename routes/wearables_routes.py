@@ -863,9 +863,11 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
                            image: UploadFile = File(...),
                            question: str = Form("What am I looking at?"),
                            store_transcript: bool = Form(True)):
-        """Image + question → concise local-model answer. The image is held in
-        memory only for the duration of the request and never written to disk
-        or logs (retention policy: transient, deleted with the request)."""
+        """Image + question → concise local-model answer. The image lives only for
+        the duration of the request and is never persisted or logged (retention
+        policy: transient, dropped when the request ends). Note: a frame larger than
+        Starlette's ~1 MB multipart threshold transits a short-lived temp file that
+        the framework unlinks at request end — it is never durably stored."""
         enforce_content_length(request, WEARABLES_IMAGE_MAX_BYTES, "Image")
         owner = require_wearables(request)
         if not _media_limiter.check(f"vision:{owner or _client_ip(request)}"):
@@ -896,7 +898,8 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
                 extra_payload={"keep_alive": _vision_keep_alive()},
             )
         except Exception as exc:
-            logger.error(f"[wearables] vision failed req={request_id}: {exc}")
+            logger.error(f"[wearables] vision failed req={request_id}: "
+                         f"{type(exc).__name__}")
             raise gw_error(502, gw.VISION_FAILED, "Vision query failed")
         finally:
             # Transient-image policy: drop all references before returning.
@@ -980,6 +983,7 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
             spoken_cursor = 0
             spoken_chars = 0
             spoken_capped = False
+            errored = False
             agen = None
             try:
                 from src.llm_core import stream_llm
@@ -991,13 +995,15 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
                 async for chunk in agen:
                     if isinstance(chunk, str) and chunk.startswith("event: error"):
                         # Curate upstream errors: raw frames can carry endpoint URLs
-                        # / backend strings. Send the device a fixed message only.
-                        logger.warning(f"[wearables] vision stream upstream error "
-                                       f"req={request_id}: {chunk[:200]}")
+                        # / backend strings. Send the device a fixed message only, and
+                        # DON'T log the raw frame (host-log policy: codes only).
+                        logger.warning("[wearables] vision stream upstream error "
+                                       f"req={request_id}")
                         yield "event: error\ndata: " + json.dumps(
                             {"code": gw.VISION_FAILED,
                              "message": "The vision model stream failed. "
                                         "Please try again."}) + "\n\n"
+                        errored = True
                         break
                     if not (isinstance(chunk, str) and chunk.startswith("data: ")):
                         yield chunk
@@ -1032,18 +1038,36 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
                                         spoken_capped = True
                     yield chunk
             except Exception as exc:
-                logger.error(f"[wearables] vision stream error req={request_id}: {exc}")
+                logger.error(f"[wearables] vision stream error req={request_id}: "
+                             f"{type(exc).__name__}")
                 yield "event: error\ndata: " + json.dumps(
                     {"code": gw.VISION_FAILED,
                      "message": "The vision model stream failed. "
                                 "Please try again."}) + "\n\n"
+                errored = True
             finally:
                 if agen is not None:
                     with contextlib.suppress(Exception):
                         await agen.aclose()
+                # (The base64 image in `messages` is freed when this generator is
+                # closed/collected at end-of-response; not nil'd here because
+                # rebinding a closure var would shadow the earlier read.)
 
             full_text = "".join(full_parts)
-            if full_text.strip():
+            if not errored and not full_text.strip():
+                # Parity with /vision/query (which raises 502 on an empty answer):
+                # an empty stream is a FAILURE, not a silent completion — otherwise
+                # the wearer hears nothing and gets no cue. Emit a curated error.
+                yield "event: error\ndata: " + json.dumps(
+                    {"code": gw.VISION_FAILED,
+                     "message": "The vision model returned no answer. "
+                                "Please try again."}) + "\n\n"
+                errored = True
+            if not errored:
+                # Only persist + emit the terminal spoken frame on a CLEAN finish —
+                # a mid-stream error already sent its own error frame, so we must not
+                # log the truncated partial to Look-and-Ask history or follow the
+                # error with a "truncated:False" spoken frame that contradicts it.
                 if store_transcript:
                     try:
                         from services.wearables_gateway import productivity as prod

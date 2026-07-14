@@ -728,7 +728,9 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
             // retry — a tap must not fail silently (UAT #2).
             val chatReady = ui.canTalk && ui.llmReady
             val send = {
-                if (chatReady && draft.isNotBlank() && !ui.busy) {
+                // Not while listening: starting a turn would leave the open mic
+                // running (its later stopListening fires a second, overlapping turn).
+                if (chatReady && draft.isNotBlank() && !ui.busy && !ui.listening) {
                     vm.ask(draft); draft = ""
                 }
             }
@@ -759,7 +761,7 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    enabled = chatReady && draft.isNotBlank() && !ui.busy,
+                    enabled = chatReady && draft.isNotBlank() && !ui.busy && !ui.listening,
                     onClick = send,
                 ) { Text(if (ui.busy) "Answering…" else "Ask") }
                 OutlinedButton(enabled = ui.busy, onClick = vm::cancel) { Text("Stop") }
@@ -785,7 +787,9 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
                     })
                 }
                 LookAndAskButton(
-                    enabled = ui.canTalk && ui.visionAvailable && !ui.busy,
+                    // Disabled while listening: a tap/long-press mid-listen would
+                    // start a look while the mic is still open (overlapping turns).
+                    enabled = ui.canTalk && ui.visionAvailable && !ui.busy && !ui.listening,
                     onTap = vm::lookAndAsk,
                     onLongPress = vm::lookAndAskSpoken,
                 )

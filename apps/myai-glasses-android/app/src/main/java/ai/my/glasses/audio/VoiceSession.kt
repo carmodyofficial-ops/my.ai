@@ -42,8 +42,11 @@ class VoiceSession(private val context: Context) {
     private val audioManager =
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-    private var record: AudioRecord? = null
-    private var recordThread: Thread? = null
+    // @Volatile: onCleared() tears these down off micLock (Main) while a
+    // startRecording() may still be assigning them on the IO thread — publish
+    // writes so neither side reads a torn/stale reference.
+    @Volatile private var record: AudioRecord? = null
+    @Volatile private var recordThread: Thread? = null
     private val recording = AtomicBoolean(false)
     private val pcm = ByteArrayOutputStream()
     private var player: MediaPlayer? = null

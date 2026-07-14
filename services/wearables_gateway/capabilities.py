@@ -109,6 +109,11 @@ async def warm_vision_model(keep_alive: str = "20m") -> dict:
     """
     import asyncio
 
+    if (keep_alive or "").strip() == "0":
+        # Opt-out: "0" means "don't keep it warm". Skip entirely — otherwise the
+        # /api/generate call below would LOAD the model and then immediately unload
+        # it (keep_alive:0), paying a pointless cold-load.
+        return {"warmed": False, "reason": "disabled"}
     vision = await asyncio.to_thread(resolve_vision_model)
     if not vision:
         return {"warmed": False, "reason": "VISION_MODEL_NOT_CONFIGURED"}

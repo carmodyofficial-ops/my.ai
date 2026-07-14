@@ -614,8 +614,13 @@ class MainViewModel(
         val v = voice
         viewModelScope.launch {
             micLock.withLock {
-                if (_ui.value.listening) return@withLock
+                if (_ui.value.listening) { pendingVisionJpeg = null; return@withLock }
                 dispatch(Event.FailureCleared)  // clear a stale banner before a new turn
+                // Barge-in: cancel any in-flight answer stream AND its queued TTS.
+                // Without the streamJob cancel a prior turn keeps collecting SSE and
+                // feeding TTS into the mic we're about to open — feedback, and in
+                // hands-free the echo keeps RMS up so VAD never endpoints.
+                streamJob?.cancel()
                 stopSpeaking()   // barge-in: talking over the reply stops it + the TTS queue
                 // Foreground BEFORE the mic opens: a backgrounded app has its mic
                 // muted and its SCO route dropped by the OS.
@@ -639,12 +644,17 @@ class MainViewModel(
                     // AFTER the blocking IO body has run to completion — so the
                     // recorder may already be hot with nobody left to close it.
                     closeMic(v)
+                    pendingVisionJpeg = null   // listen never started — don't strand the frame
                     dispatch(Event.ListeningChanged(false))  // never strand listening=true
                     throw t
                 }
                 // The reducer may have forced listening=false while we acquired.
                 if (!started || !app.listening) {
                     closeMic(v)
+                    // A long-press Look & Ask stashed a frame for this listen; since
+                    // it didn't start, drop it so a later ordinary Talk isn't
+                    // silently answered against this stale photo.
+                    pendingVisionJpeg = null
                     if (!started) {
                         dispatch(Event.ListeningChanged(false))
                         dispatch(Event.GatewayError("BLUETOOTH_AUDIO_UNAVAILABLE"))
@@ -655,8 +665,10 @@ class MainViewModel(
         }
     }
 
-    /** Close the mic and drop the audio route. Idempotent. */
-    private fun closeMic(v: VoiceSession) {
+    /** Close the mic and drop the audio route. Idempotent. Runs off the main
+     *  thread: cancelRecording() joins the capture thread (up to 2s) and
+     *  releaseBluetoothMic() makes a binder call — both would risk an ANR on Main. */
+    private suspend fun closeMic(v: VoiceSession) = withContext(Dispatchers.IO) {
         v.cancelRecording()
         v.releaseBluetoothMic()
         MicForegroundService.stop(appContext)
@@ -993,6 +1005,7 @@ class MainViewModel(
                 micLock.withLock {
                     MicForegroundService.start(appContext)
                     v.acquireBluetoothMic()
+                    v.vadEnabled = false   // the diagnostic drives the mic directly; no auto-endpoint
                     val started = withContext(Dispatchers.IO) { v.startRecording() }
                     kotlinx.coroutines.delay(1_200)
                     val wav = withContext(Dispatchers.IO) { v.stopRecording() }
@@ -1020,14 +1033,18 @@ class MainViewModel(
                     append("▶ playing a test tone — you should hear a beep IN THE GLASSES")
                 }
                 ok = true
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e   // never swallow cancellation (ViewModel cleared mid-run)
             } catch (e: Exception) {
                 report = "Audio diagnostic error: ${e.message ?: e.javaClass.simpleName}"
             } finally {
-                // ALWAYS release the mic + clear the spinner, even if recording threw
-                // mid-lock, so a failed test can't wedge the mic or leave the UI stuck.
+                // ALWAYS reclaim the recorder + release the mic + clear the spinner,
+                // even if recording threw or was cancelled mid-lock, so a failed test
+                // can't leave a hot AudioRecord or wedge the mic / UI.
                 withContext(NonCancellable) {
                     runCatching {
                         micLock.withLock {
+                            v.cancelRecording()   // reclaim a still-hot recorder
                             v.releaseBluetoothMic()
                             MicForegroundService.stop(appContext)
                         }
@@ -1059,6 +1076,7 @@ class MainViewModel(
     fun unpair() {
         streamJob?.cancel()
         stopSpeaking()
+        pendingVisionJpeg = null
         GlassesControlService.stop(appContext)   // disarm the triple-tap trigger
         credentials.clear()
         dispatch(Event.HostUnpaired)

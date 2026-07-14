@@ -642,6 +642,78 @@ async def test_vision_warm_rate_limited_is_soft(monkeypatch):
     assert (await ep(_device_req("alice"))) == {"warmed": False, "reason": "RATE_LIMITED"}
 
 
+async def test_vision_stream_empty_answer_emits_error_not_silent_done(monkeypatch):
+    """An empty stream is a failure (parity with /vision/query's 502), not a silent
+    'done' — the wearer must get an error cue, and nothing is logged to history."""
+    import services.wearables_gateway.capabilities as C
+    import src.llm_core as llm
+    import services.wearables_gateway.productivity as _PROD
+    monkeypatch.setattr(C, "resolve_vision_model",
+                        lambda force_refresh=False: {
+                            "model": "m", "chat_url": "http://fake/v1/chat/completions"})
+    logged = []
+    monkeypatch.setattr(_PROD, "log_vision",
+                        lambda owner, q, a: logged.append((owner, q, a)))
+
+    async def _empty_stream(url, model, messages, **kw):
+        yield "data: [DONE]\n\n"      # model produced nothing usable
+
+    monkeypatch.setattr(llm, "stream_llm", _empty_stream)
+    ep = _endpoints()[("POST", "/vision/stream")]
+    resp = await ep(_device_req("alice"),
+                    image=_Upload(b"\xff\xd8x", content_type="image/jpeg"),
+                    question="what is this?")
+    frames = await _collect_sse(resp)
+    assert any(f.startswith("event: error") for f in frames)          # cue emitted
+    assert not any('"type": "spoken"' in f for f in frames)           # no fake success
+    assert logged == []                                               # nothing persisted
+
+
+async def test_vision_stream_upstream_error_doesnt_log_partial_or_leak(monkeypatch):
+    """A mid-stream upstream error must NOT persist the truncated partial to history,
+    must NOT follow with a 'truncated:False' spoken frame, and must NOT forward the
+    raw upstream text (internal URLs) to the device."""
+    import services.wearables_gateway.capabilities as C
+    import src.llm_core as llm
+    import services.wearables_gateway.productivity as _PROD
+    monkeypatch.setattr(C, "resolve_vision_model",
+                        lambda force_refresh=False: {
+                            "model": "m", "chat_url": "http://fake/v1/chat/completions"})
+    logged = []
+    monkeypatch.setattr(_PROD, "log_vision",
+                        lambda owner, q, a: logged.append((owner, q, a)))
+
+    async def _err_stream(url, model, messages, **kw):
+        yield "data: " + json.dumps({"delta": "The temperature is 72 degrees."}) + "\n\n"
+        yield "event: error\ndata: " + json.dumps(
+            {"status": 502, "text": "boom at http://internal-ollama:11434"}) + "\n\n"
+        yield "data: [DONE]\n\n"
+
+    monkeypatch.setattr(llm, "stream_llm", _err_stream)
+    ep = _endpoints()[("POST", "/vision/stream")]
+    resp = await ep(_device_req("alice"),
+                    image=_Upload(b"\xff\xd8x", content_type="image/jpeg"),
+                    question="temp?")
+    frames = await _collect_sse(resp)
+    assert any(f.startswith("event: error") for f in frames)
+    assert logged == []                                              # no partial persisted
+    assert not any("internal-ollama" in f for f in frames)           # raw upstream text curated
+    assert not any('"truncated": false' in f.lower() and '"partial": false' in f.lower()
+                   for f in frames)                                  # no clean terminal after error
+
+
+async def test_warm_disabled_short_circuits(monkeypatch):
+    """keep_alive="0" (opt-out) must skip the load entirely, not load-then-evict."""
+    import services.wearables_gateway.capabilities as C
+    resolved = []
+    monkeypatch.setattr(C, "resolve_vision_model",
+                        lambda force_refresh=False: resolved.append(1) or {
+                            "model": "m", "chat_url": "x"})
+    out = await C.warm_vision_model("0")
+    assert out == {"warmed": False, "reason": "disabled"}
+    assert resolved == []    # never even resolved the model → no cold-load
+
+
 async def test_vision_stream_blank_question_uses_grounded_default(monkeypatch):
     """A plain tap (no spoken question) falls back to the specific-subject prompt,
     not a vague 'what am I looking at'."""
