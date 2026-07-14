@@ -93,7 +93,20 @@ class GlassesControlService : android.app.Service() {
                 val ke = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
                     mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
                 else @Suppress("DEPRECATION") mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
-                if (ke == null || !isTapKey(ke.keyCode)) return super.onMediaButtonEvent(mediaButtonIntent)
+                if (ke == null) return super.onMediaButtonEvent(mediaButtonIntent)
+                // Surface EVERY media key to Diagnostics (even non-tap ones) so the
+                // hardware's actual button behavior is visible on-device.
+                val act = when (ke.action) {
+                    KeyEvent.ACTION_DOWN -> "DOWN"; KeyEvent.ACTION_UP -> "UP"; else -> ke.action.toString()
+                }
+                // Log the initial press and the release only — a held button fires a
+                // stream of auto-repeat DOWNs (repeatCount 1,2,3…) that would flood the
+                // diagnostics gesture log and hide the events that matter.
+                if (!(ke.action == KeyEvent.ACTION_DOWN && ke.repeatCount > 0)) {
+                    GlassesGestures.emitKey(
+                        "key=${ke.keyCode} $act long=${ke.isLongPress} rpt=${ke.repeatCount}")
+                }
+                if (!isTapKey(ke.keyCode)) return super.onMediaButtonEvent(mediaButtonIntent)
                 Log.i(TAG, "media key ${ke.keyCode} action=${ke.action} long=${ke.isLongPress}")
                 when (ke.action) {
                     KeyEvent.ACTION_DOWN -> onKeyDown(ke)

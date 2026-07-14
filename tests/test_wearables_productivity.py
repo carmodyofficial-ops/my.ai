@@ -110,3 +110,56 @@ def test_list_tasks_completed_flag(memdb):
          items=json.dumps([{"text": "x", "done": True}]))
     tasks = prod.list_tasks("alice")
     assert len(tasks) == 1 and tasks[0]["completed"] is True
+
+
+def test_create_task_is_a_web_todo_and_toggles(memdb):
+    # A glasses task is created as a web-checkable 'todo' (so it renders + syncs on
+    # the web), shows in Tasks (not Notes), and toggles.
+    r = prod.create_task("alice", "buy milk")
+    s = memdb()
+    assert s.query(db.Note).filter(db.Note.id == r["id"]).first().note_type == "todo"
+    s.close()
+    assert [t["id"] for t in prod.list_tasks("alice")] == [r["id"]]
+    assert prod.list_notes("alice") == []
+    assert prod.complete_item("alice", r["id"]) is True
+    assert prod.complete_item("alice", r["id"]) is False
+
+
+def test_todo_checklist_are_tasks_goal_and_notes_are_reference(memdb):
+    _add(memdb, owner="alice", note_type="todo",
+         items=json.dumps([{"text": "a", "done": False}]))
+    _add(memdb, owner="alice", note_type="checklist",
+         items=json.dumps([{"text": "b", "done": False}]))
+    # A 'goal' is a big multi-step objective — reference, NOT a quick task; it must
+    # NOT clog the Tasks card. It falls into the Notes card instead.
+    _add(memdb, owner="alice", note_type="goal", content="run a marathon",
+         items=json.dumps([{"text": "c", "done": False}]))
+    _add(memdb, owner="alice", note_type="note", content="ref")
+    _add(memdb, owner="alice", note_type=None, content="legacy")   # null → a note
+    assert len(prod.list_tasks("alice")) == 2
+    assert sorted(n["snippet"] for n in prod.list_notes("alice")) == [
+        "legacy", "ref", "run a marathon"]
+
+
+def test_create_task_leaves_title_empty_to_avoid_double_render(memdb):
+    # The web renders a checkable to-do from items[]; a non-empty title would render
+    # a SECOND time as a header row. We store title="" and let the glasses label fall
+    # back to the item text.
+    r = prod.create_task("alice", "buy milk")
+    s = memdb()
+    assert s.query(db.Note).filter(db.Note.id == r["id"]).first().title == ""
+    s.close()
+    assert prod.list_tasks("alice")[0]["title"] == "buy milk"   # item-text fallback
+
+
+def test_active_tasks_sort_before_completed_within_the_cap(memdb):
+    # Completed (all-items-done) tasks must sink below active ones so a pile of
+    # finished tasks can't bury active work in the capped card.
+    for i in range(8):
+        _add(memdb, owner="alice", note_type="todo",
+             items=json.dumps([{"text": f"done{i}", "done": True}]))
+    active = _add(memdb, owner="alice", note_type="todo",
+                  items=json.dumps([{"text": "ACTIVE", "done": False}]))
+    tasks = prod.list_tasks("alice", limit=8)
+    assert len(tasks) == 8
+    assert tasks[0]["id"] == active and tasks[0]["completed"] is False

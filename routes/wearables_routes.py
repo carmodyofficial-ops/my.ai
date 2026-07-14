@@ -31,7 +31,8 @@ from services.wearables_gateway import errors as gw
 from services.wearables_gateway import pairing as gw_pairing
 from services.wearables_gateway.errors import gw_error
 from services.wearables_gateway.sessions import WearableSessionStore
-from services.wearables_gateway.spoken import spoken_text
+from services.wearables_gateway.spoken import (
+    spoken_text, last_sentence_end, DEFAULT_MAX_SPOKEN_CHARS)
 from src.auth_helpers import effective_user, get_current_user
 from src.rate_limiter import RateLimiter
 from src.upload_limits import (
@@ -47,18 +48,35 @@ MAX_TEXT_CHARS = 4000
 MAX_QUESTION_CHARS = 500
 MAX_SPEECH_CHARS = 2000
 MAX_AGENT_ROUNDS = 6
+# Don't speak a streamed segment until it's at least this long: merges tiny
+# fragments an abbreviation boundary produces ("Dr.", "e.g.") into the next real
+# sentence so the glasses TTS isn't choppy. The final flush emits any short tail.
+MIN_STREAM_SEGMENT_CHARS = 24
 
-# Read-only toolset for the glasses channel (mirrors the WhatsApp field-mode
-# posture). relevant_tools pins availability; the deny set is belt-and-braces.
-WEARABLES_TOOLS = {"web_search", "web_fetch"}
+# Toolset for the glasses channel. Beyond web search, the assistant can use the
+# BENIGN, OWNER-SCOPED memory/productivity tools by voice — remember facts
+# ("remember I'm allergic to X"), manage notes/todos/reminders ("remind me to call
+# mom at 5"), and recall past chats. These touch only the caller's OWN data. Note a
+# reminder CAN fire an outbound alert on the owner's OWN configured channel
+# (email/ntfy/webhook) — that is the reminder's whole point and is self-directed,
+# but it is not strictly side-effect-free. There is no way to message a THIRD PARTY
+# or reach arbitrary destinations. Everything dangerous (shell/files/email/tokens/settings/
+# ui_control/contacts write) stays OUT — relevant_tools + tool_allowlist are the
+# HARD cap (see agent_loop), and the deny set below is belt-and-braces.
+WEARABLES_TOOLS = {
+    "web_search", "web_fetch",
+    "manage_memory", "manage_notes", "search_chats",
+}
 WEARABLES_DISABLED_TOOLS = {
     "bash", "python", "shell", "terminal", "git",
     "write_file", "edit_file", "read_file", "grep", "glob", "ls", "get_workspace",
     "multi_edit", "delete_file", "move_file", "apply_patch", "run_tests",
     "lint_format", "code_sandbox", "http_request",
-    "manage_memory", "manage_notes", "create_document", "update_document",
+    "create_document", "update_document",
     "edit_document", "manage_documents", "manage_skills", "manage_mcp", "app_api",
     "dispatch_subagents", "request_sandbox_build",
+    "send_email", "reply_to_email", "manage_settings", "manage_tokens",
+    "manage_webhooks", "manage_endpoints", "ui_control", "manage_contact",
 }
 
 SPOKEN_SYSTEM_PROMPT = (
@@ -67,8 +85,50 @@ SPOKEN_SYSTEM_PROMPT = (
     "sentences unless the user asks for more. Plain conversational prose only: "
     "no markdown, no bullet lists, no tables, no code blocks, never read a URL "
     "aloud. If a lot more detail exists, end with a brief offer like 'Want more "
-    "detail?'. Never speak passwords, tokens, keys, or other secrets."
+    "detail?'. Never speak passwords, tokens, keys, or other secrets. "
+    "You can remember facts about the user, manage their notes/to-dos/reminders, "
+    "and search past chats when asked (e.g. 'remember I'm allergic to peanuts', "
+    "'remind me to call mom at 5'); after doing so, confirm in ONE short sentence."
 )
+
+# Look-and-Ask uses a DEDICATED vision prompt (not the chat one): the chat prompt
+# optimizes for brevity and produces vague scene summaries. This one forces CONCRETE,
+# grounded answers — read text verbatim, give counts/colors/brands/prices, identify
+# the single main subject — which is the whole point of pointing the glasses at
+# something. Still spoken-friendly (short, no markdown).
+VISION_SYSTEM_PROMPT = (
+    "You are my.ai, seeing through the wearer's smart glasses and speaking aloud. "
+    "You are given ONE photo of what they are looking at, plus their question. "
+    "Answer the question DIRECTLY and CONCRETELY from what is actually visible. "
+    "Be specific: identify the exact object (not the whole scene), read any text, "
+    "numbers, or labels VERBATIM, and state colors, counts, brands, prices, and "
+    "readings you can actually see. Do NOT hedge with 'appears to be' or 'likely' "
+    "when it is clear — only flag uncertainty when the photo genuinely doesn't show "
+    "it, and if the answer isn't visible, say so in one sentence. Keep it to 1-3 "
+    "short spoken sentences: plain conversational prose, no markdown, no lists, "
+    "never spell out a URL. Lead with the answer."
+)
+# What we ask the model when the wearer just taps Look & Ask without speaking a
+# question — steer it to name the specific primary subject, not describe everything.
+VISION_DEFAULT_QUESTION = (
+    "What is the main thing I'm looking at? Identify it specifically and note the "
+    "most important detail.")
+
+
+def _vision_messages(mime: str, data: bytes, question: str):
+    """Build the (question, chat-messages) pair for a Look-and-Ask. A blank question
+    (plain tap) falls back to the specific-subject default. Shared by the one-shot
+    and streaming vision endpoints so the grounding prompt lives in ONE place."""
+    import base64
+    q = (question or "").strip()[:MAX_QUESTION_CHARS] or VISION_DEFAULT_QUESTION
+    data_uri = f"data:{mime};base64," + base64.b64encode(data).decode()
+    return q, [
+        {"role": "system", "content": VISION_SYSTEM_PROMPT},
+        {"role": "user", "content": [
+            {"type": "text", "text": q},
+            {"type": "image_url", "image_url": {"url": data_uri}},
+        ]},
+    ]
 
 # Module-level singletons (same pattern as cowork's approval registry) so
 # tests can import and drive them directly.
@@ -557,6 +617,9 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
                 "request_id": request_id,
             }) + "\n\n"
             full_parts: list[str] = []
+            spoken_cursor = 0   # chars of the answer already emitted as spoken
+            spoken_chars = 0    # total spoken chars emitted (caps run-on TTS)
+            spoken_capped = False
             cancelled = False
             try:
                 from src.agent_loop import stream_agent_loop
@@ -610,6 +673,32 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
                                         and isinstance(d.get("delta"), str)
                                         and not d.get("thinking")):
                                     full_parts.append(d["delta"])
+                                    # Stream spoken sentences as they complete so
+                                    # the FIRST sentence's TTS starts ~1s in instead
+                                    # of after the whole reply. The client plays them
+                                    # in order (its TTS queue).
+                                    if not spoken_capped:
+                                        joined = "".join(full_parts)
+                                        end = last_sentence_end(joined, spoken_cursor)
+                                        if end > spoken_cursor:
+                                            seg = spoken_text(
+                                                joined[spoken_cursor:end])["spoken"]
+                                            # Buffer short fragments (abbreviations)
+                                            # until they grow into a real sentence.
+                                            if len(seg) >= MIN_STREAM_SEGMENT_CHARS:
+                                                spoken_cursor = end
+                                                spoken_chars += len(seg)
+                                                if seg:
+                                                    yield "data: " + json.dumps({
+                                                        "type": "spoken", "text": seg,
+                                                        "partial": True,
+                                                        "truncated": False,
+                                                        "request_id": request_id}) + "\n\n"
+                                                # Stop speaking once we've said a
+                                                # screenful; the rest stays on the
+                                                # phone (final frame flags it).
+                                                if spoken_chars >= DEFAULT_MAX_SPOKEN_CHARS:
+                                                    spoken_capped = True
                             except (ValueError, TypeError):
                                 pass
                         yield chunk
@@ -646,10 +735,24 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
             else:
                 if full_text:
                     session.append_turn(text, full_text)
-                sp = spoken_text(full_text)
+                if spoken_capped:
+                    # We already spoke a screenful; don't dump the rest to TTS.
+                    # The full answer is on the phone; flag the spoken side as
+                    # truncated so the client can cue "more on your phone".
+                    sp = {"spoken": "", "truncated": True}
+                else:
+                    # Flush the trailing partial sentence (everything up to the last
+                    # sentence boundary was already streamed as spoken above), but
+                    # still bound its length so a single run-on final sentence can't
+                    # blow past the spoken cap.
+                    remainder = full_text[spoken_cursor:]
+                    sp = (spoken_text(remainder, max_chars=DEFAULT_MAX_SPOKEN_CHARS)
+                          if remainder.strip()
+                          else {"spoken": "", "truncated": False})
                 yield "data: " + json.dumps({
                     "type": "spoken",
                     "text": sp["spoken"],
+                    "partial": False,
                     "truncated": sp["truncated"],
                     "request_id": request_id,
                 }) + "\n\n"
@@ -771,18 +874,8 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
         data = await read_upload_limited(image, WEARABLES_IMAGE_MAX_BYTES, "Image")
         if not data:
             raise gw_error(400, gw.BAD_REQUEST, "Empty image")
-        question = (question or "").strip()[:MAX_QUESTION_CHARS] or "What am I looking at?"
-
-        import base64
-        data_uri = f"data:{mime};base64," + base64.b64encode(data).decode()
         request_id = _new_request_id()
-        messages = [
-            {"role": "system", "content": SPOKEN_SYSTEM_PROMPT},
-            {"role": "user", "content": [
-                {"type": "text", "text": question},
-                {"type": "image_url", "image_url": {"url": data_uri}},
-            ]},
-        ]
+        question, messages = _vision_messages(mime, data, question)
         logger.info(f"[wearables] vision query req={request_id} owner={owner} "
                     f"model={vision['model']} bytes={len(data)}")
         try:
@@ -797,7 +890,6 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
         finally:
             # Transient-image policy: drop all references before returning.
             data = None
-            data_uri = None
             messages = None
         if not isinstance(answer, str) or not answer.strip():
             raise gw_error(502, gw.VISION_FAILED, "Vision model returned no answer")
@@ -819,5 +911,134 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
             "model": vision["model"],
             "request_id": request_id,
         }
+
+    @router.post("/vision/stream")
+    async def vision_stream(request: Request,
+                            image: UploadFile = File(...),
+                            question: str = Form(""),
+                            store_transcript: bool = Form(True)):
+        """Streaming Look-and-Ask: image (+ optional spoken question) → SSE
+        (meta → deltas → spoken → done), the SAME frame vocabulary as /respond so
+        the first spoken sentence's TTS starts ~1-2s in instead of after the whole
+        answer is generated. Image is transient (memory-only, never disk/logs)."""
+        enforce_content_length(request, WEARABLES_IMAGE_MAX_BYTES, "Image")
+        owner = require_wearables(request)
+        if not _media_limiter.check(f"vision:{owner or _client_ip(request)}"):
+            raise gw_error(429, gw.RATE_LIMITED, "Too many requests")
+        from services.wearables_gateway.capabilities import resolve_vision_model
+        vision = await asyncio.to_thread(resolve_vision_model)
+        if not vision:
+            raise gw_error(503, gw.VISION_MODEL_NOT_CONFIGURED,
+                           "No local vision-capable model is configured")
+        mime = (image.content_type or "").lower().split(";")[0].strip()
+        if mime not in _ALLOWED_IMAGE_TYPES:
+            raise gw_error(400, gw.BAD_REQUEST, "Image must be JPEG, PNG, or WebP")
+        data = await read_upload_limited(image, WEARABLES_IMAGE_MAX_BYTES, "Image")
+        if not data:
+            raise gw_error(400, gw.BAD_REQUEST, "Empty image")
+        request_id = _new_request_id()
+        question, messages = _vision_messages(mime, data, question)
+        data = None   # the data_uri inside `messages` is now the only copy
+        logger.info(f"[wearables] vision stream req={request_id} owner={owner} "
+                    f"model={vision['model']}")
+
+        async def gen():
+            yield "data: " + json.dumps({
+                "type": "wearables_meta",
+                "session_id": "",
+                "model": vision["model"],
+                "request_id": request_id,
+            }) + "\n\n"
+            full_parts: list[str] = []
+            spoken_cursor = 0
+            spoken_chars = 0
+            spoken_capped = False
+            agen = None
+            try:
+                from src.llm_core import stream_llm
+                agen = stream_llm(vision["chat_url"], vision["model"], messages,
+                                  temperature=0.2, max_tokens=700,
+                                  headers={}, timeout=120)
+                async for chunk in agen:
+                    if isinstance(chunk, str) and chunk.startswith("event: error"):
+                        # Curate upstream errors: raw frames can carry endpoint URLs
+                        # / backend strings. Send the device a fixed message only.
+                        logger.warning(f"[wearables] vision stream upstream error "
+                                       f"req={request_id}: {chunk[:200]}")
+                        yield "event: error\ndata: " + json.dumps(
+                            {"code": gw.VISION_FAILED,
+                             "message": "The vision model stream failed. "
+                                        "Please try again."}) + "\n\n"
+                        break
+                    if not (isinstance(chunk, str) and chunk.startswith("data: ")):
+                        yield chunk
+                        continue
+                    payload = chunk[6:].strip()
+                    if payload == "[DONE]":
+                        continue   # we emit our own terminal frames below
+                    try:
+                        d = json.loads(payload)
+                    except (ValueError, TypeError):
+                        yield chunk
+                        continue
+                    if (isinstance(d, dict) and isinstance(d.get("delta"), str)
+                            and not d.get("thinking")):
+                        full_parts.append(d["delta"])
+                        # Same per-sentence spoken streaming as /respond: buffer
+                        # short fragments, cap total spoken length.
+                        if not spoken_capped:
+                            joined = "".join(full_parts)
+                            end = last_sentence_end(joined, spoken_cursor)
+                            if end > spoken_cursor:
+                                seg = spoken_text(joined[spoken_cursor:end])["spoken"]
+                                if len(seg) >= MIN_STREAM_SEGMENT_CHARS:
+                                    spoken_cursor = end
+                                    spoken_chars += len(seg)
+                                    if seg:
+                                        yield "data: " + json.dumps({
+                                            "type": "spoken", "text": seg,
+                                            "partial": True, "truncated": False,
+                                            "request_id": request_id}) + "\n\n"
+                                    if spoken_chars >= DEFAULT_MAX_SPOKEN_CHARS:
+                                        spoken_capped = True
+                    yield chunk
+            except Exception as exc:
+                logger.error(f"[wearables] vision stream error req={request_id}: {exc}")
+                yield "event: error\ndata: " + json.dumps(
+                    {"code": gw.VISION_FAILED,
+                     "message": "The vision model stream failed. "
+                                "Please try again."}) + "\n\n"
+            finally:
+                if agen is not None:
+                    with contextlib.suppress(Exception):
+                        await agen.aclose()
+
+            full_text = "".join(full_parts)
+            if full_text.strip():
+                if store_transcript:
+                    try:
+                        from services.wearables_gateway import productivity as prod
+                        await asyncio.to_thread(
+                            prod.log_vision, owner, question, full_text)
+                    except Exception as e:
+                        logger.debug(f"[wearables] vision log skipped: {e}")
+                if spoken_capped:
+                    sp = {"spoken": "", "truncated": True}
+                else:
+                    remainder = full_text[spoken_cursor:]
+                    sp = (spoken_text(remainder, max_chars=DEFAULT_MAX_SPOKEN_CHARS)
+                          if remainder.strip()
+                          else {"spoken": "", "truncated": False})
+                yield "data: " + json.dumps({
+                    "type": "spoken", "text": sp["spoken"],
+                    "partial": False, "truncated": sp["truncated"],
+                    "request_id": request_id}) + "\n\n"
+                logger.info(f"[wearables] vision stream done req={request_id} "
+                            f"chars={len(full_text)}")
+            yield "data: " + json.dumps(
+                {"type": "done", "request_id": request_id, "session_id": ""}) + "\n\n"
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(gen(), media_type="text/event-stream")
 
     return router

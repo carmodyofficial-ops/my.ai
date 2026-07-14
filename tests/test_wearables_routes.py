@@ -569,6 +569,74 @@ async def test_vision_happy_path_sends_data_uri(monkeypatch):
     assert img["image_url"]["url"].startswith("data:image/jpeg;base64,")
 
 
+async def test_vision_stream_grounds_and_streams(monkeypatch):
+    """Streaming Look-and-Ask: same SSE vocabulary as /respond, driven by the
+    dedicated grounding prompt, with the spoken question passed through."""
+    import services.wearables_gateway.capabilities as C
+    import src.llm_core as llm
+    monkeypatch.setattr(C, "resolve_vision_model",
+                        lambda force_refresh=False: {
+                            "model": "qwen3.6:27b",
+                            "chat_url": "http://fake/v1/chat/completions"})
+    captured = {}
+
+    async def _fake_stream(url, model, messages, **kw):
+        captured.update(url=url, model=model, messages=messages)
+        for d in ("That is a red ", "octagonal stop sign."):
+            yield "data: " + json.dumps({"delta": d}) + "\n\n"
+        yield "data: [DONE]\n\n"
+
+    monkeypatch.setattr(llm, "stream_llm", _fake_stream)
+    ep = _endpoints()[("POST", "/vision/stream")]
+    resp = await ep(_device_req("alice"),
+                    image=_Upload(b"\xff\xd8fakejpeg", content_type="image/jpeg"),
+                    question="what does this sign say?")
+    frames = await _collect_sse(resp)
+    events = _events(frames)
+
+    assert events[0]["type"] == "wearables_meta"
+    assert events[0]["model"] == "qwen3.6:27b"
+    deltas = [e["delta"] for e in events if "delta" in e]
+    assert "".join(deltas) == "That is a red octagonal stop sign."
+    assert any(e.get("type") == "spoken" and "stop sign" in e["text"] for e in events)
+    assert events[-1]["type"] == "done"
+    assert frames[-1] == "data: [DONE]\n\n"
+    assert sum(1 for f in frames if "[DONE]" in f) == 1   # upstream [DONE] swallowed
+    # The GROUNDING system prompt (not the chat one) drives it, and the spoken
+    # question + the image both reach the model.
+    assert captured["messages"][0]["content"] == W.VISION_SYSTEM_PROMPT
+    user = captured["messages"][-1]["content"]
+    assert next(c for c in user if c["type"] == "text")["text"] == "what does this sign say?"
+    assert next(c for c in user if c["type"] == "image_url"
+                )["image_url"]["url"].startswith("data:image/jpeg;base64,")
+
+
+async def test_vision_stream_blank_question_uses_grounded_default(monkeypatch):
+    """A plain tap (no spoken question) falls back to the specific-subject prompt,
+    not a vague 'what am I looking at'."""
+    import services.wearables_gateway.capabilities as C
+    import src.llm_core as llm
+    monkeypatch.setattr(C, "resolve_vision_model",
+                        lambda force_refresh=False: {
+                            "model": "qwen3.6:27b",
+                            "chat_url": "http://fake/v1/chat/completions"})
+    captured = {}
+
+    async def _fake_stream(url, model, messages, **kw):
+        captured.update(messages=messages)
+        yield "data: " + json.dumps({"delta": "A ceramic mug."}) + "\n\n"
+        yield "data: [DONE]\n\n"
+
+    monkeypatch.setattr(llm, "stream_llm", _fake_stream)
+    ep = _endpoints()[("POST", "/vision/stream")]
+    resp = await ep(_device_req("alice"),
+                    image=_Upload(b"\xff\xd8fakejpeg", content_type="image/jpeg"),
+                    question="")
+    await _collect_sse(resp)
+    user = captured["messages"][-1]["content"]
+    assert next(c for c in user if c["type"] == "text")["text"] == W.VISION_DEFAULT_QUESTION
+
+
 # --- capabilities ------------------------------------------------------------------
 
 async def test_capabilities_honest_reporting(monkeypatch):
@@ -587,7 +655,8 @@ async def test_capabilities_honest_reporting(monkeypatch):
     assert caps["llm"] == {"available": True, "model": "big-model", "streaming": True}
     assert caps["vision"]["state"] == "VISION_MODEL_NOT_CONFIGURED"
     assert caps["memory"]["available"] is False
-    assert caps["tools"]["readonly"] == ["web_fetch", "web_search"]
+    assert caps["tools"]["available"] == \
+        ["manage_memory", "manage_notes", "search_chats", "web_fetch", "web_search"]
     assert caps["limits"]["text_max_chars"] == W.MAX_TEXT_CHARS
 
 
@@ -630,11 +699,14 @@ async def test_tool_allowlist_caps_the_schema_against_intent_widening():
 
     al._build_base_prompt = spy
     try:
+        # DANGEROUS tools that must never leak into the glasses schema. (The benign
+        # owner-scoped tools manage_memory/manage_notes/search_chats are now allowed,
+        # so they are deliberately NOT in this set.)
         mutating = {
             "send_email", "reply_to_email", "delete_email", "bulk_email",
-            "manage_calendar", "manage_tasks", "manage_settings", "manage_tokens",
+            "manage_calendar", "manage_settings", "manage_tokens", "manage_contact",
             "manage_webhooks", "manage_endpoints", "serve_model", "stop_served_model",
-            "download_model", "search_chats", "manage_session", "create_session",
+            "download_model", "ui_control", "manage_session", "create_session",
             "send_to_session", "pipeline", "write_file", "bash", "python",
         }
         leaked = set()

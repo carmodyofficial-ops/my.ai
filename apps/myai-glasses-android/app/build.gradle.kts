@@ -35,8 +35,8 @@ android {
         applicationId = "ai.my.glasses"
         minSdk = 31 // AudioManager.setCommunicationDevice (BT HFP mic routing)
         targetSdk = 36
-        versionCode = 30
-        versionName = "0.8.3"
+        versionCode = 37
+        versionName = "0.9.0"
         buildConfigField("boolean", "META_SDK", metaSdkEnabled.toString())
         manifestPlaceholders["metaAppId"] = metaAppId
         manifestPlaceholders["metaClientToken"] = metaClientToken

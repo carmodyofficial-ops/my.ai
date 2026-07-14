@@ -7,11 +7,15 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions
 import androidx.activity.viewModels
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,10 +47,13 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +66,11 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -182,15 +193,21 @@ fun HomeScreen(vm: MainViewModel) {
     val ui by vm.ui.collectAsState()
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    var showDiag by remember { mutableStateOf(false) }
 
     ModalNavigationDrawer(
         drawerState = drawer,
-        gesturesEnabled = ui.paired,              // history exists only once paired
-        drawerContent = { HistoryDrawer(vm, ui) { scope.launch { drawer.close() } } },
+        gesturesEnabled = ui.paired && !showDiag,   // history exists only once paired
+        drawerContent = {
+            HistoryDrawer(vm, ui,
+                onDiagnostics = { showDiag = true; scope.launch { drawer.close() } },
+                onClose = { scope.launch { drawer.close() } })
+        },
     ) {
+        if (showDiag) DiagnosticsScreen(vm, ui) { showDiag = false }
         // Pull down anywhere to re-probe host health/capabilities and re-poke
         // the glasses connection — the "why is Talk greyed out" recovery gesture.
-        PullToRefreshBox(
+        else PullToRefreshBox(
             isRefreshing = ui.refreshing,
             onRefresh = vm::refresh,
             // statusBarsPadding on the BOX (not just the inner column) so the app
@@ -225,7 +242,8 @@ fun HomeScreen(vm: MainViewModel) {
 
 /** Left nav: recent chats and Look-and-Ask history for this device's owner. */
 @Composable
-private fun HistoryDrawer(vm: MainViewModel, ui: UiState, onClose: () -> Unit) {
+private fun HistoryDrawer(vm: MainViewModel, ui: UiState,
+                          onDiagnostics: () -> Unit, onClose: () -> Unit) {
     val ctx = LocalContext.current
     ModalDrawerSheet(
         drawerContainerColor = MaterialTheme.colorScheme.surface,
@@ -263,7 +281,101 @@ private fun HistoryDrawer(vm: MainViewModel, ui: UiState, onClose: () -> Unit) {
             ui.visionHistory.forEach { v ->
                 DrawerRow(v.question.ifBlank { "What am I looking at?" }, v.answer)
             }
+
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            DrawerRow("🔧 Diagnostics", "Validate glasses audio + gesture on hardware",
+                onClick = onDiagnostics)
         }
+    }
+}
+
+/** Outlined "Look & Ask" control that distinguishes a tap (identify the main
+ *  subject) from a long-press (freeze the frame, then speak a specific question).
+ *  Material3's Button has no long-press hook, so this is a styled clickable Surface. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun LookAndAskButton(enabled: Boolean, onTap: () -> Unit, onLongPress: () -> Unit) {
+    val content = if (enabled) MaterialTheme.colorScheme.primary
+                  else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    val border = if (enabled) MaterialTheme.colorScheme.outline
+                 else MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, border),
+        modifier = Modifier.combinedClickable(
+            enabled = enabled, onClick = onTap, onLongClick = onLongPress),
+    ) {
+        Text("Look & Ask", color = content,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
+    }
+}
+
+/** On-device hardware validation — the one screen that answers whether the glasses
+ *  mic/speaker/camera and the media-button gesture actually work on real Ray-Bans. */
+@Composable
+private fun DiagnosticsScreen(vm: MainViewModel, ui: UiState, onBack: () -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    // System Back should leave Diagnostics (return to Home), not the whole app.
+    BackHandler { onBack() }
+    LaunchedEffect(Unit) { vm.refreshDiagnostics() }
+    val d = ui.diagnostics
+    Column(
+        Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, bottom = 20.dp, top = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = onBack) { Text("‹ Back") }
+            Spacer(Modifier.weight(1f))
+            Text("Diagnostics", style = MaterialTheme.typography.titleLarge, color = MyAiBrand)
+        }
+        Text("On-device checks for the glasses audio + gesture.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(enabled = !d.running, onClick = vm::runAudioDiagnostic) {
+                Text(if (d.running) "Testing…" else "Test mic + speaker")
+            }
+            OutlinedButton(enabled = !d.running, onClick = vm::refreshDiagnostics) { Text("Refresh") }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Report", style = MaterialTheme.typography.labelLarge)
+                Text(d.report.ifBlank { "Tap 'Test mic + speaker' to run the audio check." },
+                    style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Gesture events", style = MaterialTheme.typography.labelLarge)
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = vm::clearGestureLog) { Text("Clear") }
+                }
+                Text("Tap or hold the glasses button — raw media keys appear here.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (d.gestureLog.isEmpty()) {
+                    Text("(none yet)", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else d.gestureLog.forEach {
+                    Text(it, style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace)
+                }
+            }
+        }
+
+        OutlinedButton(onClick = {
+            val text = "my.ai Glasses diagnostics\n\n${d.report}\n\nGesture events:\n" +
+                d.gestureLog.joinToString("\n").ifBlank { "(none)" }
+            clipboard.setText(AnnotatedString(text))
+        }) { Text("Copy report") }
     }
 }
 
@@ -561,6 +673,23 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
                     onCheckedChange = vm::setStoreTranscript,
                 )
             }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Hands-free", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        if (ui.handsFree) "Auto-sends when you stop speaking"
+                        else "Tap Talk again to send",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                androidx.compose.material3.Switch(
+                    checked = ui.handsFree,
+                    onCheckedChange = vm::setHandsFree,
+                )
+            }
             ui.failure?.let {
                 Text(recoveryHint(it), color = MaterialTheme.colorScheme.error)
             }
@@ -648,11 +777,23 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
                 Button(
                     enabled = chatReady && ui.sttAvailable && !ui.busy,
                     onClick = { if (ui.listening) vm.stopListening() else vm.startListening() },
-                ) { Text(if (ui.listening) "Listening — tap to send" else "Talk") }
-                OutlinedButton(
+                ) {
+                    Text(when {
+                        ui.listening && ui.handsFree -> "Listening — pause to send"
+                        ui.listening -> "Listening — tap to send"
+                        else -> "Talk"
+                    })
+                }
+                LookAndAskButton(
                     enabled = ui.canTalk && ui.visionAvailable && !ui.busy,
-                    onClick = vm::lookAndAsk,
-                ) { Text("Look & Ask") }
+                    onTap = vm::lookAndAsk,
+                    onLongPress = vm::lookAndAskSpoken,
+                )
+            }
+            if (ui.visionAvailable) {
+                Text("Tap to identify · hold to ask about it",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
             // Response panel: show the Q&A pair (question + answer), not a bare

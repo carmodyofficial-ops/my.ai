@@ -288,6 +288,44 @@ class GatewayClient(
             }.getOrElse { VisionResult.Failure("MYAI_HOST_UNREACHABLE") }
         }
 
+    /** Streaming Look-and-Ask: image (+ optional spoken question) → the SAME
+     *  GatewayEvent stream as [respond], so TTS can start on the first spoken
+     *  sentence instead of waiting for the whole answer. */
+    fun visionStream(jpeg: ByteArray, question: String): Flow<GatewayEvent> =
+        callbackFlow {
+            val body = MultipartBody.Builder().setType(MultipartBody.FORM)
+                .addFormDataPart("image", "look.jpg",
+                    jpeg.toRequestBody("image/jpeg".toMediaType()))
+                .addFormDataPart("question", question)
+                .build()
+            val call = http().newCall(req("/vision/stream").post(body).build())
+            val parser = SseParser()
+            try {
+                call.execute().use { resp ->
+                    if (!resp.isSuccessful) {
+                        val code = runCatching {
+                            JSONObject(resp.body?.string() ?: "{}")
+                                .optJSONObject("detail")?.optString("code")
+                        }.getOrNull()
+                        trySend(GatewayEvent.Error(code ?: httpFallback(resp.code), ""))
+                        trySend(GatewayEvent.StreamEnd)
+                        return@use
+                    }
+                    val source = resp.body!!.source()
+                    while (true) {
+                        val line = source.readUtf8Line() ?: break
+                        parser.feed(line + "\n").forEach { trySend(it) }
+                    }
+                }
+            } catch (e: Exception) {
+                trySend(GatewayEvent.Error("MYAI_HOST_UNREACHABLE", e.message ?: ""))
+            } finally {
+                trySend(GatewayEvent.StreamEnd)
+                close()
+            }
+            awaitClose { call.cancel() } // dropping the collector cancels server-side
+        }.flowOn(Dispatchers.IO)
+
     private fun httpFallback(code: Int) = when (code) {
         400 -> "BAD_REQUEST"
         401 -> "AUTHENTICATION_REQUIRED"

@@ -587,10 +587,13 @@ function _isNoteFullyDone(note) {
   return false;
 }
 
-// A "checklist note" — todo or goal — has structured items[] that the cards
-// render as checkboxes and that "fully done" / progress logic reads from.
+// A "checklist note" — todo, checklist, or goal — has structured items[] that the
+// cards render as checkboxes and that "fully done" / progress logic reads from.
+// 'checklist' is what the glasses/AI create for multi-step lists; without it here
+// those notes rendered as plain text with no checkboxes on the web.
 function _hasItems(note) {
-  return note && (note.note_type === 'todo' || note.note_type === 'goal');
+  return note && (note.note_type === 'todo' || note.note_type === 'goal'
+                  || note.note_type === 'checklist');
 }
 
 // Compact " N/M" progress string for a goal's checklist. Empty when the goal

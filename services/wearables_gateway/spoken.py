@@ -81,3 +81,14 @@ def spoken_text(text: str, max_chars: int = DEFAULT_MAX_SPOKEN_CHARS) -> dict:
         s += " Want to hear more?"
 
     return {"spoken": s.strip(), "truncated": truncated}
+
+
+def last_sentence_end(text: str, start: int = 0) -> int:
+    """Index into `text` just past the last COMPLETE sentence at/after `start`
+    (or `start` if none). Lets /respond stream spoken sentences incrementally so
+    the first sentence's TTS starts while the rest of the answer is still
+    generating, instead of waiting for the whole reply."""
+    end = start
+    for m in _SENTENCE_END_RE.finditer(text, start):
+        end = m.end()
+    return end

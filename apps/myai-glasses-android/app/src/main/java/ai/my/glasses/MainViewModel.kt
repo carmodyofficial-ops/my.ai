@@ -27,15 +27,17 @@ import ai.my.glasses.net.PairResult
 import ai.my.glasses.net.TaskItem
 import ai.my.glasses.net.TranscribeResult
 import ai.my.glasses.net.VisionItem
-import ai.my.glasses.net.VisionResult
 import ai.my.glasses.wearables.GlassesAdapters
 import ai.my.glasses.wearables.GlassesConnection
 import ai.my.glasses.wearables.GlassesError
 import ai.my.glasses.wearables.GlassesHost
 import ai.my.glasses.wearables.WearablesAdapter
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -65,6 +67,9 @@ data class UiState(
      *  letting a tap fail silently. */
     val llmReady: Boolean = false,
     val storeTranscript: Boolean = true,
+    /** Hands-free: auto-send the utterance after a trailing silence (VAD), so you
+     *  needn't tap to send. */
+    val handsFree: Boolean = true,
     val lastQuestion: String = "",
     val lastResponse: String = "",
     val failure: Failure? = null,
@@ -81,6 +86,15 @@ data class UiState(
     val tasks: List<TaskItem> = emptyList(),
     val chatHistory: List<ChatItem> = emptyList(),
     val visionHistory: List<VisionItem> = emptyList(),
+    // On-device hardware diagnostics (the Diagnostics screen).
+    val diagnostics: DiagnosticsState = DiagnosticsState(),
+)
+
+/** Results of the on-device audio/gesture hardware checks. */
+data class DiagnosticsState(
+    val report: String = "",
+    val running: Boolean = false,
+    val gestureLog: List<String> = emptyList(),
 )
 
 /** Shown while an enrollment is awaiting approval on the host. */
@@ -118,6 +132,9 @@ class MainViewModel(
     private val _ui = MutableStateFlow(UiState())
     val ui: StateFlow<UiState> = _ui
     private var streamJob: Job? = null
+    // A frame captured for a long-press "Look & Ask + speak" turn, waiting for the
+    // spoken question. Non-null → the next transcript is answered against this image.
+    private var pendingVisionJpeg: ByteArray? = null
     private var bootstrapJob: Job? = null
     /** Set once registration+connect has run to success. onAndroidPermissionsGranted
      *  re-fires on every Activity recreation (rotation, dark-mode, return from
@@ -159,7 +176,25 @@ class MainViewModel(
         viewModelScope.launch {
             GlassesGestures.talk.collect {
                 if (!app.hostPaired) return@collect
+                // Don't let a hands-free hold seize the mic mid-diagnostic — the
+                // audio test drives the recorder directly and a concurrent
+                // startListening() would fight it for the mic.
+                if (_ui.value.diagnostics.running) return@collect
                 if (_ui.value.listening) stopListening() else startListening()
+            }
+        }
+        // Hands-free: when the mic's VAD detects end-of-speech, auto-send (as if the
+        // user tapped "send"). Invoked from the mic thread → hop to the VM scope.
+        voice.onAutoEndpoint = {
+            viewModelScope.launch { if (_ui.value.listening) stopListening() }
+        }
+        // Diagnostics: keep a rolling log of raw media-button key events so the
+        // Diagnostics screen shows what the glasses actually emit on tap/hold.
+        viewModelScope.launch {
+            GlassesGestures.keyEvents.collect { ev ->
+                val d = _ui.value.diagnostics
+                _ui.value = _ui.value.copy(
+                    diagnostics = d.copy(gestureLog = (d.gestureLog + ev).takeLast(20)))
             }
         }
         viewModelScope.launch {
@@ -560,6 +595,11 @@ class MainViewModel(
         _ui.value = _ui.value.copy(storeTranscript = enabled)
     }
 
+    /** Hands-free auto-send (VAD endpointing). Takes effect on the next capture. */
+    fun setHandsFree(enabled: Boolean) {
+        _ui.value = _ui.value.copy(handsFree = enabled)
+    }
+
     // ── Voice loop ────────────────────────────────────────────────────────
 
     fun startListening() {
@@ -568,8 +608,7 @@ class MainViewModel(
             micLock.withLock {
                 if (_ui.value.listening) return@withLock
                 dispatch(Event.FailureCleared)  // clear a stale banner before a new turn
-                v.stopPlayback()         // barge-in: talking over the reply cancels it
-                dispatch(Event.SpeakingChanged(false))  // stopPlayback skips onDone
+                stopSpeaking()   // barge-in: talking over the reply stops it + the TTS queue
                 // Foreground BEFORE the mic opens: a backgrounded app has its mic
                 // muted and its SCO route dropped by the OS.
                 MicForegroundService.start(appContext)
@@ -584,6 +623,7 @@ class MainViewModel(
                 // DAT camera session (the glasses "disconnect"). Phone-mic-in +
                 // glasses-A2DP-out keeps the camera session alive for Look & Ask.
                 if (USE_GLASSES_MIC) v.acquireBluetoothMic()
+                v.vadEnabled = _ui.value.handsFree   // auto-send on silence when on
                 val started = try {
                     withContext(Dispatchers.IO) { v.startRecording() }
                 } catch (t: Throwable) {
@@ -628,18 +668,31 @@ class MainViewModel(
                 dispatch(Event.ListeningChanged(false))
                 captured
             }
-            if (wav == null) return@launch   // too short / empty — nothing to send
+            if (wav == null) {
+                // Nothing said. If this was a long-press Look & Ask, still answer the
+                // frozen frame (generically) rather than dropping the capture.
+                val pj = pendingVisionJpeg
+                pendingVisionJpeg = null
+                if (pj != null) streamJob = viewModelScope.launch { runVisionStream(pj, "") }
+                else _ui.value = _ui.value.copy(busy = false)
+                return@launch
+            }
 
             // Network work stays OUTSIDE the mic lock: holding it across a
             // transcribe would block the next push-to-talk.
             _ui.value = _ui.value.copy(busy = true)
+            val pendingJpeg = pendingVisionJpeg
+            pendingVisionJpeg = null
             when (val r = client.transcribe(wav)) {
-                is TranscribeResult.Success -> {
-                    if (r.empty || r.text.isBlank()) {
-                        _ui.value = _ui.value.copy(busy = false)
-                    } else {
-                        ask(r.text)      // ask() manages busy from here
+                is TranscribeResult.Success -> when {
+                    // Long-press Look & Ask: answer the spoken question against the
+                    // frozen frame. Empty transcript → grounded generic look.
+                    pendingJpeg != null -> {
+                        val q = if (r.empty || r.text.isBlank()) "" else r.text
+                        streamJob = viewModelScope.launch { runVisionStream(pendingJpeg, q) }
                     }
+                    r.empty || r.text.isBlank() -> _ui.value = _ui.value.copy(busy = false)
+                    else -> ask(r.text)      // ask() manages busy from here
                 }
                 is TranscribeResult.Failure -> {
                     dispatch(Event.GatewayError(r.code))
@@ -651,6 +704,7 @@ class MainViewModel(
 
     fun ask(text: String) {
         streamJob?.cancel()
+        stopSpeaking()   // drop any TTS still playing/queued from a prior turn
         // Starting a new turn clears a stale transient banner (a prior Stop /
         // rate-limit / TTS hiccup) so it doesn't linger through a good turn.
         dispatch(Event.FailureCleared)
@@ -681,9 +735,13 @@ class MainViewModel(
                                 sb.append(ev.text)
                                 _ui.value = _ui.value.copy(lastResponse = sb.toString())
                             }
-                            is GatewayEvent.Spoken -> speak(ev.text)
+                            is GatewayEvent.Spoken -> enqueueSpeak(ev.text)
                             is GatewayEvent.Cancelled -> {
                                 handled = true
+                                // The server stopped mid-answer; kill any spoken
+                                // segments still queued so TTS doesn't keep talking
+                                // after a cancel.
+                                stopSpeaking()
                                 dispatch(Event.GatewayError("SESSION_CANCELLED"))
                             }
                             is GatewayEvent.Error -> when {
@@ -724,54 +782,137 @@ class MainViewModel(
                 if (_ui.value.lastResponse == "Reconnecting…") {
                     _ui.value = _ui.value.copy(lastResponse = "")
                 }
+                finishSpeaking()   // no more spoken chunks — let the queue drain
                 _ui.value = _ui.value.copy(busy = false)
                 break
             }
         }
     }
 
+    /** Plain tap: grab a frame and stream a grounded, specific answer about the
+     *  main subject (no spoken question). Streaming → TTS starts on sentence 1. */
     fun lookAndAsk() {
+        // Barge-in: a Look-and-Ask supersedes any in-flight text turn. Cancel its
+        // stream and drop its queued TTS so the two answers don't overlap in audio.
+        streamJob?.cancel()
+        stopSpeaking()
+        pendingVisionJpeg = null
         dispatch(Event.FailureCleared)   // clear a stale banner before a new turn
-        _ui.value = _ui.value.copy(busy = true)
-        viewModelScope.launch {
-            // Real glasses: starts a short stream (capture LED lights), grabs a
-            // still, stops. Mock: synthetic JPEG.
-            var jpeg = adapter.captureStillJpeg()
-            if (jpeg == null) {
-                // A glasses-mic Talk can drop the DAT camera session; re-establish
-                // it and retry once before surfacing an error (USE_GLASSES_MIC).
-                if (adapter.connect()) jpeg = adapter.captureStillJpeg()
-            }
-            if (jpeg == null) {
+        _ui.value = _ui.value.copy(busy = true, lastQuestion = "", lastResponse = "")
+        streamJob = viewModelScope.launch {
+            val jpeg = captureForVision() ?: run {
                 dispatch(Event.GatewayError("GLASSES_NOT_CONNECTED"))
                 _ui.value = _ui.value.copy(busy = false)
                 return@launch
             }
-            when (val r = client.visionQuery(jpeg, "What am I looking at?")) {
-                is VisionResult.Success -> {
-                    _ui.value = _ui.value.copy(lastResponse = r.text, busy = false)
-                    speak(r.spoken)
+            runVisionStream(jpeg, "")
+        }
+    }
+
+    /** Long-press: FREEZE the frame, then let the user SPEAK a specific question
+     *  about it ("what does this say?", "how much is this?"). The question and this
+     *  exact frame are answered together — the big lever against vague answers. */
+    fun lookAndAskSpoken() {
+        if (_ui.value.listening || _ui.value.diagnostics.running) return
+        if (!_ui.value.sttAvailable) { lookAndAsk(); return }   // no STT → generic look
+        streamJob?.cancel()
+        stopSpeaking()
+        dispatch(Event.FailureCleared)
+        _ui.value = _ui.value.copy(busy = true, lastQuestion = "", lastResponse = "")
+        viewModelScope.launch {
+            val jpeg = captureForVision() ?: run {
+                dispatch(Event.GatewayError("GLASSES_NOT_CONNECTED"))
+                _ui.value = _ui.value.copy(busy = false)
+                return@launch
+            }
+            // Hand off to the voice loop: stopListening() sees a pending frame and
+            // routes the transcript to vision instead of chat.
+            pendingVisionJpeg = jpeg
+            _ui.value = _ui.value.copy(busy = false)
+            startListening()
+        }
+    }
+
+    /** Grab a still; a glasses-mic Talk can drop the DAT camera session, so
+     *  re-establish it and retry once (USE_GLASSES_MIC). Mock: synthetic JPEG. */
+    private suspend fun captureForVision(): ByteArray? {
+        var jpeg = adapter.captureStillJpeg()
+        if (jpeg == null && adapter.connect()) jpeg = adapter.captureStillJpeg()
+        return jpeg
+    }
+
+    /** Stream a Look-and-Ask answer: mirrors ask()'s collector (deltas → panel,
+     *  spoken → TTS queue) so the first sentence is heard ~1-2s in. A blank
+     *  question tells the server to use its grounded "identify the main subject". */
+    private suspend fun runVisionStream(jpeg: ByteArray, question: String) {
+        _ui.value = _ui.value.copy(
+            busy = true,
+            lastQuestion = question.ifBlank { "What am I looking at?" },
+            lastResponse = "")
+        val sb = StringBuilder()
+        client.visionStream(jpeg, question).collect { ev ->
+            when (ev) {
+                is GatewayEvent.Meta -> dispatch(Event.HostHealthy)   // host reachable
+                is GatewayEvent.Delta -> if (!ev.thinking) {
+                    sb.append(ev.text)
+                    _ui.value = _ui.value.copy(lastResponse = sb.toString())
                 }
-                is VisionResult.Failure -> {
-                    dispatch(Event.GatewayError(r.code))
-                    _ui.value = _ui.value.copy(busy = false)
+                is GatewayEvent.Spoken -> enqueueSpeak(ev.text)
+                is GatewayEvent.Cancelled -> stopSpeaking()
+                is GatewayEvent.Error -> dispatch(Event.GatewayError(ev.code))
+                GatewayEvent.StreamEnd -> Unit
+                else -> Unit
+            }
+        }
+        finishSpeaking()
+        _ui.value = _ui.value.copy(busy = false)
+    }
+
+    // ── TTS queue (streaming spoken sentences) ────────────────────────────────
+    // /respond now streams one spoken event per completed sentence, so the first
+    // sentence's audio starts ~1s in instead of after the whole reply. These are
+    // played STRICTLY IN ORDER here: a fresh channel per turn, a single consumer
+    // that fetches TTS + plays each item to completion before the next.
+    private var speakChannel: Channel<String>? = null
+    private var speakJob: Job? = null
+
+    private fun ensureSpeakConsumer() {
+        if (speakJob?.isActive == true) return
+        val ch = Channel<String>(Channel.UNLIMITED)
+        speakChannel = ch
+        speakJob = viewModelScope.launch {
+            try {
+                for (t in ch) {
+                    if (t.isBlank()) continue
+                    val audio = client.speech(t) ?: continue   // skip a failed chunk
+                    dispatch(Event.SpeakingChanged(true))
+                    val done = CompletableDeferred<Unit>()
+                    voice.playAudio(audio) { done.complete(Unit) }
+                    done.await()   // barge-in cancels this coroutine → loop ends
                 }
+            } finally {
+                dispatch(Event.SpeakingChanged(false))
             }
         }
     }
 
-    /** Speak a reply through the host's local TTS (played over A2DP → glasses). */
-    private fun speak(spokenText: String) {
+    /** Queue a spoken sentence for in-order playback. */
+    private fun enqueueSpeak(spokenText: String) {
         if (!_ui.value.ttsAvailable || spokenText.isBlank()) return
-        viewModelScope.launch {
-            val audio = client.speech(spokenText)
-            if (audio == null) {
-                dispatch(Event.GatewayError("TTS_FAILED"))
-                return@launch
-            }
-            dispatch(Event.SpeakingChanged(true))
-            voice.playAudio(audio) { dispatch(Event.SpeakingChanged(false)) }
-        }
+        ensureSpeakConsumer()
+        speakChannel?.trySend(spokenText)
+    }
+
+    /** No more spoken chunks this turn — let the consumer drain and finish. */
+    private fun finishSpeaking() { speakChannel?.close() }
+
+    /** Barge-in / cancel / new turn: stop playback and drop the queue immediately. */
+    private fun stopSpeaking() {
+        speakJob?.cancel()
+        speakChannel?.close()
+        speakChannel = null
+        voice.stopPlayback()
+        dispatch(Event.SpeakingChanged(false))
     }
 
     fun cancel() {
@@ -786,10 +927,7 @@ class MainViewModel(
             lastResponse = if (_ui.value.lastResponse == "Reconnecting…") ""
                            else _ui.value.lastResponse,
         )
-        voice.stopPlayback()
-        // stopPlayback() bypasses the completion listener, so clear `speaking`
-        // here — otherwise it latches true after a barge-in/cancel.
-        dispatch(Event.SpeakingChanged(false))
+        stopSpeaking()   // stop playback + drop the TTS queue
         val sid = app.activeSessionId ?: return
         viewModelScope.launch { client.cancel(sid) }
     }
@@ -803,13 +941,105 @@ class MainViewModel(
         }
     }
 
+    // ── Diagnostics (on-device hardware validation) ───────────────────────────
+
+    private fun setDiag(transform: (DiagnosticsState) -> DiagnosticsState) {
+        _ui.value = _ui.value.copy(diagnostics = transform(_ui.value.diagnostics))
+    }
+
+    /** Static snapshot: glasses/host/model/capabilities + audio routing. */
+    fun refreshDiagnostics() {
+        val gs = adapter.state.value
+        val u = _ui.value
+        val report = buildString {
+            appendLine("glasses: ${gs.connection}  model=${gs.model ?: "?"}  " +
+                "batt=${gs.batteryPercent?.let { "$it%" } ?: "?"}")
+            gs.lastErrorDetail?.let { appendLine("glasses detail: $it") }
+            appendLine("host: ${if (app.hostReachable) "reachable" else "unreachable"}  " +
+                "model=${u.modelLabel}")
+            appendLine("stt=${u.sttAvailable} tts=${u.ttsAvailable} " +
+                "vision=${u.visionAvailable} llm=${u.llmReady}")
+            appendLine("mic mode: ${if (USE_GLASSES_MIC) "GLASSES (SCO/HFP)" else "PHONE"}")
+            append(voice.audioRouteSnapshot())
+        }
+        setDiag { it.copy(report = report) }
+    }
+
+    /** Acquire the glasses mic, record ~1.2s, report which mic captured and whether
+     *  the camera session survived — then play a test tone (should be heard in the
+     *  glasses). The one action that answers the "Both"-audio hardware unknowns. */
+    fun runAudioDiagnostic() {
+        // Don't run while a voice turn holds the mic, or twice at once — both would
+        // fight over the recorder.
+        if (_ui.value.diagnostics.running || _ui.value.listening) return
+        val v = voice
+        stopSpeaking()   // don't let a playing/queued reply talk over the test tone
+        setDiag { it.copy(running = true, report = "Running audio diagnostic…") }
+        viewModelScope.launch {
+            var report = "Audio diagnostic failed."
+            var ok = false
+            try {
+                val connBefore = adapter.state.value.connection
+                val routeBefore = v.audioRouteSnapshot().replace("\n", " | ")
+                val micLine: String
+                micLock.withLock {
+                    MicForegroundService.start(appContext)
+                    v.acquireBluetoothMic()
+                    val started = withContext(Dispatchers.IO) { v.startRecording() }
+                    kotlinx.coroutines.delay(1_200)
+                    val wav = withContext(Dispatchers.IO) { v.stopRecording() }
+                    val glassesMic = v.lastMicWasGlasses()
+                    v.releaseBluetoothMic()
+                    MicForegroundService.stop(appContext)
+                    micLine = "mic used: ${if (glassesMic) "GLASSES (SCO/HFP) ✓" else "PHONE (fallback)"}" +
+                        "   started=$started  captured=${wav?.size ?: 0} bytes"
+                }
+                kotlinx.coroutines.delay(300)   // let the camera-session state settle
+                val connAfter = adapter.state.value.connection
+                val coexist = when {
+                    connBefore == GlassesConnection.CONNECTED && connAfter != GlassesConnection.CONNECTED ->
+                        "camera session DROPPED by mic acquire ($connBefore→$connAfter) — expected on camera-only Ray-Bans; Look & Ask re-establishes it"
+                    connBefore == GlassesConnection.CONNECTED ->
+                        "camera session SURVIVED mic acquire ✓ (can hold camera + HFP mic at once)"
+                    else -> "camera not connected before test ($connBefore→$connAfter)"
+                }
+                report = buildString {
+                    appendLine("— AUDIO DIAGNOSTIC —")
+                    appendLine("route before: $routeBefore")
+                    appendLine(micLine)
+                    appendLine("route after:  ${v.audioRouteSnapshot().replace("\n", " | ")}")
+                    appendLine("coexistence: $coexist")
+                    append("▶ playing a test tone — you should hear a beep IN THE GLASSES")
+                }
+                ok = true
+            } catch (e: Exception) {
+                report = "Audio diagnostic error: ${e.message ?: e.javaClass.simpleName}"
+            } finally {
+                // ALWAYS release the mic + clear the spinner, even if recording threw
+                // mid-lock, so a failed test can't wedge the mic or leave the UI stuck.
+                withContext(NonCancellable) {
+                    runCatching {
+                        micLock.withLock {
+                            v.releaseBluetoothMic()
+                            MicForegroundService.stop(appContext)
+                        }
+                    }
+                }
+                setDiag { it.copy(report = report, running = false) }
+            }
+            if (ok) v.playTestTone()
+        }
+    }
+
+    fun clearGestureLog() = setDiag { it.copy(gestureLog = emptyList()) }
+
     /** Start a fresh conversation: drop the current server session (so context
      *  doesn't carry over), stop any playback, and clear the panel — ready for a
      *  new question. Works even with no active session (UAT #5). */
     fun newChat() {
         streamJob?.cancel()
-        voice.stopPlayback()
-        dispatch(Event.SpeakingChanged(false))
+        stopSpeaking()
+        pendingVisionJpeg = null
         app.activeSessionId?.let { sid ->
             viewModelScope.launch { runCatching { client.deleteSession(sid) } }
         }
@@ -820,7 +1050,7 @@ class MainViewModel(
 
     fun unpair() {
         streamJob?.cancel()
-        voice.stopPlayback()
+        stopSpeaking()
         GlassesControlService.stop(appContext)   // disarm the triple-tap trigger
         credentials.clear()
         dispatch(Event.HostUnpaired)
@@ -829,6 +1059,7 @@ class MainViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        speakJob?.cancel()
         voice.cancelRecording()
         voice.stopPlayback()
         voice.releaseBluetoothMic()

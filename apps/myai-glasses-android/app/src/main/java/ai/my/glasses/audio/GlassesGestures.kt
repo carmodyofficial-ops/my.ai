@@ -19,4 +19,12 @@ object GlassesGestures {
     val talk: SharedFlow<Unit> = _talk
 
     fun emitTalk() { _talk.tryEmit(Unit) }
+
+    /** Raw media-key descriptions from GlassesControlService, for the Diagnostics
+     *  screen — so you can tap/hold the glasses and see exactly what the button
+     *  emits on real hardware (the load-bearing gesture unknown). */
+    private val _keys = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    val keyEvents: SharedFlow<String> = _keys
+
+    fun emitKey(desc: String) { _keys.tryEmit(desc) }
 }

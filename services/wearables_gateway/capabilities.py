@@ -155,7 +155,7 @@ def build_capabilities(stt_service, tts_service, owner: str | None) -> dict:
             "state": "ok" if vision else "VISION_MODEL_NOT_CONFIGURED",
         },
         "memory": {"available": False, "reason": "not wired in v1 (privacy default)"},
-        "tools": {"readonly": sorted(WEARABLES_TOOLS)},
+        "tools": {"available": sorted(WEARABLES_TOOLS)},
         "limits": {
             "audio_max_bytes": STT_MAX_AUDIO_BYTES,
             "image_max_bytes": WEARABLES_IMAGE_MAX_BYTES,

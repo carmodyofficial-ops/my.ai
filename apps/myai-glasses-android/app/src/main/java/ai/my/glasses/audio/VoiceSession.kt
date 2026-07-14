@@ -1,5 +1,6 @@
 package ai.my.glasses.audio
 
+import ai.my.glasses.core.Vad
 import android.annotation.SuppressLint
 import android.content.Context
 import android.media.AudioAttributes
@@ -69,15 +70,23 @@ class VoiceSession(private val context: Context) {
         private const val TAG = "VoiceSession"
         const val SAMPLE_RATE = 16_000        // whisper-native; the stack resamples HFP
         private const val MAX_UTTERANCE_SECONDS = 60   // hard stop: no endless capture
-        private const val MIN_UTTERANCE_BYTES = SAMPLE_RATE / 4 * 2  // ~125 ms
+        private const val MIN_UTTERANCE_BYTES = SAMPLE_RATE / 4 * 2  // 1/4 s of 16-bit @16k → ~250 ms
         // HFP/SCO link-up is typically 0.3–2 s; 3 s is a generous ceiling before
         // we give up and fall back to the phone mic.
         private const val SCO_ROUTE_TIMEOUT_MS = 3_000L
+        private const val VAD_SILENCE_MS = 1_200L   // trailing silence that ends an utterance
+        private const val VAD_SPEECH_RMS = 700.0    // 16-bit RMS above which we count "speech"
     }
 
     /** True when the mic is routed to the glasses (vs. the phone's own mic). */
     var usingBluetoothMic: Boolean = false
         private set
+
+    /** Voice-activity endpointing (hands-free): when true, capture auto-ends after a
+     *  trailing silence once speech has been heard, so the user needn't tap to send.
+     *  [onAutoEndpoint] is invoked (from the mic thread) when that happens. */
+    @Volatile var vadEnabled: Boolean = false
+    @Volatile var onAutoEndpoint: (() -> Unit)? = null
 
     /** Set as soon as we ASK for the SCO route, whether or not it lands — so the
      *  release path always clears a route we requested. */
@@ -244,14 +253,29 @@ class VoiceSession(private val context: Context) {
         r.startRecording()
 
         val maxBytes = SAMPLE_RATE * 2 * MAX_UTTERANCE_SECONDS
+        // Pure endpoint decision lives in :core (Vad) so it's unit-tested.
+        val vad = Vad(speechRms = VAD_SPEECH_RMS, silenceMs = VAD_SILENCE_MS,
+            minBytes = MIN_UTTERANCE_BYTES)
         recordThread = thread(name = "myai-mic") {
             val buf = ByteArray(4096)
+            var autoEnded = false
             while (recording.get() && pcm.size() < maxBytes) {
                 val n = r.read(buf, 0, buf.size)
-                if (n > 0) synchronized(pcm) { pcm.write(buf, 0, n) }
-                else if (n < 0) break
+                if (n > 0) {
+                    synchronized(pcm) { pcm.write(buf, 0, n) }
+                    if (vadEnabled &&
+                        vad.accept(buf, n, pcm.size(), SystemClock.uptimeMillis())) {
+                        autoEnded = true
+                        break
+                    }
+                } else if (n < 0) break
             }
+            // Hitting the 60s hard cap (loop exits with recording still requested)
+            // must ALSO auto-send in hands-free mode — otherwise the mic stops but
+            // the turn never fires and the UI hangs on "listening".
+            val hitCap = recording.get() && pcm.size() >= maxBytes
             recording.set(false)
+            if (autoEnded || (vadEnabled && hitCap)) runCatching { onAutoEndpoint?.invoke() }
         }
         return true
     }
@@ -348,6 +372,55 @@ class VoiceSession(private val context: Context) {
         // file here rather than leaking it until the next process-start sweep.
         playerTmp?.let { runCatching { it.delete() } }
         playerTmp = null
+    }
+
+    // ── Diagnostics (on-device hardware validation) ───────────────────────────
+
+    /** Human-readable snapshot of the audio routing state — which communication
+     *  devices the OS offers (is a glasses BT SCO mic present?), the current route,
+     *  and the audio mode. */
+    fun audioRouteSnapshot(): String {
+        val devs = runCatching { audioManager.availableCommunicationDevices }
+            .getOrNull().orEmpty()
+        val names = devs.joinToString(", ") { deviceTypeName(it.type) }.ifEmpty { "none" }
+        val cur = runCatching { audioManager.communicationDevice }.getOrNull()
+        return "audio mode: ${modeName(audioManager.mode)}\n" +
+            "comm devices: $names\n" +
+            "active route: ${cur?.let { deviceTypeName(it.type) } ?: "none"}"
+    }
+
+    /** True if the last acquire routed to the glasses HFP/SCO mic (vs the phone). */
+    fun lastMicWasGlasses(): Boolean = usingBluetoothMic
+
+    /** A short test tone played through the normal playback path (USAGE_ASSISTANT →
+     *  A2DP) so the user can confirm audio reaches the GLASSES speaker. */
+    suspend fun playTestTone(onDone: () -> Unit = {}) {
+        val n = (SAMPLE_RATE * 0.6).toInt()
+        val pcm = ByteArray(n * 2)
+        for (i in 0 until n) {
+            val s = (Math.sin(2 * Math.PI * 660.0 * i / SAMPLE_RATE) * 0.35 * Short.MAX_VALUE)
+                .toInt().toShort().toInt()
+            pcm[i * 2] = (s and 0xff).toByte()
+            pcm[i * 2 + 1] = ((s shr 8) and 0xff).toByte()
+        }
+        playAudio(wavFromPcm16(pcm, SAMPLE_RATE), onDone)
+    }
+
+    private fun deviceTypeName(t: Int): String = when (t) {
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "BT_SCO(glasses mic/HFP)"
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP -> "BT_A2DP(glasses speaker)"
+        AudioDeviceInfo.TYPE_BLE_HEADSET -> "BLE_HEADSET"
+        AudioDeviceInfo.TYPE_BUILTIN_MIC -> "PHONE_MIC"
+        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "PHONE_SPEAKER"
+        AudioDeviceInfo.TYPE_WIRED_HEADSET -> "WIRED_HEADSET"
+        else -> "type$t"
+    }
+
+    private fun modeName(m: Int): String = when (m) {
+        AudioManager.MODE_NORMAL -> "NORMAL"
+        AudioManager.MODE_IN_COMMUNICATION -> "IN_COMMUNICATION"
+        AudioManager.MODE_IN_CALL -> "IN_CALL"
+        else -> "mode$m"
     }
 
     /** Minimal RIFF/WAVE header around 16-bit mono PCM. */

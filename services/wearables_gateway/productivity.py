@@ -19,6 +19,13 @@ _MAX_TITLE = 200
 _MAX_BODY = 4000
 _MAX_DATE = 32  # room for any ISO-8601 date/datetime; keeps the field bounded
 
+# Note types the glasses "Tasks" card shows (quick, checkable, items[]-backed):
+# user to-dos ('todo', the type glasses creates so the web renders them checkable)
+# and AI-made checklists ('checklist'). 'goal' is deliberately EXCLUDED — a goal is
+# a big multi-step objective, not a quick task, and would clog the small Tasks card
+# (it falls into the Notes card as reference instead).
+_TASK_TYPES = ("todo", "checklist")
+
 
 def _clip(s, n):
     s = (s or "").strip()
@@ -40,13 +47,15 @@ def _snippet(text, n=120):
 
 def list_notes(owner: str, limit: int = 8) -> list[dict]:
     from core.database import get_db_session, Note
+    from sqlalchemy import or_
     with get_db_session() as db:
-        # Hide archived notes (archived == the web app's Archive flag; a note the
-        # user archived on the web must not resurface here). Notes are reference
-        # text — no glasses "completion" concept, so no `done` field.
+        # Plain reference notes only — the checkable task types go in the Tasks card.
+        # Hide archived (archived == the web app's Archive flag). Null note_type
+        # (legacy) counts as a plain note.
         rows = (db.query(Note)
                 .filter(Note.owner == owner, Note.archived == False,  # noqa: E712
-                        Note.note_type != "checklist")
+                        or_(Note.note_type.notin_(_TASK_TYPES),
+                            Note.note_type.is_(None)))
                 .order_by(Note.pinned.desc(), Note.updated_at.desc())
                 .limit(limit).all())
         return [{
@@ -82,11 +91,14 @@ def list_tasks(owner: str, limit: int = 8) -> list[dict]:
         # the web app uses) — a task is "completed" (greyed) when ALL items are
         # done; completed tasks stay in the list (not archived) and can be toggled
         # back. This never touches Note.archived, so glasses + web agree.
+        # Over-fetch so ACTIVE tasks are never buried under a pile of completed
+        # (greyed) ones in the capped card — glasses has no archive affordance, so
+        # completed tasks accumulate. We sort active-first below and then cap.
         rows = (db.query(Note)
                 .filter(Note.owner == owner, Note.archived == False,  # noqa: E712
-                        Note.note_type == "checklist")
+                        Note.note_type.in_(_TASK_TYPES))
                 .order_by(Note.pinned.desc(), Note.updated_at.desc())
-                .limit(limit).all())
+                .limit(limit * 4).all())
         out = []
         for n in rows:
             items = []
@@ -104,7 +116,10 @@ def list_tasks(owner: str, limit: int = 8) -> list[dict]:
                 "done": done,                    # per-item done count (sub-label)
                 "total": len(items),
             })
-        return out
+        # Stable sort → active tasks first, completed sink; keep pinned/recency
+        # order within each group. Then cap to the card size.
+        out.sort(key=lambda t: t["completed"])
+        return out[:limit]
 
 
 def create_task(owner: str, text: str, due_date: str | None = None) -> dict:
@@ -116,8 +131,13 @@ def create_task(owner: str, text: str, due_date: str | None = None) -> dict:
     nid = str(uuid.uuid4())
     items = json.dumps([{"text": text, "done": False}])
     with get_db_session() as db:
-        db.add(Note(id=nid, owner=owner, title=text, items=items,
-                    note_type="checklist", source="user",
+        # 'todo' (not 'checklist') so the web app renders it as a checkable to-do —
+        # a glasses task IS a web to-do, kept in sync via the shared items[].done.
+        # title left EMPTY (the text lives in items[0]) so the web doesn't render it
+        # twice (a title header + the checkbox row); list_tasks falls back to the
+        # item text for the glasses label.
+        db.add(Note(id=nid, owner=owner, title="", items=items,
+                    note_type="todo", source="user",
                     due_date=due_date))
     return {"id": nid, "title": text, "due_date": due_date, "done": 0, "total": 1}
 
@@ -141,8 +161,8 @@ def complete_item(owner: str, note_id: str) -> bool | None:
                .filter(Note.owner == owner, Note.id == note_id).first())
         if row is None:
             return None
-        if row.note_type != "checklist" or not row.items:
-            return False
+        if not row.items:
+            return False   # plain notes (no items) aren't completable
         try:
             items = json.loads(row.items)
         except (json.JSONDecodeError, TypeError):
