@@ -1,12 +1,119 @@
 # src/middleware.py
 # Shared middleware, decorators, and request helpers
 
+import json
+import logging
 import os
 import secrets
 
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+
+logger = logging.getLogger(__name__)
+
+
+class BodySizeLimitMiddleware:
+    """Pure-ASGI guard that rejects an oversized request body BEFORE Starlette
+    parses or spools it.
+
+    Why this exists: FastAPI's ``UploadFile``/``Form`` params make Starlette parse
+    the WHOLE multipart body and spool it to a temp file (past ~1 MB) before the
+    route handler — and its per-route caps — ever run. So a body with no
+    ``Content-Length`` (chunked) bypasses the handler's header check entirely, and
+    a multi-GB body can exhaust disk before anything rejects it. This middleware
+    closes both: a declared over-ceiling ``Content-Length`` is refused before a
+    byte is read, and a chunked/streaming body is counted and cut off the moment it
+    crosses the ceiling.
+
+    It is a COARSE global backstop (default 128 MB). The tight per-route limits
+    (``read_upload_limited`` / ``enforce_content_length``) remain the precise gates;
+    this only stops egregious abuse the framework would otherwise let hit disk.
+
+    Implementation note: on a streaming overflow we do NOT raise through the app —
+    ``BaseHTTPMiddleware`` (the auth layer) runs the inner app in an anyio task
+    group that would wrap our exception in an ``ExceptionGroup``. Instead we send
+    the 413 ourselves and feed the inner app an ``http.disconnect`` so it unwinds,
+    swallowing anything it tries to send afterward.
+    """
+
+    def __init__(self, app, max_body_bytes: int):
+        self.app = app
+        self.max_body_bytes = int(max_body_bytes)
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            # WebSocket/lifespan carry no large HTTP body — pass straight through.
+            return await self.app(scope, receive, send)
+
+        # Fast path: a declared Content-Length over the ceiling is refused before
+        # a single body byte is read (covers every well-behaved client).
+        for name, value in scope.get("headers") or ():
+            if name == b"content-length":
+                try:
+                    if int(value) > self.max_body_bytes:
+                        self._log(scope)
+                        return await self._reject(send)
+                except (ValueError, TypeError):
+                    pass
+                break
+
+        total = 0
+        rejected = False          # WE sent the 413
+        app_responded = False     # the inner app started its own response
+
+        async def limited_receive():
+            nonlocal total, rejected
+            message = await receive()
+            if (message.get("type") == "http.request" and not rejected):
+                total += len(message.get("body", b"") or b"")
+                if total > self.max_body_bytes:
+                    if app_responded:
+                        # App already responded (unusual for an upload route); we
+                        # can't inject a 413, so just cut the body off.
+                        return {"type": "http.disconnect"}
+                    rejected = True
+                    self._log(scope)
+                    await self._reject(send)          # raw send — the real 413
+                    # Tell the inner app the client is gone so it stops reading and
+                    # unwinds; its subsequent output is swallowed by guarded_send.
+                    return {"type": "http.disconnect"}
+            return message
+
+        async def guarded_send(message):
+            nonlocal app_responded
+            if rejected:
+                return                                 # 413 already sent — drop the rest
+            if message.get("type") == "http.response.start":
+                app_responded = True
+            await send(message)
+
+        try:
+            await self.app(scope, limited_receive, guarded_send)
+        except Exception:
+            # The app unwound from our injected disconnect (ClientDisconnect, possibly
+            # wrapped in an ExceptionGroup by BaseHTTPMiddleware). We already sent the
+            # 413 — swallow. Anything else is a real error → re-raise.
+            if rejected:
+                return
+            raise
+
+    def _log(self, scope):
+        logger.warning("Rejected oversized request body (> %d bytes) on %s %s",
+                       self.max_body_bytes, scope.get("method", "?"),
+                       scope.get("path", "?"))
+
+    async def _reject(self, send):
+        body = json.dumps(
+            {"detail": {"code": "PAYLOAD_TOO_LARGE",
+                        "message": "Request body too large"}}).encode()
+        await send({
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [(b"content-type", b"application/json"),
+                        (b"content-length", str(len(body)).encode())],
+        })
+        await send({"type": "http.response.body", "body": body})
 
 
 # Per-process token that lets the in-app tool layer hit admin-gated

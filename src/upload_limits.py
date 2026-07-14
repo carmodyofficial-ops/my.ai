@@ -63,6 +63,17 @@ WEARABLES_IMAGE_MAX_BYTES = read_byte_limit_env(
     "ODYSSEUS_WEARABLES_IMAGE_MAX_BYTES", 10 * 1024 * 1024
 )
 
+# Global request-body ceiling enforced by BodySizeLimitMiddleware BEFORE the body
+# is parsed/spooled. This is a COARSE backstop against multi-GB disk-exhaustion and
+# the chunked-encoding bypass (a body with no Content-Length skips the per-route
+# header check) — NOT a replacement for the tight per-route caps above, which stay
+# the precise limits. Default 128 MB sits comfortably above the largest legitimate
+# upload (GALLERY = 100 MB); raise ODYSSEUS_MAX_REQUEST_BODY_BYTES if a real route
+# needs more.
+MAX_REQUEST_BODY_BYTES = read_byte_limit_env(
+    "ODYSSEUS_MAX_REQUEST_BODY_BYTES", 128 * 1024 * 1024
+)
+
 
 async def read_upload_limited(upload: UploadFile, limit: int, label: str = "Upload") -> bytes:
     """Read an UploadFile with a hard byte cap."""

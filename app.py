@@ -56,7 +56,8 @@ from core.constants import (
     REQUEST_TIMEOUT, OPENAI_API_KEY, AUTH_FILE,
 )
 from core.database import SessionLocal, ApiToken
-from core.middleware import SecurityHeadersMiddleware, is_cors_preflight
+from core.middleware import (
+    SecurityHeadersMiddleware, BodySizeLimitMiddleware, is_cors_preflight)
 from core.auth import AuthManager, normalize_known_username
 from core.exceptions import (
     SessionNotFoundError, InvalidFileUploadError,
@@ -476,6 +477,14 @@ if AUTH_ENABLED:
     logger.info("Auth middleware enabled (AUTH_ENABLED=true)")
 else:
     logger.info("Auth middleware disabled (set AUTH_ENABLED=true to enable)")
+
+# Outermost middleware (added last): reject an oversized request body before ANY
+# other middleware or the route's multipart parser spools it to disk. Runs even
+# when auth is disabled, and ahead of auth so a giant unauthenticated body is
+# refused up front. Per-route caps remain the precise limits (see upload_limits).
+from src.upload_limits import MAX_REQUEST_BODY_BYTES
+app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=MAX_REQUEST_BODY_BYTES)
+logger.info(f"Request body ceiling: {MAX_REQUEST_BODY_BYTES} bytes")
 
 # ========= STATIC FILES =========
 os.makedirs(STATIC_DIR, exist_ok=True)
