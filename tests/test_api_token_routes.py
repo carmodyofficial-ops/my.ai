@@ -222,6 +222,19 @@ def test_cookbook_launch_scope_implies_read(monkeypatch, token_routes_mod):
     assert resp["scopes"] == ["cookbook:read", "cookbook:launch"]
 
 
+def test_wearables_scope_cannot_be_combined(token_routes_mod):
+    """The wearables scope is confined to /api/wearables/ by the auth
+    middleware; mixing it with another scope would defeat that confinement, so
+    minting such a token must be refused (C1 defense-in-depth)."""
+    mod = token_routes_mod
+    # Pure device token is fine.
+    assert mod._normalize_scopes(["wearables"]) == ["wearables"]
+    for mix in (["wearables", "chat"], ["chat", "wearables"], ["wearables", "email:read"]):
+        with pytest.raises(HTTPException) as exc:
+            mod._normalize_scopes(mix)
+        assert exc.value.status_code == 400
+
+
 # ---------------------------------------------------------------------------
 # 3. GET /api/tokens — safe display fields only, no hash or raw token
 # ---------------------------------------------------------------------------

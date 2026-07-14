@@ -1635,6 +1635,21 @@ class Note(TimestampMixin, Base):
     agent_session_id  = Column(String, nullable=True)
 
 
+class WearableVisionLog(TimestampMixin, Base):
+    """Text-only history of glasses Look-and-Ask (vision) exchanges.
+
+    The image itself is never persisted (retention policy: transient) — only
+    the question and the model's answer, owner-scoped, so the companion app can
+    show a Look-and-Ask history. Auto-created at startup like every model.
+    """
+    __tablename__ = "wearable_vision_log"
+
+    id       = Column(String, primary_key=True, index=True)
+    owner    = Column(String, nullable=True, index=True)
+    question = Column(String, nullable=True)
+    answer   = Column(Text, nullable=True)
+
+
 class CalendarCal(TimestampMixin, Base):
     """A calendar (e.g. 'Personal', 'TimeTree')."""
     __tablename__ = "calendars"

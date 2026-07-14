@@ -27,6 +27,7 @@ ALLOWED_SCOPES = {
     "memory:write",
     "cookbook:read",
     "cookbook:launch",
+    "wearables",
 }
 TOKEN_PROFILES = {
     "chat": ["chat"],
@@ -69,6 +70,13 @@ def _normalize_scopes(scopes: str | list[str] | None = None, profile: str | None
     ensure_before("memory:write", "memory:read")
     ensure_before("email:draft", "email:read")
     ensure_before("cookbook:launch", "cookbook:read")
+
+    # The wearables scope is confined to /api/wearables/ by the auth middleware
+    # (it's a device credential, not a general one). Mixing it with any other
+    # scope would defeat that confinement, so refuse to mint such a token.
+    if "wearables" in normalized and len(normalized) > 1:
+        raise HTTPException(
+            400, "The 'wearables' scope cannot be combined with other scopes")
 
     return normalized or [DEFAULT_SCOPES]
 

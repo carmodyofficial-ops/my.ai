@@ -5,14 +5,14 @@ Purpose: Give the local AI durable awareness of what this system is, how it is d
 Core identity:
 - Product name: my.ai, previously Your.AI/Odysseus.
 - Local-first private AI system.
-- Runs from `/home/vc_wrkstn/odysseus`.
+- Runs from `/home/youruser/odysseus`.
 - Uses Docker Compose for the app stack.
 - Uses local model routing and local/private intelligence packs.
 - LAN access is allowed only for trusted local Wi-Fi users with valid credentials.
 
 Architecture anchors:
-- App repo: `/home/vc_wrkstn/odysseus`
-- Local coding harness: `/home/vc_wrkstn/local-agent-harness`
+- App repo: `/home/youruser/odysseus`
+- Local coding harness: `/home/youruser/local-agent-harness`
 - ProjectForge coding reports: `data/projectforge_sme/coding/reports`
 - Primary app service: `odysseus`
 - Supporting services: `chromadb`, `searxng`

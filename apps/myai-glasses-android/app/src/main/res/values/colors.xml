@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- my.ai background (bg token). Used as the window/status/nav background so
+         there is no white flash before Compose draws its dark theme. -->
+    <color name="myai_bg">#282C34</color>
+    <!-- Black launcher-icon background; the cyan glasses foreground sits on it. -->
+    <color name="ic_launcher_bg">#000000</color>
+</resources>

@@ -2,7 +2,7 @@
 
 import os
 
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 
 DEFAULT_CHAT_UPLOAD_MAX_BYTES = 10 * 1024 * 1024
 CHAT_UPLOAD_MAX_BYTES_ENV = "ODYSSEUS_CHAT_UPLOAD_MAX_BYTES"
@@ -59,6 +59,9 @@ STT_MAX_AUDIO_BYTES = read_byte_limit_env(
 ICS_MAX_BYTES = read_byte_limit_env(
     "ODYSSEUS_ICS_MAX_BYTES", 10 * 1024 * 1024
 )
+WEARABLES_IMAGE_MAX_BYTES = read_byte_limit_env(
+    "ODYSSEUS_WEARABLES_IMAGE_MAX_BYTES", 10 * 1024 * 1024
+)
 
 
 async def read_upload_limited(upload: UploadFile, limit: int, label: str = "Upload") -> bytes:
@@ -70,3 +73,26 @@ async def read_upload_limited(upload: UploadFile, limit: int, label: str = "Uplo
             detail=f"{label} exceeds {format_byte_limit(limit)} limit",
         )
     return data
+
+
+def enforce_content_length(request: Request, limit: int, label: str = "Upload") -> None:
+    """Reject an over-limit request by its declared Content-Length, BEFORE the
+    body is consumed. read_upload_limited caps what reaches memory, but the
+    multipart body has already been received and spooled (to disk past 1 MB) by
+    the time the handler runs — so a large upload still costs a full transfer +
+    disk write. This header check rejects the common oversize case up front. A
+    ~1 KB slack covers the multipart envelope overhead around the raw file.
+    Content-Length can be absent (chunked) or spoofed; read_upload_limited
+    remains the actual enforcement, this is the cheap early-out."""
+    raw = request.headers.get("content-length")
+    if not raw:
+        return
+    try:
+        declared = int(raw)
+    except ValueError:
+        return
+    if declared > limit + 1024:
+        raise HTTPException(
+            status_code=413,
+            detail=f"{label} exceeds {format_byte_limit(limit)} limit",
+        )

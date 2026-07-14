@@ -1,5 +1,9 @@
 venv/
 .venv/
+# The Android companion app (glasses) is built with Gradle, not shipped in the
+# Python server image. Excluding it keeps ~558MB (APKs + gradle caches) out of
+# the build context and off the image.
+apps/
 node_modules/
 services/node_modules/
 __pycache__/

@@ -170,6 +170,10 @@ _TIMEOUT_EXEMPT_PREFIXES = (
     "/api/upload",          # large files
     "/api/image",           # diffusion proxies (inpaint/harmonize/upscale/etc.) — own 120s httpx timeout
     "/api/memory/audit",    # retains own 120s LLM inactivity timeout
+    "/api/wearables/v1/respond",    # SSE conversation stream
+    "/api/wearables/v1/transcribe", # whisper cold-load can exceed 45s
+    "/api/wearables/v1/speech",     # TTS engine cold-load
+    "/api/wearables/v1/vision",     # vision model generation
 )
 
 
@@ -212,6 +216,23 @@ if AUTH_ENABLED:
         "/api/health",
         "/api/version",
         "/login",
+        # Wearables enrollment: the phone has no credential yet. The handler
+        # itself requires a single-use, short-TTL pairing code minted by an
+        # admin and is per-IP rate-limited (routes/wearables_routes.py).
+        "/api/wearables/v1/pair",
+        # LAN discover + approve enrollment. /discover is a read-only identity
+        # beacon (no secrets); /enroll/request creates a PENDING request an admin
+        # must approve (no credential issued without approval). Both rate-limited.
+        # The token poll is a dynamic path exempted via the compiled patterns below.
+        "/api/wearables/v1/discover",
+        "/api/wearables/v1/enroll/request",
+        # Static pairing helper page; holds no data. Its mint call (POST
+        # /api/wearables/v1/pairings) still requires the admin session, and
+        # the page itself explains the login step when that returns 401.
+        "/pair-glasses",
+        # The companion app itself — a fresh phone needs it before it can
+        # have any credential. Debug-signed build, no secrets baked in.
+        "/pair-glasses/app.apk",
     }
     AUTH_EXEMPT_PREFIXES = ["/static"]
     # Dynamic paths whose own handler proves identity via a path-embedded
@@ -225,6 +246,11 @@ if AUTH_ENABLED:
     import re as _re
     AUTH_EXEMPT_PATTERNS = [
         _re.compile(r"^/api/tasks/[^/]+/webhook/[^/]+/?$"),
+        # Wearables enrollment poll: the path-embedded request_id is a
+        # high-entropy secret the handler validates itself (unknown → pending),
+        # and it only ever yields a token the admin already approved. The
+        # approve/deny/pending endpoints are NOT here — they require admin auth.
+        _re.compile(r"^/api/wearables/v1/enroll/status/[^/]+/?$"),
     ]
 
     def _is_auth_exempt(path: str) -> bool:
@@ -242,6 +268,24 @@ if AUTH_ENABLED:
     _token_cache: dict = {}
     _token_cache_lock = _asyncio.Lock()
     _token_cache_dirty = True
+
+    # Scopes that must not roam past their own API surface, mapped to the path
+    # prefix they ARE allowed to reach. A device/gateway credential is confined
+    # here so a leaked token can't ride the admin owner into the general API.
+    _CONFINED_SCOPE_PREFIXES = {"wearables": "/api/wearables/"}
+
+    def _confined_scope_prefix(scopes):
+        """If EVERY scope on the token is confined, return the single prefix it
+        may reach; None means the token is general-purpose (unchanged behavior).
+        A token carrying a confined scope alongside a general one is treated as
+        general — mixing is a minting choice, and we don't want to silently
+        widen a confined credential, so minting a mixed token is blocked at
+        creation (see api_token_routes)."""
+        norm = {str(s).strip() for s in (scopes or [])}
+        confined = {s for s in norm if s in _CONFINED_SCOPE_PREFIXES}
+        if confined and confined == norm and len(confined) == 1:
+            return _CONFINED_SCOPE_PREFIXES[next(iter(confined))]
+        return None
 
     def _token_cache_invalidate():
         nonlocal_dict = app.state.__dict__
@@ -396,6 +440,20 @@ if AUTH_ENABLED:
                         request.state.api_token_id = matched_id
                         request.state.api_token_owner = matched_owner
                         request.state.api_token_scopes = matched_scopes
+                        # Confine device-only scopes to their own surface. A
+                        # wearables token is admin-OWNED (the enrolling admin),
+                        # so once past auth it would otherwise inherit admin
+                        # reach: POST /session then /api/chat_stream mode=agent
+                        # allow_bash=true == host RCE from a lost phone. The
+                        # per-route require_wearables gate did nothing for routes
+                        # that never call it. This is the global backstop: a
+                        # token whose scopes are confined may touch ONLY its
+                        # prefix (+ the already-returned auth-exempt paths).
+                        confined = _confined_scope_prefix(matched_scopes)
+                        if confined is not None and not path.startswith(confined):
+                            return JSONResponse(
+                                status_code=403,
+                                content={"error": "API token scope does not permit this endpoint"})
                         return await call_next(request)
                 except Exception:
                     logger.warning("API token auth error", exc_info=False)
@@ -791,6 +849,11 @@ app.include_router(setup_contacts_routes())
 from companion import setup_companion_routes
 app.include_router(setup_companion_routes())
 
+# Wearables gateway (glasses companion app) — narrow authenticated surface
+# over STT/TTS/agent-loop; see docs/wearables/.
+from routes.wearables_routes import setup_wearables_routes
+app.include_router(setup_wearables_routes(stt_service, tts_service))
+
 # ========= ROUTES (kept in app.py) =========
 
 def _serve_html_with_nonce(request: Request, file_path: str) -> HTMLResponse:
@@ -851,6 +914,37 @@ async def serve_library(request: Request):
 async def serve_backgrounds(request: Request):
     """Sandbox page for prototyping background effects. No auth required."""
     return _serve_html_with_nonce(request, abs_join(BASE_DIR, "static/backgrounds.html"))
+
+@app.get("/pair-glasses")
+async def serve_pair_glasses(request: Request):
+    """Phone-friendly wearables pairing page: mints via the (admin-gated)
+    pairings API and deep-links the payload into the Glasses companion app."""
+    with open(abs_join(BASE_DIR, "static/pair-glasses.html"), encoding="utf-8") as f:
+        html = f.read()
+    html = html.replace("{{CSP_NONCE}}", getattr(request.state, "csp_nonce", ""))
+    # The served APK's version, written beside the APK at publish time, so the
+    # "current: vX" note never drifts from what /pair-glasses/app.apk actually is.
+    ver = "?"
+    try:
+        with open(abs_join(BASE_DIR, "data/wearables/version.txt"), encoding="utf-8") as vf:
+            ver = vf.read().strip() or "?"
+    except OSError:
+        pass
+    html = html.replace("{{APK_VERSION}}", ver)
+    return HTMLResponse(html)
+
+@app.get("/pair-glasses/app.apk")
+async def serve_glasses_apk():
+    """The companion APK, served from the same origin as pairing so the whole
+    install→pair flow needs only the my.ai host (no side channel). The debug
+    APK is not a secret; SHA-256 is available beside it for verification."""
+    # data/ (not apps/) because that's the volume the container actually
+    # mounts; the build recipe copies the APK here when publishing.
+    apk = abs_join(BASE_DIR, "data/wearables/myai-glasses.apk")
+    if not os.path.exists(apk):
+        return JSONResponse({"detail": "companion APK not published on this host"}, status_code=404)
+    return FileResponse(apk, media_type="application/vnd.android.package-archive",
+                        filename="myai-glasses.apk")
 
 @app.get("/login")
 async def serve_login(request: Request):

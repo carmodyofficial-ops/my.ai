@@ -5,6 +5,7 @@ import io
 import wave
 import logging
 import hashlib
+import threading
 import httpx
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -235,6 +236,11 @@ class _KokoroPipeline:
         self.pipeline = None
         self.available = False
         self.device = None
+        # The Kokoro pipeline is not proven thread-safe (the sidecar serializes
+        # it for the same reason). /speech runs synthesize via asyncio.to_thread,
+        # so concurrent requests would otherwise call one pipeline from multiple
+        # threadpool threads at once → corrupted audio or a crash.
+        self._synth_lock = threading.Lock()
         self._init()
 
     def _init(self):
@@ -242,17 +248,21 @@ class _KokoroPipeline:
             import torch
             from kokoro import KPipeline
 
-            if not torch.cuda.is_available():
-                logger.warning("CUDA not available for Kokoro TTS")
-                return
-
-            self.device = torch.device("cuda:0")
-            with torch.cuda.device(0):
-                self.pipeline = KPipeline(lang_code="a")
-                if hasattr(self.pipeline, "model"):
-                    self.pipeline.model = self.pipeline.model.to(self.device)
+            if torch.cuda.is_available():
+                self.device = torch.device("cuda:0")
+                with torch.cuda.device(0):
+                    self.pipeline = KPipeline(lang_code="a")
+                    if hasattr(self.pipeline, "model"):
+                        self.pipeline.model = self.pipeline.model.to(self.device)
+            else:
+                # CPU fallback: Kokoro-82M is small enough for near-real-time
+                # synthesis on a modern CPU. The container has no GPU
+                # passthrough, so without this the local provider could never
+                # activate there.
+                self.device = torch.device("cpu")
+                self.pipeline = KPipeline(lang_code="a", device="cpu")
             self.available = True
-            logger.info("Kokoro-82M TTS pipeline loaded")
+            logger.info(f"Kokoro-82M TTS pipeline loaded on {self.device}")
         except ImportError as e:
             logger.warning(f"Kokoro TTS not available: {e}")
             logger.warning("Install with: pip install kokoro soundfile")
@@ -263,10 +273,14 @@ class _KokoroPipeline:
         if not self.available:
             return None
         try:
+            import contextlib
+
             import torch
             import numpy as np
 
-            with torch.cuda.device(self.device):
+            ctx = (torch.cuda.device(self.device) if self.device is not None
+                   and self.device.type == "cuda" else contextlib.nullcontext())
+            with self._synth_lock, ctx:
                 chunks = []
                 for _, _, audio in self.pipeline(text, voice=voice):
                     chunks.append(audio)

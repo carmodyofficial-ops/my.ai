@@ -4,7 +4,7 @@ Updated: 2026-06-22T01:00:24.487450+00:00
 
 ## Identity
 
-The system is my.ai/Odysseus: a local-first AI application running from `/home/vc_wrkstn/odysseus`.
+The system is my.ai/Odysseus: a local-first AI application running from `/home/youruser/odysseus`.
 
 The product was previously branded Your.AI and is being changed to my.ai with a light grey/neutral theme.
 
@@ -12,7 +12,7 @@ The product was previously branded Your.AI and is being changed to my.ai with a 
 
 Important runtime pieces:
 
-- Main repo: `/home/vc_wrkstn/odysseus`
+- Main repo: `/home/youruser/odysseus`
 - Docker compose base: `docker-compose.yml`
 - Intelligence override: `docker-compose.k1j-intelligence.override.yml`
 - Main app container: `odysseus-odysseus-1`
@@ -58,7 +58,7 @@ Safe coding artifacts include:
 - Patch hygiene validation.
 - Controlled live patch apply.
 - Reports under `data/projectforge_sme/coding/reports`.
-- Safe mirror under `/home/vc_wrkstn/local-agent-harness/swe_style/repos/odysseus_safe_ui_mirror_repo`.
+- Safe mirror under `/home/youruser/local-agent-harness/swe_style/repos/odysseus_safe_ui_mirror_repo`.
 
 ## Security posture
 

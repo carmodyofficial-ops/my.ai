@@ -2246,6 +2246,8 @@ async def stream_agent_loop(
     disabled_tools: Optional[Set[str]] = None,
     owner: Optional[str] = None,
     relevant_tools: Optional[Set[str]] = None,
+    tool_allowlist: Optional[Set[str]] = None,
+    redact_user_text: bool = False,
     fallbacks: Optional[List[tuple]] = None,
     plan_mode: bool = False,
     approved_plan: Optional[str] = None,
@@ -2289,8 +2291,23 @@ async def stream_agent_loop(
         # filtered to read-only tools below (after the disabled map is loaded).
         disabled_tools.update(plan_mode_disabled_tools())
 
+    # Hard tool allowlist (device/field channels: wearables, WhatsApp). A CAP,
+    # not a hint: no downstream widening — spoken-word domain seeding, admin-
+    # intent detection, skill requires_toolsets, MCP — may add a tool outside
+    # it. The advertised "read-only toolset" was only a *hint* (relevant_tools)
+    # plus a partial deny-set; intent-widening added send_email / manage_settings
+    # / manage_tokens back, turning a voice channel into a remote actuator.
+    _tool_allowlist = None
+    if tool_allowlist is not None:
+        _tool_allowlist = {str(t).strip() for t in tool_allowlist}
+        # A device channel does not reach arbitrary MCP servers, and skipping
+        # MCP indexing also avoids widening the schema list underneath the cap.
+        mcp_mgr = None
+
     _t0 = time.time()
-    _needs_admin = _detect_admin_intent(messages)
+    # Admin-intent widening (manage_settings/tokens/webhooks/…) is exactly what
+    # the cap exists to prevent; never let a spoken keyword arm it.
+    _needs_admin = False if _tool_allowlist is not None else _detect_admin_intent(messages)
     _last_user = _extract_last_user_message(messages)
 
     # Sandbox-build mode lets a headless, admin-initiated coder run with execution
@@ -2367,13 +2384,16 @@ async def stream_agent_loop(
     # Tool retrieval uses the latest message by default. It may inherit recent
     # user turns only for explicit continuations ("yes", "do it", "1").
     _retrieval_query = str(_intent.get("retrieval_query") or _last_user)
+    # redact_user_text: callers that promise "no transcript stored" (a wearables
+    # session with store_transcript=false) must not have the user's words land in
+    # host logs either. Log lengths, not content, in that mode.
     logger.info(
-        "[agent-intent] latest=%r continuation=%s low_signal=%s domains=%s retrieval_query=%r",
-        _last_user[:120],
+        "[agent-intent] latest=%s continuation=%s low_signal=%s domains=%s retrieval_query=%s",
+        (f"<{len(_last_user)} chars redacted>" if redact_user_text else repr(_last_user[:120])),
         bool(_intent.get("continuation")),
         bool(_intent.get("low_signal")),
         sorted(_intent.get("domains") or []),
-        _retrieval_query[:200],
+        (f"<{len(_retrieval_query)} chars redacted>" if redact_user_text else repr(_retrieval_query[:200])),
     )
     _mcp_disabled_map = _load_mcp_disabled_map() if mcp_mgr else {}
     if plan_mode and mcp_mgr:
@@ -2519,6 +2539,22 @@ async def stream_agent_loop(
                         )
         except Exception as _e:
             logger.debug(f"[tool-rag] skill-aware tool include skipped: {_e}")
+
+    # HARD CAP. Applied AFTER every widening path (RAG, keyword, domain seeding,
+    # skills, active-document). Two layers: (1) shrink the schema list the model
+    # sees to the allowlist, and (2) add everything outside it to disabled_tools
+    # so tool_execution refuses it even if a schema leaks in by another route
+    # (MCP name, admin schema, a skill's requires_toolsets). ask_user/update_plan
+    # are the irreducible loop primitives and are always permitted.
+    if _tool_allowlist is not None:
+        _allow = set(_tool_allowlist) | {"ask_user", "update_plan"}
+        _relevant_tools = (set(_relevant_tools) & _allow) if _relevant_tools else set(_allow)
+        try:
+            from src.tool_policy import known_tool_names
+            disabled_tools |= (known_tool_names() - _allow)
+        except Exception as _e:
+            logger.warning("[tool-allowlist] could not enumerate tools to disable: %s", _e)
+        logger.info("[tool-allowlist] capped toolset to %s", sorted(_relevant_tools))
 
     if _relevant_tools is not None:
         logger.info("[agent-intent] selected_tools=%s", sorted(_relevant_tools)[:50])

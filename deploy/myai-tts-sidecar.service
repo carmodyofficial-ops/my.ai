@@ -1,0 +1,15 @@
+[Unit]
+Description=my.ai Kokoro TTS sidecar (loopback OpenAI-compatible /v1/audio/speech)
+After=network.target
+
+[Service]
+Type=simple
+# Bind the docker bridge IP so the odysseus container reaches the sidecar via
+# host.docker.internal (mirrors myai-ollama-bridge-proxy). Not LAN-routable.
+Environment=MYAI_TTS_BIND_HOST=172.17.0.1
+ExecStart=%h/myai-tts/venv/bin/python /home/youruser/odysseus/scripts/wearables/tts_sidecar.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

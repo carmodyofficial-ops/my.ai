@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- The always-on control service owns a MediaSession to catch the glasses'
+         Bluetooth media-button taps (the triple-tap talk gesture). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Only to SHOW the listening notification on API 33+. The mic service runs
+         either way, so this is requested separately and never gates the app. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Required by the Meta DAT SDK (glasses camera); also used for QR scan. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- LAN-only backend: cleartext is allowed ONLY for user-confirmed RFC1918
+         hosts via network_security_config; everything else requires TLS. -->
+    <application
+        android:allowBackup="false"
+        android:label="my.ai Glasses"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:theme="@style/Theme.MyAiGlasses">
+
+        <!-- Meta DAT app identity — injected at build time from git-ignored
+             local.properties (empty in mock builds; the metaSdk build fails
+             fast when unset). See docs/wearables/INSTALL_ANDROID.md. -->
+        <meta-data android:name="com.meta.wearable.mwdat.APPLICATION_ID"
+            android:value="${metaAppId}" />
+        <meta-data android:name="com.meta.wearable.mwdat.CLIENT_TOKEN"
+            android:value="${metaClientToken}" />
+
+        <!-- singleTop: a myai-glasses:// link while the app is open must land
+             in onNewIntent, not spawn a second activity. -->
+        <activity android:name=".MainActivity" android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- DAT registration callback: the Meta AI app bounces back here
+                 via the custom scheme after app registration (same pattern as
+                 Meta's CameraAccess sample). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="myai-glasses" />
+            </intent-filter>
+        </activity>
+
+        <!-- Keeps the process foreground while the mic is open: Android 12+
+             mutes the mic and drops the Bluetooth SCO route for backgrounded
+             apps, which the glasses report as a disconnect tone. -->
+        <service android:name=".audio.MicForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- Always-on while paired: owns a MediaSession to capture the glasses'
+             media-button events — a long hold triggers talk to my.ai, a single
+             tap toggles the user's music. -->
+        <service android:name=".audio.GlassesControlService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Unlocks MediaSessionManager so a single glasses tap can play/pause
+             the user's music. Reads no notifications; user grants access once in
+             Settings → Notification access. -->
+        <service android:name=".audio.MyAiMediaListener"
+            android:exported="false"
+            android:label="my.ai Glasses"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

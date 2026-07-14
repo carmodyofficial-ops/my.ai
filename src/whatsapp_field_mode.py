@@ -241,6 +241,9 @@ async def _answer_prompt(prompt: str, cfg: Optional[dict] = None) -> str:
             endpoint_url, model, messages,
             headers=headers or {}, owner="admin",
             relevant_tools=set(WHATSAPP_READONLY_TOOLS),
+            # Hard cap — the deny-set alone let intent-widening add mutating
+            # tools back for an admin owner (same root cause as wearables).
+            tool_allowlist=set(WHATSAPP_READONLY_TOOLS),
             disabled_tools=set(WHATSAPP_DISABLED_TOOLS),
             max_rounds=MAX_ROUNDS,
         ):

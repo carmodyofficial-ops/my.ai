@@ -1,0 +1,170 @@
+openapi: 3.0.3
+info:
+  title: my.ai Wearables Gateway
+  version: "1.0"
+  description: >
+    Narrow, authenticated surface for glasses companion apps. All routes
+    except POST /pair require a session cookie or a Bearer ody_ token carrying
+    the "wearables" scope. Errors use {"detail":{"code","message"}} with
+    stable codes: PAIRING_CODE_INVALID, AUTHENTICATION_REQUIRED,
+    FORBIDDEN_SCOPE, BAD_REQUEST, PAYLOAD_TOO_LARGE, RATE_LIMITED,
+    SESSION_NOT_FOUND, STT_UNAVAILABLE, STT_FAILED, TTS_UNAVAILABLE,
+    TTS_FAILED, LLM_UNAVAILABLE, VISION_MODEL_NOT_CONFIGURED, VISION_FAILED,
+    SESSION_CANCELLED.
+servers:
+  - url: /api/wearables/v1
+security:
+  - bearerToken: []
+components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: ody_ API token with scope "wearables"
+  schemas:
+    Error:
+      type: object
+      properties:
+        detail:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+paths:
+  /health:
+    get:
+      summary: Auth-validated liveness
+      responses:
+        "200":
+          description: ok, service, api_version, auth (token|session), owner
+        "401": { description: not authenticated }
+  /capabilities:
+    get:
+      summary: Live component availability (stt, tts, llm, vision, memory, tools, limits)
+      responses:
+        "200": { description: capability document — never guess client-side }
+  /pairings:
+    post:
+      summary: Mint a one-time pairing code (ADMIN cookie only, CSRF-safe POST)
+      responses:
+        "200":
+          description: "{code, expires_in:300, host, hosts, port, payload, qr}"
+  /pair:
+    post:
+      summary: Exchange a pairing code for a device credential (AUTH-EXEMPT, 5/min/IP)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, description: "wpair_… single-use, 5-min TTL" }
+                device_name: { type: string, maxLength: 60 }
+      responses:
+        "200":
+          description: "{token (shown ONCE), token_id, owner, scope, api_base}"
+        "401": { description: PAIRING_CODE_INVALID }
+        "429": { description: RATE_LIMITED }
+  /devices:
+    get:
+      summary: List wearable device credentials (ADMIN)
+      responses:
+        "200": { description: "{devices:[{token_id,owner,name,active,created_at,last_used_at}]}" }
+  /devices/{token_id}:
+    delete:
+      summary: Revoke a device credential (ADMIN)
+      parameters:
+        - { name: token_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "{ok,token_id,active:false}" }
+        "404": { description: unknown / not a wearables credential }
+  /respond:
+    post:
+      summary: Text conversation turn → SSE stream (30/min/owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 4000 }
+                session_id: { type: string, description: "reuse for follow-ups; omitted → new" }
+                store_transcript: { type: boolean, default: true, description: "false = no rolling context kept" }
+      responses:
+        "200":
+          description: >
+            text/event-stream. Frames: {"type":"wearables_meta",session_id,
+            model,request_id} → passthrough agent frames ({"delta":…,
+            optional "thinking":true}, tool events) → {"type":"spoken",text,
+            truncated} (thinking excluded, markdown stripped, ≤~1100 chars) →
+            {"type":"done"} → "[DONE]". On cancel: {"type":"cancelled",
+            code:SESSION_CANCELLED} replaces spoken. Errors mid-stream arrive
+            as "event: error" frames; the stream always terminates with [DONE].
+        "503": { description: LLM_UNAVAILABLE }
+  /session/{session_id}/cancel:
+    post:
+      summary: Cancel the active stream for a session (owner-scoped)
+      parameters:
+        - { name: session_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "{ok,cancelled,session_id}" }
+        "404": { description: SESSION_NOT_FOUND (or not yours) }
+  /session/{session_id}:
+    delete:
+      summary: Delete a session and its in-memory context (owner-scoped)
+      parameters:
+        - { name: session_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "{ok,deleted}" }
+        "404": { description: SESSION_NOT_FOUND }
+  /transcribe:
+    post:
+      summary: Audio → text via local STT (20/min/owner, ≤25 MiB)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200": { description: "{text, empty, request_id}" }
+        "503": { description: STT_UNAVAILABLE }
+        "413": { description: over byte cap }
+  /speech:
+    post:
+      summary: Text → audio via local TTS (20/min/owner)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 2000 }
+                transform: { type: boolean, default: true, description: "apply spoken transform first" }
+      responses:
+        "200":
+          description: audio/mpeg or audio/wav bytes; X-Request-Id header
+        "503": { description: TTS_UNAVAILABLE }
+  /vision/query:
+    post:
+      summary: Look and Ask — image + question → local vision model (20/min/owner, ≤10 MiB)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image: { type: string, format: binary, description: "JPEG/PNG/WebP" }
+                question: { type: string, maxLength: 500 }
+      responses:
+        "200": { description: "{text, spoken, truncated, model, request_id}; image held in memory only" }
+        "503": { description: VISION_MODEL_NOT_CONFIGURED }
+        "502": { description: VISION_FAILED }

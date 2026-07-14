@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release builds: TLS only (self-signed/local-CA host certs are supported
+     by installing the CA as a user cert — trust anchors include "user").
+     Debug builds: cleartext permitted so a development LAN host without TLS
+     can be used; the app UI still warns before saving a cleartext host.
+     NSC cannot whitelist IP subnets, so the split is by build type — the
+     honest v1 posture per docs/wearables/SECURITY_AND_PRIVACY.md. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+    <debug-overrides>
+        <base-config cleartextTrafficPermitted="true" />
+    </debug-overrides>
+</network-security-config>

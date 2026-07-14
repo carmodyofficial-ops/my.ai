@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark, action-bar-free base so the window matches the my.ai Compose theme
+         from the first frame (no white launch flash). Compose paints the rest. -->
+    <style name="Theme.MyAiGlasses" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/myai_bg</item>
+        <item name="android:statusBarColor">@color/myai_bg</item>
+        <item name="android:navigationBarColor">@color/myai_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

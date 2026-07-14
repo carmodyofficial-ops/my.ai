@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>my.ai — pair glasses companion</title>
+<style>
+  body{font-family:-apple-system,system-ui,sans-serif;max-width:560px;margin:0 auto;
+       padding:28px 20px;background:#16161a;color:#e8e8e8;line-height:1.5}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:#8a8a96;font-size:14px;margin-bottom:24px}
+  .card{background:#1f1f25;border:1px solid #2c2c35;border-radius:14px;
+        padding:18px;margin-bottom:14px}
+  a.btn,button.btn{display:block;width:100%;text-align:center;background:#7c9cff;
+        color:#0e0e12;text-decoration:none;border:0;border-radius:10px;padding:13px;
+        font-weight:600;font-size:15px;cursor:pointer;box-sizing:border-box}
+  .btn.alt{background:#2c2c35;color:#e8e8e8;margin-top:10px}
+  .qrbox{background:#fff;border-radius:14px;padding:14px;text-align:center;
+         margin:14px 0;display:none}
+  .qrbox img{max-width:100%}
+  textarea{width:100%;height:96px;background:#0e0e12;color:#e8e8e8;
+           border:1px solid #2c2c35;border-radius:10px;padding:10px;font-size:12px;
+           box-sizing:border-box;margin-top:10px;display:none}
+  #status{font-size:14px;color:#9ba7d0;margin-top:12px;min-height:20px}
+  #err{color:#ff8a8a}
+</style>
+</head>
+<body>
+<h1>Pair the Glasses companion</h1>
+<p class="sub">Install the app, tap <b>Find my.ai host on Wi-Fi</b> in it, then
+approve the device here — no code to copy.</p>
+
+<div class="card">
+  <h2 style="font-size:16px;margin:0 0 6px">1 · Install the app</h2>
+  <p style="margin:0 0 12px;color:#bdbdc7;font-size:14px">Skip if already
+  installed and up to date (current: v{{APK_VERSION}}).</p>
+  <a class="btn alt" style="margin:0" href="/pair-glasses/app.apk">Download
+  my.ai Glasses (APK)</a>
+</div>
+
+<div class="card">
+  <h2 style="font-size:16px;margin:0 0 6px">2 · Approve this device</h2>
+  <p class="sub" style="margin:0 0 8px">In the app, tap <b>Find my.ai host on
+    Wi-Fi</b> and select this host. It appears below with a code — check the code
+    matches the one on the phone, then approve.</p>
+  <div id="pending"><div class="sub">No devices waiting… open the app and tap
+    “Find my.ai host on Wi-Fi.”</div></div>
+  <div id="perr"></div>
+</div>
+
+<script nonce="{{CSP_NONCE}}">
+const $ = id => document.getElementById(id);
+
+// --- LAN discover + approve: poll for devices awaiting approval ---------------
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => (
+    {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+async function act(url, id) {
+  try {
+    const r = await fetch(url, {method: "POST"});
+    if (!r.ok) { $("perr").textContent = "Action failed (HTTP " + r.status + ")"; }
+  } catch (e) { $("perr").textContent = "Network error."; }
+  refreshPending();
+}
+async function refreshPending() {
+  let resp;
+  try { resp = await fetch("/api/wearables/v1/enroll/pending"); }
+  catch (e) { return; }               // transient; try again next tick
+  if (resp.status === 401 || resp.status === 403) {
+    $("pending").innerHTML = '<div class="sub">Admin session required — ' +
+      '<a style="color:#7c9cff" href="/login">log in</a> to approve devices.</div>';
+    return;
+  }
+  if (!resp.ok) return;
+  const { pending } = await resp.json();
+  $("perr").textContent = "";
+  if (!pending || !pending.length) {
+    $("pending").innerHTML = '<div class="sub">No devices waiting…</div>'; return;
+  }
+  $("pending").innerHTML = pending.map(p => (
+    '<div style="border:1px solid #333;border-radius:8px;padding:10px;margin:6px 0">' +
+      '<div><b>' + esc(p.device_name) + '</b> <span class="sub">(' + esc(p.ip) + ')</span></div>' +
+      '<div style="font-size:22px;letter-spacing:3px;margin:4px 0">code ' + esc(p.verify_code) + '</div>' +
+      '<div class="sub" style="margin-bottom:6px">Confirm this matches the code on the phone.</div>' +
+      '<button class="btn" data-approve="' + esc(p.approval_id) + '" style="margin:0 6px 0 0">Approve</button>' +
+      '<button class="btn alt" data-deny="' + esc(p.approval_id) + '" style="margin:0">Deny</button>' +
+    '</div>'
+  )).join("");
+  $("pending").querySelectorAll("[data-approve]").forEach(b =>
+    b.addEventListener("click", () =>
+      act("/api/wearables/v1/enroll/" + encodeURIComponent(b.dataset.approve) + "/approve")));
+  $("pending").querySelectorAll("[data-deny]").forEach(b =>
+    b.addEventListener("click", () =>
+      act("/api/wearables/v1/enroll/" + encodeURIComponent(b.dataset.deny) + "/deny")));
+}
+refreshPending();
+setInterval(refreshPending, 3000);
+</script>
+</body>
+</html>

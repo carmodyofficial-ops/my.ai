@@ -5,7 +5,7 @@ import io
 import logging
 import httpx
 import tempfile
-from pathlib import Path
+import threading
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,10 @@ class STTService:
 
     def __init__(self):
         self._whisper_model = None  # lazy-init
+        # faster-whisper's WhisperModel.transcribe is not safe to call
+        # concurrently from multiple threads; /transcribe runs it via
+        # asyncio.to_thread, so serialize access to the shared model.
+        self._transcribe_lock = threading.Lock()
 
     # ── Settings ──
 
@@ -93,26 +97,30 @@ class STTService:
             return None
         tmp_path = None
         try:
-            # Write to temp file (faster-whisper needs a file path or file-like)
-            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+            # faster-whisper needs a filesystem path. delete=True so the raw
+            # voice audio never OUTLIVES this call: the privacy policy says
+            # audio is transient and never persisted, and a delete=False temp
+            # file left the user's speech on disk if the process was killed
+            # between write and the finally-unlink (a live footgun given the
+            # documented pkill/uvicorn restart pattern).
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
                 tmp.write(audio_bytes)
+                tmp.flush()
                 tmp_path = tmp.name
 
-            kwargs = {}
-            if language:
-                kwargs["language"] = language
+                kwargs = {}
+                if language:
+                    kwargs["language"] = language
 
-            segments, info = model.transcribe(tmp_path, **kwargs)
-            text = " ".join(seg.text.strip() for seg in segments)
+                with self._transcribe_lock:
+                    segments, info = model.transcribe(tmp_path, **kwargs)
+                    text = " ".join(seg.text.strip() for seg in segments)
 
-            logger.info(f"Local STT: {len(text)} chars, lang={info.language}, prob={info.language_probability:.2f}")
-            return text
+                logger.info(f"Local STT: {len(text)} chars, lang={info.language}, prob={info.language_probability:.2f}")
+                return text
         except Exception as e:
             logger.error(f"Local STT transcription failed: {e}", exc_info=True)
             return None
-        finally:
-            if tmp_path:
-                Path(tmp_path).unlink(missing_ok=True)
 
     # ── API endpoint ──
 
