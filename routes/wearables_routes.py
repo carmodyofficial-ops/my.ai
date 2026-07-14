@@ -529,6 +529,15 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
             raise gw_error(404, gw.BAD_REQUEST, "No such item")
         return {"ok": True, "id": item_id, "done": done}
 
+    @router.delete("/items/{item_id}")
+    async def item_delete(request: Request, item_id: str):
+        """Remove a note/task entirely (owner-scoped hard delete). 404 if there is
+        no such item for this owner."""
+        owner = require_wearables(request)
+        if not await asyncio.to_thread(prod.delete_item, owner, item_id):
+            raise gw_error(404, gw.BAD_REQUEST, "No such item")
+        return {"ok": True, "deleted": item_id}
+
     # ── History (chats + Look-and-Ask) ────────────────────────────────────
 
     @router.get("/history/chats")

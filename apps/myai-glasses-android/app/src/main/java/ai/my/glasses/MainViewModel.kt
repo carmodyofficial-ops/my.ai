@@ -573,16 +573,14 @@ class MainViewModel(
         }
     }
 
-    /** date: an ISO date "YYYY-MM-DD" (all-day) or null. Notes/tasks/events all
-     *  mirror onto the calendar → the owner's Google Calendar when connected. */
-    fun addNote(title: String, date: String?) {
+    fun addNote(title: String) {
         if (title.isBlank()) return
-        viewModelScope.launch { if (client.addNote(title.trim(), "", date)) refreshProductivity() }
+        viewModelScope.launch { if (client.addNote(title.trim(), "")) refreshProductivity() }
     }
 
-    fun addTask(text: String, date: String?) {
+    fun addTask(text: String) {
         if (text.isBlank()) return
-        viewModelScope.launch { if (client.addTask(text.trim(), date)) refreshProductivity() }
+        viewModelScope.launch { if (client.addTask(text.trim())) refreshProductivity() }
     }
 
     /** Check a note/task off (archives it on the host), then refresh. */
@@ -594,6 +592,15 @@ class MainViewModel(
             tasks = _ui.value.tasks.map {
                 if (it.id == id) it.copy(completed = !it.completed) else it })
         viewModelScope.launch { client.completeItem(id); refreshProductivity() }
+    }
+
+    /** Remove a note/task entirely, then refresh. Optimistic: drop it from the
+     *  visible list immediately so the tap feels instant. */
+    fun deleteItem(id: String) {
+        _ui.value = _ui.value.copy(
+            notes = _ui.value.notes.filterNot { it.id == id },
+            tasks = _ui.value.tasks.filterNot { it.id == id })
+        viewModelScope.launch { client.deleteItem(id); refreshProductivity() }
     }
 
     /** Privacy toggle. storeTranscript is already threaded into client.respond()

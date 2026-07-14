@@ -96,6 +96,25 @@ def test_cross_owner_and_missing_return_none(memdb):
     assert prod.complete_item("alice", "nope") is None   # missing
 
 
+def test_delete_item_removes_owned_row(memdb):
+    nid = _add(memdb, owner="alice", note_type="todo",
+               items=json.dumps([{"text": "x", "done": False}]))
+    assert prod.delete_item("alice", nid) is True
+    s = memdb()
+    assert s.query(db.Note).filter(db.Note.id == nid).first() is None   # gone
+    s.close()
+    assert prod.delete_item("alice", nid) is False       # already gone → no-op
+
+
+def test_delete_item_is_owner_scoped(memdb):
+    nid = _add(memdb, owner="alice", note_type="note", content="mine")
+    assert prod.delete_item("bob", nid) is False         # not bob's — refused
+    s = memdb()
+    assert s.query(db.Note).filter(db.Note.id == nid).first() is not None  # untouched
+    s.close()
+    assert prod.delete_item("alice", "missing") is False # missing → no-op
+
+
 def test_lists_hide_archived(memdb):
     _add(memdb, owner="alice", note_type="note", content="active")
     _add(memdb, owner="alice", note_type="note", content="hidden", archived=True)

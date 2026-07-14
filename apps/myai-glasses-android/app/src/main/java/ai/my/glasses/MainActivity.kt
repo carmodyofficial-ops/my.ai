@@ -33,11 +33,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -403,36 +400,22 @@ private data class ChecklistRow(
     val checkable: Boolean = true,
 )
 
-/** A home card: a checklist of items (tap the box to complete one) plus an
- *  inline quick-add with an optional date. Notes and tasks both live here. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** A home card: a checklist of items — tap the box to complete a task, tap ✕ to
+ *  remove any item — plus an inline quick-add. Notes and tasks both live here. */
 @Composable
 private fun ChecklistCard(
     title: String, items: List<ChecklistRow>, empty: String, hint: String,
     onCheck: (String) -> Unit,
-    onAdd: (text: String, date: String?) -> Unit,
+    onAdd: (text: String) -> Unit,
+    onDelete: (String) -> Unit,
     // Notes are reference text (no completion); tasks are checkable. Notes pass
     // false so no checkbox renders (completion for notes would collide with the
     // web app's Archive flag).
     showChecks: Boolean = true,
 ) {
     var draft by remember { mutableStateOf("") }
-    var dateMillis by remember { mutableStateOf<Long?>(null) }
-    var showPicker by remember { mutableStateOf(false) }
-
-    fun isoDate(ms: Long): String {
-        // UTC calendar date (YYYY-MM-DD) — a plain due date, timezone-free.
-        val d = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
-        d.timeInMillis = ms
-        return "%04d-%02d-%02d".format(
-            d.get(java.util.Calendar.YEAR),
-            d.get(java.util.Calendar.MONTH) + 1,
-            d.get(java.util.Calendar.DAY_OF_MONTH))
-    }
     val submit = {
-        if (draft.isNotBlank()) {
-            onAdd(draft, dateMillis?.let { isoDate(it) }); draft = ""; dateMillis = null
-        }
+        if (draft.isNotBlank()) { onAdd(draft); draft = "" }
     }
 
     Card(Modifier.fillMaxWidth()) {
@@ -463,43 +446,29 @@ private fun ChecklistCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
+                        // Remove this item entirely (hard delete on the host).
+                        TextButton(onClick = { onDelete(row.id) }) {
+                            Text("✕", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
             Spacer(Modifier.height(4.dp))
-            OutlinedTextField(
-                value = draft, onValueChange = { draft = it },
-                label = { Text(hint) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { submit() }),
-            )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OutlinedButton(onClick = { showPicker = true }, modifier = Modifier.weight(1f)) {
-                    Text(dateMillis?.let { isoDate(it) } ?: "Pick date")
-                }
+                OutlinedTextField(
+                    value = draft, onValueChange = { draft = it },
+                    label = { Text(hint) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                )
                 Button(enabled = draft.isNotBlank(), onClick = submit) { Text("Add") }
             }
         }
-    }
-
-    if (showPicker) {
-        val state = rememberDatePickerState()
-        DatePickerDialog(
-            onDismissRequest = { showPicker = false },
-            confirmButton = {
-                Button(onClick = { dateMillis = state.selectedDateMillis; showPicker = false }) {
-                    Text("OK")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { dateMillis = null; showPicker = false }) { Text("Clear") }
-            },
-        ) { DatePicker(state = state) }
     }
 }
 
@@ -827,6 +796,7 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
         hint = "Quick note",
         onCheck = {},                 // notes aren't completable
         onAdd = vm::addNote,
+        onDelete = vm::deleteItem,
         showChecks = false,
     )
     ChecklistCard(
@@ -842,6 +812,7 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
         hint = "Add a task",
         onCheck = vm::completeItem,
         onAdd = vm::addTask,
+        onDelete = vm::deleteItem,
     )
 
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

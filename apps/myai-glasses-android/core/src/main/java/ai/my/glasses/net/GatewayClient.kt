@@ -162,9 +162,8 @@ class GatewayClient(
         NoteItem(it.optString("id"), it.optString("title"), it.optString("snippet"))
     }
 
-    suspend fun addNote(title: String, content: String, date: String?): Boolean =
-        post("/notes", JSONObject().put("title", title).put("content", content)
-            .apply { date?.let { put("date", it) } })
+    suspend fun addNote(title: String, content: String): Boolean =
+        post("/notes", JSONObject().put("title", title).put("content", content))
 
     suspend fun tasks(): List<TaskItem> = getArray("/tasks", "tasks").map {
         TaskItem(it.optString("id"), it.optString("title"),
@@ -172,13 +171,20 @@ class GatewayClient(
             it.optInt("done"), it.optInt("total"), it.optBoolean("completed"))
     }
 
-    suspend fun addTask(text: String, date: String?): Boolean =
-        post("/tasks", JSONObject().put("text", text)
-            .apply { date?.let { put("due_date", it) } })
+    suspend fun addTask(text: String): Boolean =
+        post("/tasks", JSONObject().put("text", text))
 
     /** Toggle a note/task between completed and active — the host flips its done
      *  state and keeps it in the list (greyed while completed). */
     suspend fun completeItem(id: String): Boolean = post("/items/$id/done", JSONObject())
+
+    /** Remove a note/task entirely (owner-scoped hard delete on the host). */
+    suspend fun deleteItem(id: String): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            http().newCall(req("/items/$id").delete().build())
+                .execute().use { it.isSuccessful }
+        }.getOrDefault(false)
+    }
 
     suspend fun chatHistory(): List<ChatItem> = getArray("/history/chats", "chats").map {
         ChatItem(it.optString("id"), it.optString("name"), it.optInt("messages"))

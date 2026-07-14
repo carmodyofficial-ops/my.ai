@@ -178,6 +178,22 @@ def complete_item(owner: str, note_id: str) -> bool | None:
         return new_done
 
 
+def delete_item(owner: str, note_id: str) -> bool:
+    """Hard-delete a note/task this owner owns. Owner-scoped: a device can only
+    remove its OWN rows. Returns True if a row was deleted, False if there was no
+    such item for this owner. This removes the row entirely (from the web app too),
+    which is the intuitive "remove" — distinct from complete_item's done-toggle and
+    from the web's Archive/hide flag."""
+    from core.database import get_db_session, Note
+    with get_db_session() as db:
+        row = (db.query(Note)
+               .filter(Note.owner == owner, Note.id == note_id).first())
+        if row is None:
+            return False
+        db.delete(row)
+        return True
+
+
 # ── Chat history ───────────────────────────────────────────────────────────
 
 def list_chats(owner: str, limit: int = 20) -> list[dict]:
