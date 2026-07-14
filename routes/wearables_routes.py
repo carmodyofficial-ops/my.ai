@@ -115,6 +115,15 @@ VISION_DEFAULT_QUESTION = (
     "most important detail.")
 
 
+def _vision_keep_alive() -> str:
+    """How long Ollama keeps the vision model resident after a look/warm. Default
+    20m so it survives a normal session; set `wearables_vision_keep_alive` to "0"
+    to opt out (unload immediately — for a VRAM-tight host sharing the chat model)."""
+    from src import settings
+    val = settings.get_setting("wearables_vision_keep_alive", "20m")
+    return (str(val).strip() if val is not None else "") or "20m"
+
+
 def _vision_messages(mime: str, data: bytes, question: str):
     """Build the (question, chat-messages) pair for a Look-and-Ask. A blank question
     (plain tap) falls back to the specific-subject default. Shared by the one-shot
@@ -883,6 +892,8 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
             answer = await llm_call_async(
                 vision["chat_url"], vision["model"], messages, 0.2, 700,
                 headers={}, timeout=120,
+                # Refresh the warm window so back-to-back looks stay fast.
+                extra_payload={"keep_alive": _vision_keep_alive()},
             )
         except Exception as exc:
             logger.error(f"[wearables] vision failed req={request_id}: {exc}")
@@ -911,6 +922,22 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
             "model": vision["model"],
             "request_id": request_id,
         }
+
+    @router.post("/vision/warm")
+    async def vision_warm(request: Request):
+        """Preload + pin the vision model warm so the FIRST Look-and-Ask after idle
+        doesn't pay Ollama's cold-load. The app calls this (fire-and-forget) when
+        Look-and-Ask becomes available. Best-effort: always 200 with a `warmed`
+        flag — warming is an optimization, never a hard dependency for a look."""
+        owner = require_wearables(request)
+        if not _media_limiter.check(f"warm:{owner or _client_ip(request)}"):
+            # Warming is cheap when already loaded, but don't let it be spammed.
+            return {"warmed": False, "reason": "RATE_LIMITED"}
+        from services.wearables_gateway.capabilities import warm_vision_model
+        result = await warm_vision_model(_vision_keep_alive())
+        logger.info(f"[wearables] vision warm owner={owner} "
+                    f"warmed={result.get('warmed')} model={result.get('model')}")
+        return result
 
     @router.post("/vision/stream")
     async def vision_stream(request: Request,
@@ -958,7 +985,9 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
                 from src.llm_core import stream_llm
                 agen = stream_llm(vision["chat_url"], vision["model"], messages,
                                   temperature=0.2, max_tokens=700,
-                                  headers={}, timeout=120)
+                                  headers={}, timeout=120,
+                                  # Refresh the warm window (see /vision/warm).
+                                  extra_payload={"keep_alive": _vision_keep_alive()})
                 async for chunk in agen:
                     if isinstance(chunk, str) and chunk.startswith("event: error"):
                         # Curate upstream errors: raw frames can carry endpoint URLs

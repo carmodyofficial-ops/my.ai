@@ -527,13 +527,21 @@ class MainViewModel(
             val stt = caps.optJSONObject("stt")?.optBoolean("available") == true
             val tts = caps.optJSONObject("tts")?.optBoolean("available") == true
             val llm = caps.optJSONObject("llm")
+            val vision = caps.optJSONObject("vision")?.optBoolean("available") == true
+            // Rising edge only: preload the vision model ONCE when Look-and-Ask
+            // first becomes available (app open / recovery), not on every refresh —
+            // repeatedly reloading a 24-27B model would thrash VRAM with the chat
+            // model. Fire-and-forget so it never blocks the refresh; actual looks
+            // then keep the model warm via keep_alive.
+            if (vision && !_ui.value.visionAvailable) {
+                viewModelScope.launch { runCatching { client.warmVision() } }
+            }
             _ui.value = _ui.value.copy(
                 modelLabel = llm?.optString("model")?.ifBlank { "—" } ?: "—",
                 llmReady = llm?.optBoolean("available") == true,
                 sttAvailable = stt,
                 ttsAvailable = tts,
-                visionAvailable =
-                    caps.optJSONObject("vision")?.optBoolean("available") == true,
+                visionAvailable = vision,
                 voiceLabel = when {
                     stt && tts -> "listen + speak"
                     stt -> "listen only"

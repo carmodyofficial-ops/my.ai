@@ -288,6 +288,19 @@ class GatewayClient(
             }.getOrElse { VisionResult.Failure("MYAI_HOST_UNREACHABLE") }
         }
 
+    /** Preload the vision model so the first Look-and-Ask doesn't cold-load.
+     *  Best-effort + fire-and-forget: returns true if the host reports it warmed. */
+    suspend fun warmVision(): Boolean = withContext(Dispatchers.IO) {
+        runCatching {
+            http().newCall(req("/vision/warm")
+                .post(ByteArray(0).toRequestBody(null)).build())
+                .execute().use { resp ->
+                    resp.isSuccessful &&
+                        JSONObject(resp.body?.string() ?: "{}").optBoolean("warmed")
+                }
+        }.getOrDefault(false)
+    }
+
     /** Streaming Look-and-Ask: image (+ optional spoken question) → the SAME
      *  GatewayEvent stream as [respond], so TTS can start on the first spoken
      *  sentence instead of waiting for the whole answer. */

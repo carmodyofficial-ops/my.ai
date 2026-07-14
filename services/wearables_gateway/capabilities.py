@@ -96,6 +96,42 @@ def _detect_vision_model(root: str, chat_url: str) -> dict | None:
     return None
 
 
+async def warm_vision_model(keep_alive: str = "20m") -> dict:
+    """Preload the Look-and-Ask vision model into VRAM and pin it warm.
+
+    Uses Ollama's native ``/api/generate`` with an empty prompt — the documented
+    "load a model" call: it returns as soon as the model is resident (done_reason
+    "load") without generating, and ``keep_alive`` sets how long it stays loaded.
+    The app calls this when Look-and-Ask becomes available so the FIRST look
+    doesn't pay the cold-load; actual look requests then refresh the same window.
+    Best-effort — a failure just means the next look loads on demand as before.
+    ``keep_alive="0"`` is honored by Ollama as "unload immediately" (opt-out).
+    """
+    import asyncio
+
+    vision = await asyncio.to_thread(resolve_vision_model)
+    if not vision:
+        return {"warmed": False, "reason": "VISION_MODEL_NOT_CONFIGURED"}
+    root = _ollama_root()
+    try:
+        import httpx
+
+        # A generous timeout: a cold 24-27B load can take a while, and we want the
+        # request to stay in flight until Ollama finishes loading (a client
+        # disconnect can abort the load).
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            r = await client.post(
+                root + "/api/generate",
+                json={"model": vision["model"], "prompt": "",
+                      "stream": False, "keep_alive": keep_alive},
+            )
+            r.raise_for_status()
+        return {"warmed": True, "model": vision["model"], "keep_alive": keep_alive}
+    except Exception as e:
+        logger.warning(f"Vision warm failed: {e}")
+        return {"warmed": False, "model": vision["model"], "reason": "warm_failed"}
+
+
 def build_capabilities(stt_service, tts_service, owner: str | None) -> dict:
     """Honest, current component availability for one caller."""
     from src import settings

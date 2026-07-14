@@ -1535,8 +1535,14 @@ async def llm_call_async(
     max_retries: int = LLMConfig.MAX_RETRIES,
     prompt_type: Optional[str] = None,
     session_id: Optional[str] = None,
+    extra_payload: Optional[Dict] = None,
 ) -> str:
-    """Asynchronous LLM call using httpx with connection pooling, timeout, retry logic, and performance logging."""
+    """Asynchronous LLM call using httpx with connection pooling, timeout, retry logic, and performance logging.
+
+    ``extra_payload`` merges extra top-level request fields into the OpenAI-compat
+    body (e.g. Ollama's ``keep_alive`` to pin a model warm). Only applied on the
+    generic OpenAI-compatible path; ignored for native Ollama/Anthropic providers.
+    """
     provider = _detect_provider(url)
     messages_copy = _sanitize_llm_messages(messages)
 
@@ -1634,6 +1640,8 @@ async def llm_call_async(
         # Suppress thinking for qwen3/gemma4 on Ollama /v1 — same as stream_llm.
         if _is_ollama_openai_compat_url(url) and _supports_thinking(model):
             payload["think"] = False
+        if extra_payload:
+            payload.update(extra_payload)
         _apply_local_cache_affinity(payload, url, session_id)
 
     if _is_host_dead(target_url):
@@ -1692,7 +1700,8 @@ async def llm_call_async(
 async def stream_llm(url: str, model: str, messages: List[Dict], temperature: float = LLMConfig.DEFAULT_TEMPERATURE,
                      max_tokens: int = LLMConfig.DEFAULT_MAX_TOKENS, headers: Optional[Dict] = None,
                      timeout: int = LLMConfig.STREAM_TIMEOUT, prompt_type: Optional[str] = None,
-                     tools: Optional[List[Dict]] = None, session_id: Optional[str] = None):
+                     tools: Optional[List[Dict]] = None, session_id: Optional[str] = None,
+                     extra_payload: Optional[Dict] = None):
     """Stream LLM responses with improved error handling.
 
     Yields SSE chunks:
@@ -1757,6 +1766,8 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
         # <think> blocks. Ollama /v1 accepts "think": false as a top-level param.
         if _is_ollama_openai_compat_url(url) and _supports_thinking(model):
             payload["think"] = False
+        if extra_payload:
+            payload.update(extra_payload)
         _apply_local_cache_affinity(payload, url, session_id)
         h = _provider_headers(provider, headers)
         if provider == "copilot":

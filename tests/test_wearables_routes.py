@@ -581,7 +581,7 @@ async def test_vision_stream_grounds_and_streams(monkeypatch):
     captured = {}
 
     async def _fake_stream(url, model, messages, **kw):
-        captured.update(url=url, model=model, messages=messages)
+        captured.update(url=url, model=model, messages=messages, kw=kw)
         for d in ("That is a red ", "octagonal stop sign."):
             yield "data: " + json.dumps({"delta": d}) + "\n\n"
         yield "data: [DONE]\n\n"
@@ -609,6 +609,37 @@ async def test_vision_stream_grounds_and_streams(monkeypatch):
     assert next(c for c in user if c["type"] == "text")["text"] == "what does this sign say?"
     assert next(c for c in user if c["type"] == "image_url"
                 )["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    # A look refreshes the model's warm window (keep_alive passthrough).
+    assert captured["kw"].get("extra_payload", {}).get("keep_alive")
+
+
+async def test_vision_warm_preloads_model(monkeypatch):
+    """POST /vision/warm delegates to the capabilities preload and returns its
+    result verbatim (best-effort — never raises to the device)."""
+    import services.wearables_gateway.capabilities as C
+
+    async def _fake_warm(keep_alive="20m"):
+        return {"warmed": True, "model": "qwen3.6:27b", "keep_alive": keep_alive}
+
+    monkeypatch.setattr(C, "warm_vision_model", _fake_warm)
+    ep = _endpoints()[("POST", "/vision/warm")]
+    out = await ep(_device_req("alice"))
+    assert out == {"warmed": True, "model": "qwen3.6:27b", "keep_alive": "20m"}
+
+
+async def test_vision_warm_rate_limited_is_soft(monkeypatch):
+    """Warming is an optimization: a rate-limit returns a 200 soft flag, never an
+    error the app has to handle."""
+    monkeypatch.setattr(W, "_media_limiter", RateLimiter(1, 60))
+    import services.wearables_gateway.capabilities as C
+
+    async def _fake_warm(keep_alive="20m"):
+        return {"warmed": True, "model": "m", "keep_alive": keep_alive}
+
+    monkeypatch.setattr(C, "warm_vision_model", _fake_warm)
+    ep = _endpoints()[("POST", "/vision/warm")]
+    assert (await ep(_device_req("alice")))["warmed"] is True    # first passes
+    assert (await ep(_device_req("alice"))) == {"warmed": False, "reason": "RATE_LIMITED"}
 
 
 async def test_vision_stream_blank_question_uses_grounded_default(monkeypatch):
