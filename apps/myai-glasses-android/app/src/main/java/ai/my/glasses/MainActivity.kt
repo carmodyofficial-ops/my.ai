@@ -199,8 +199,11 @@ fun HomeScreen(vm: MainViewModel) {
             modifier = Modifier.fillMaxSize().statusBarsPadding(),
         ) {
             Column(
+                // Extra top padding ON TOP of the status-bar inset (applied to the
+                // box) so the brand header + hamburger sit well clear of the phone
+                // clock/notifications, not just below them.
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                    .padding(start = 20.dp, end = 20.dp, bottom = 20.dp, top = 16.dp),
+                    .padding(start = 20.dp, end = 20.dp, bottom = 20.dp, top = 40.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 BrandHeader(
@@ -283,6 +286,9 @@ private fun DrawerRow(title: String, subtitle: String, onClick: (() -> Unit)? = 
 /** One checkable row (a note or task) in a home card. */
 private data class ChecklistRow(
     val id: String, val label: String, val sub: String? = null, val done: Boolean = false,
+    // Multi-item checklists (AI-created) are read-only on glasses — a whole-note
+    // toggle would clobber their per-item state; manage them on the web.
+    val checkable: Boolean = true,
 )
 
 /** A home card: a checklist of items (tap the box to complete one) plus an
@@ -328,7 +334,7 @@ private fun ChecklistCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // Tapping toggles done both ways — a completed task stays
                         // visible (greyed + struck through) and can be re-activated.
-                        if (showChecks) {
+                        if (showChecks && row.checkable) {
                             Checkbox(checked = row.done, onCheckedChange = { onCheck(row.id) })
                         }
                         val labelColor = if (row.done)
@@ -681,8 +687,11 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
     ChecklistCard(
         title = "Tasks",
         items = ui.tasks.map { t ->
-            ChecklistRow(t.id, t.title, t.dueDate?.take(10)?.let { "due $it" },
-                done = t.completed)
+            // Single-item tasks are checkable; multi-item checklists show progress
+            // (done/total) read-only.
+            val sub = if (t.total > 1) "${t.done}/${t.total} done"
+                      else t.dueDate?.take(10)?.let { "due $it" }
+            ChecklistRow(t.id, t.title, sub, done = t.completed, checkable = t.total <= 1)
         },
         empty = "No tasks",
         hint = "Add a task",

@@ -451,8 +451,9 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
 
     @router.post("/items/{item_id}/done")
     async def item_done(request: Request, item_id: str):
-        """Toggle a note/task between completed and active (owner-scoped).
-        Completed items stay visible (greyed); this un-completes them too."""
+        """Toggle a single-item checklist TASK between completed and active
+        (owner-scoped); completed tasks stay visible (greyed). No-op for notes and
+        multi-item checklists (returns done=false). 404 only if no such item."""
         owner = require_wearables(request)
         done = await asyncio.to_thread(prod.complete_item, owner, item_id)
         if done is None:   # None = not found; False is a valid "now active" result

@@ -247,12 +247,12 @@ class MainViewModel(
                 else -> credentials.hostBaseUrl ?: ""
             },
         )
-        // The reducer forces listening=false on glasses loss, gateway error, host
-        // loss and credential rejection — "losing glasses mid-capture must stop
-        // the mic, never keep recording". Nothing was enforcing that: it only
-        // relabelled the button while AudioRecord kept running and SCO stayed up.
-        // ListeningChanged is excluded because start/stopListening already own
-        // the mic on those paths (and hold micLock while dispatching).
+        // The reducer forces listening=false on host loss, credential rejection,
+        // unpair, and capture-invalidating gateway errors — and this closes the mic
+        // to match. (A glasses/camera-session drop deliberately does NOT stop the
+        // mic — see ConnectionReducer.GlassesDisconnected — so it won't reach here.)
+        // ListeningChanged is excluded because start/stopListening already own the
+        // mic on those paths (and hold micLock while dispatching).
         if (wasListening && !app.listening && e !is Event.ListeningChanged) {
             abortListening()
         }
@@ -736,7 +736,12 @@ class MainViewModel(
         viewModelScope.launch {
             // Real glasses: starts a short stream (capture LED lights), grabs a
             // still, stops. Mock: synthetic JPEG.
-            val jpeg = adapter.captureStillJpeg()
+            var jpeg = adapter.captureStillJpeg()
+            if (jpeg == null) {
+                // A glasses-mic Talk can drop the DAT camera session; re-establish
+                // it and retry once before surfacing an error (USE_GLASSES_MIC).
+                if (adapter.connect()) jpeg = adapter.captureStillJpeg()
+            }
             if (jpeg == null) {
                 dispatch(Event.GatewayError("GLASSES_NOT_CONNECTED"))
                 _ui.value = _ui.value.copy(busy = false)
@@ -774,7 +779,13 @@ class MainViewModel(
         // no-op during the retry backoff (no active stream to receive the cancel) and
         // the loop proceeds to the next attempt (L1).
         streamJob?.cancel()
-        _ui.value = _ui.value.copy(busy = false)   // cancelled ask() won't reach its own reset
+        // Cancelling unwinds ask() before its tail runs, so reset busy here AND
+        // clear a lingering "Reconnecting…" placeholder (Stop during retry backoff).
+        _ui.value = _ui.value.copy(
+            busy = false,
+            lastResponse = if (_ui.value.lastResponse == "Reconnecting…") ""
+                           else _ui.value.lastResponse,
+        )
         voice.stopPlayback()
         // stopPlayback() bypasses the completion listener, so clear `speaking`
         // here — otherwise it latches true after a barge-in/cancel.

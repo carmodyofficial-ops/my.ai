@@ -77,14 +77,19 @@ object ConnectionReducer {
             // Do NOT stop the mic here. This event tracks the DAT *camera* session,
             // which is separate from the audio path: acquiring the glasses HFP mic
             // can itself drop the camera session, and a camera drop must never abort
-            // an in-progress utterance. (If the audio link truly dies, the mic falls
-            // back to the phone rather than being killed.) `listening` is owned by
-            // start/stopListening, and by host/credential failures below.
-            // Don't clobber a higher-priority banner (credential revoked / host
-            // unreachable) with GLASSES_NOT_CONNECTED — a BT blip would otherwise
-            // hide the real recovery instruction the user needs.
-            failure = if (s.failure == null || s.failure == Failure.GLASSES_NOT_CONNECTED)
-                Failure.GLASSES_NOT_CONNECTED else s.failure)
+            // an in-progress utterance. `listening` is owned by start/stopListening,
+            // and by host/credential failures below.
+            failure = when {
+                // Mid-capture, a camera-session drop is EXPECTED (acquiring the
+                // glasses mic causes it) — don't pop a "glasses not connected"
+                // banner over an active Talk.
+                s.listening -> s.failure
+                // Don't clobber a higher-priority banner (credential revoked / host
+                // unreachable) with GLASSES_NOT_CONNECTED.
+                s.failure == null || s.failure == Failure.GLASSES_NOT_CONNECTED ->
+                    Failure.GLASSES_NOT_CONNECTED
+                else -> s.failure
+            })
         Event.HostPaired -> s.copy(hostPaired = true, credentialValid = true)
         // Unpairing mid-utterance must close the mic too. It was the one
         // invalidating event that left `listening` set, so the mic kept
@@ -108,7 +113,10 @@ object ConnectionReducer {
         // vision, a cancelled previous turn) arrived for the turn before it.
         is Event.GatewayError -> failureFromCode(e.code).let { f ->
             s.copy(
-                failure = f,
+                // A GLASSES_NOT_CONNECTED arriving mid-capture is the benign camera
+                // drop from acquiring the glasses mic — keep the existing banner
+                // rather than popping "glasses not connected" over an active Talk.
+                failure = if (f == Failure.GLASSES_NOT_CONNECTED && s.listening) s.failure else f,
                 listening = if (stopsCapture(f)) false else s.listening,
                 // Persistent host/credential failures keep Talk/Ask gated by
                 // flipping the durable flags canTalk reads — since canTalk no

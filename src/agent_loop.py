@@ -2384,9 +2384,9 @@ async def stream_agent_loop(
     # Tool retrieval uses the latest message by default. It may inherit recent
     # user turns only for explicit continuations ("yes", "do it", "1").
     _retrieval_query = str(_intent.get("retrieval_query") or _last_user)
-    # redact_user_text: callers that promise "no transcript stored" (a wearables
-    # session with store_transcript=false) must not have the user's words land in
-    # host logs either. Log lengths, not content, in that mode.
+    # redact_user_text: callers that must keep the user's words out of host logs
+    # (the wearables gateway passes this ALWAYS — "lengths only, never prompt
+    # text") get char-counts here instead of content.
     logger.info(
         "[agent-intent] latest=%s continuation=%s low_signal=%s domains=%s retrieval_query=%s",
         (f"<{len(_last_user)} chars redacted>" if redact_user_text else repr(_last_user[:120])),

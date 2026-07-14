@@ -123,12 +123,17 @@ def create_task(owner: str, text: str, due_date: str | None = None) -> dict:
 
 
 def complete_item(owner: str, note_id: str) -> bool | None:
-    """Toggle a checklist TASK's completion by flipping its items' `done` flags
-    (owner-scoped). Completion uses the SAME per-item `done` the web app uses; it
-    deliberately does NOT touch Note.archived — that is the web app's separate
-    Archive (hide) flag, and writing it here silently hid/un-hid notes on the web.
-    Plain notes have no completion concept and are left unchanged. Returns the new
-    completed state (all items done), or None if no such item for this owner.
+    """Toggle a SINGLE-item checklist task's `done` flag (owner-scoped). Uses the
+    same per-item `done` the web app uses; NEVER touches Note.archived (that is the
+    web's Archive/hide flag). Returns the new completed state, or None if no such
+    item for this owner.
+
+    Deliberately a no-op (returns current state, no write) for:
+      - plain notes (no completion concept), and
+      - MULTI-item checklists (AI-created): a whole-note mark-all/unmark-all would
+        clobber and then destroy individual per-item state, which the glasses UI
+        can't edit. Those stay read-only on glasses; manage their items on the web.
+    Also refuses to rewrite malformed/empty `items` (would discard the stored bytes).
     """
     from core.database import get_db_session, Note
     with get_db_session() as db:
@@ -136,21 +141,19 @@ def complete_item(owner: str, note_id: str) -> bool | None:
                .filter(Note.owner == owner, Note.id == note_id).first())
         if row is None:
             return None
-        if row.note_type != "checklist":
-            return False   # notes aren't completable — no-op
-        items = []
-        if row.items:
-            try:
-                items = json.loads(row.items) or []
-            except (json.JSONDecodeError, TypeError):
-                items = []
-        # Toggle: if every item is already done, un-complete all; else complete all.
-        all_done = bool(items) and all(
-            isinstance(it, dict) and it.get("done") for it in items)
-        new_done = not all_done
-        for it in items:
-            if isinstance(it, dict):
-                it["done"] = new_done
+        if row.note_type != "checklist" or not row.items:
+            return False
+        try:
+            items = json.loads(row.items)
+        except (json.JSONDecodeError, TypeError):
+            return False   # malformed — don't overwrite the stored bytes
+        if not isinstance(items, list) or not items:
+            return False
+        done_now = all(isinstance(it, dict) and it.get("done") for it in items)
+        if len(items) > 1 or not isinstance(items[0], dict):
+            return done_now   # multi-item / non-dict item → read-only, report only
+        new_done = not bool(items[0].get("done"))
+        items[0]["done"] = new_done
         row.items = json.dumps(items)
         return new_done
 

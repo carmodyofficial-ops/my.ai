@@ -54,10 +54,19 @@ class ConnectionReducerTest {
     @Test fun `glasses (camera) disconnect must NOT abort an in-progress capture`() {
         // The DAT camera session is separate from the audio path — acquiring the
         // glasses HFP mic can itself drop the camera session, and that must not
-        // kill the utterance. listening stays; only the banner updates.
+        // kill the utterance. listening stays and (mid-capture) no scary banner.
         val s = reduce(healthy.copy(listening = true), Event.GlassesDisconnected)
         assertTrue(s.listening)
-        assertEquals(Failure.GLASSES_NOT_CONNECTED, s.failure)
+        assertNull(s.failure)  // no "glasses not connected" banner over an active Talk
+        // Outside a capture, a real disconnect DOES surface the banner.
+        val idle = reduce(healthy.copy(listening = false), Event.GlassesDisconnected)
+        assertEquals(Failure.GLASSES_NOT_CONNECTED, idle.failure)
+    }
+
+    @Test fun `GLASSES_NOT_CONNECTED gateway error mid-capture does not banner`() {
+        val talking = healthy.copy(listening = true)
+        assertNull(reduce(talking, Event.GatewayError("GLASSES_NOT_CONNECTED")).failure)
+        assertTrue(reduce(talking, Event.GatewayError("GLASSES_NOT_CONNECTED")).listening)
     }
 
     @Test fun `credential rejection ends session and flags revocation`() {

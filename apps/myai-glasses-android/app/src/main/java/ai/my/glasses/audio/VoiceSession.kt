@@ -50,6 +50,10 @@ class VoiceSession(private val context: Context) {
      *  it even when the player is released before prepareAsync fires (a released
      *  MediaPlayer calls none of its listeners, so finish() never runs). */
     private var playerTmp: File? = null
+    /** Playback generation, bumped by stopPlayback() and captured by playAudio().
+     *  A mismatch means an in-flight playAudio() was superseded (barge-in / next
+     *  chunk) during its async setup and must not start. Main-thread-confined. */
+    private var playGen = 0
 
     init {
         // Sweep TTS temp files orphaned by a process death mid-playback (the
@@ -94,7 +98,12 @@ class VoiceSession(private val context: Context) {
      * exist yet; the failure path then cleared the route, tearing SCO straight
      * back down — the disconnect tone, milliseconds after the connect tone.
      */
-    suspend fun acquireBluetoothMic(timeoutMs: Long = SCO_ROUTE_TIMEOUT_MS): Boolean {
+    suspend fun acquireBluetoothMic(timeoutMs: Long = SCO_ROUTE_TIMEOUT_MS): Boolean =
+      // OFF-MAIN: the AudioManager binder calls below (availableCommunicationDevices
+      // / setCommunicationDevice / mode=) run synchronously; keep them off the main
+      // thread so BT contention can't jank the UI (the SCO listener still delivers
+      // via mainExecutor). Caller (startListening) is on viewModelScope=Main.
+      withContext(Dispatchers.IO) {
         // Enter communication mode FIRST. setCommunicationDevice() routes OUTPUT
         // and is accepted in MODE_NORMAL, but the SCO *uplink* — the glasses mic —
         // only comes up in MODE_IN_COMMUNICATION, and entering it is often what
@@ -130,19 +139,19 @@ class VoiceSession(private val context: Context) {
                     ") — using PHONE mic")
                 restoreMode()
                 usingBluetoothMic = false
-                return false
+                return@withContext false
             }
             if (audioManager.communicationDevice?.id == sco.id) {
                 routeRequested = true
                 usingBluetoothMic = true
                 Log.i(TAG, "glasses SCO mic already routed")
-                return true       // already routed; don't cycle SCO (that re-tones)
+                return@withContext true   // already routed; don't cycle SCO (re-tones)
             }
 
             routeRequested = true
             if (!audioManager.setCommunicationDevice(sco)) {
                 releaseBluetoothMic()
-                return false
+                return@withContext false
             }
 
             val routed = withTimeoutOrNull(timeoutMs) { awaitCommunicationDevice(sco.id) } ?: false
@@ -150,7 +159,7 @@ class VoiceSession(private val context: Context) {
             Log.i(TAG, if (routed) "glasses SCO mic ROUTED" else
                 "SCO route did not land within ${timeoutMs}ms; using phone mic")
             if (!routed) releaseBluetoothMic()
-            return routed
+            return@withContext routed
         } catch (t: Throwable) {
             releaseBluetoothMic()   // restores mode + clears route; idempotent
             throw t
@@ -288,18 +297,20 @@ class VoiceSession(private val context: Context) {
      * blocked the UI for the length of the decode.
      */
     suspend fun playAudio(bytes: ByteArray, onDone: () -> Unit = {}) {
-        stopPlayback()
+        stopPlayback()                     // supersede/stop any current playback
+        val myGen = playGen                // this attempt's generation (post-bump)
         val tmp = withContext(Dispatchers.IO) {
             File.createTempFile("myai_tts", ".audio", context.cacheDir)
                 .also { it.writeBytes(bytes) }
         }
-        playerTmp = tmp   // track now so a concurrent stopPlayback() can clean it up
-        // Temp audio is deleted as soon as playback ends (privacy policy:
-        // audio is transient). `finish` releases THIS player instance and only
-        // clears the shared field if it still points here — a newer playAudio
-        // (multi-sentence TTS, or barge-in) may have replaced it, and the old code
-        // released whatever was in the field, killing the newer player and leaking
-        // this one.
+        // A newer playAudio() OR a stopPlayback() (barge-in) ran during the temp
+        // write. `player` is only assigned AFTER this suspension, so the old code's
+        // stopPlayback() missed an in-setup player — with USE_GLASSES_MIC the reply
+        // could then start playing INTO the open SCO mic (feedback), or two players
+        // could overlap. Bail if superseded. (Everything here is main-confined, so
+        // playGen needs no synchronization.)
+        if (myGen != playGen) { tmp.delete(); onDone(); return }
+        playerTmp = tmp
         var mp: MediaPlayer? = null
         val finish = {
             tmp.delete()
@@ -319,7 +330,8 @@ class VoiceSession(private val context: Context) {
             p.setDataSource(tmp.absolutePath)
             p.setOnCompletionListener { finish() }
             p.setOnErrorListener { _, _, _ -> finish(); true }
-            p.setOnPreparedListener { it.start() }
+            // Don't start if superseded between prepareAsync() and onPrepared.
+            p.setOnPreparedListener { if (myGen == playGen) it.start() else finish() }
             p.prepareAsync()
         }.onFailure {
             Log.e(TAG, "TTS playback failed", it)
@@ -329,6 +341,7 @@ class VoiceSession(private val context: Context) {
 
     /** Barge-in: the user started talking → kill playback immediately. */
     fun stopPlayback() {
+        playGen++   // invalidate any playAudio() still in its async setup phase
         player?.let { runCatching { it.stop() }; runCatching { it.release() } }
         player = null
         // A released player fires no completion/error listener, so delete the temp
