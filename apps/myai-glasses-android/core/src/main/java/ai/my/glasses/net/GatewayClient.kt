@@ -46,6 +46,7 @@ class GatewayClient(
     // doesn't rebuild one every call. Keyed by identity of the base client, so it
     // refreshes automatically when the pinned client changes.
     @Volatile private var boundedCache: Pair<OkHttpClient, OkHttpClient>? = null
+    @Volatile private var longCache: Pair<OkHttpClient, OkHttpClient>? = null
 
     private fun clientFor(fp: String?): OkHttpClient {
         if (fp.isNullOrBlank()) return plainHttp
@@ -106,6 +107,24 @@ class GatewayClient(
         return bounded
     }
 
+    /** Client for SLOW non-streaming server operations — STT of a long recording,
+     *  TTS synthesis, a cold vision-model load. These hold the connection silently
+     *  while the server processes (no bytes until done), so a read-gap timeout
+     *  would kill them: readTimeout stays 0 and callTimeout(150s) is the ceiling
+     *  that still prevents an infinite hang. (The fast 15s http() is only for quick
+     *  probes/CRUD; using it for these would time out a valid long operation —
+     *  e.g. a 2-minute spoken question's transcription.) */
+    private fun longHttp(): OkHttpClient {
+        val base = streamHttp()
+        longCache?.let { (b, s) -> if (b === base) return s }
+        val long = base.newBuilder()
+            .readTimeout(0, TimeUnit.MILLISECONDS)
+            .callTimeout(150, TimeUnit.SECONDS)
+            .build()
+        longCache = base to long
+        return long
+    }
+
     private fun req(path: String): Request.Builder {
         val b = Request.Builder().url(baseUrl().trimEnd('/') + "/api/wearables/v1" + path)
         token()?.let { b.header("Authorization", "Bearer $it") }
@@ -128,7 +147,13 @@ class GatewayClient(
             .url(host.trimEnd('/') + "/api/wearables/v1/pair")
             .post(body).build()
         runCatching {
-            clientFor(pinSha256).newCall(request).execute().use { resp ->
+            // Bound the pairing call (payload-pinned client, so not http()/longHttp()
+            // which derive from certSha256): the infinite-read base would otherwise
+            // hang forever on a half-open Wi-Fi connection, and pairConfirmed has no
+            // withTimeoutOrNull ceiling. Pairing is a quick exchange — 20s is plenty.
+            clientFor(pinSha256).newBuilder()
+                .callTimeout(20, TimeUnit.SECONDS).build()
+                .newCall(request).execute().use { resp ->
                 val obj = JSONObject(resp.body?.string() ?: "{}")
                 if (resp.isSuccessful) {
                     PairResult.Success(obj.getString("token"), obj.getString("token_id"),
@@ -287,7 +312,7 @@ class GatewayClient(
                 wavBytes.toRequestBody("audio/wav".toMediaType()))
             .build()
         runCatching {
-            http().newCall(req("/transcribe").post(body).build()).execute().use { resp ->
+            longHttp().newCall(req("/transcribe").post(body).build()).execute().use { resp ->
                 val obj = JSONObject(resp.body?.string() ?: "{}")
                 if (resp.isSuccessful) {
                     TranscribeResult.Success(obj.optString("text"), obj.optBoolean("empty"))
@@ -301,7 +326,7 @@ class GatewayClient(
     suspend fun speech(text: String): ByteArray? = withContext(Dispatchers.IO) {
         runCatching {
             val payload = JSONObject().put("text", text).put("transform", true)
-            http().newCall(req("/speech").post(payload.toString().toRequestBody(jsonType)).build())
+            longHttp().newCall(req("/speech").post(payload.toString().toRequestBody(jsonType)).build())
                 .execute().use { if (it.isSuccessful) it.body?.bytes() else null }
         }.getOrNull()
     }
@@ -314,7 +339,7 @@ class GatewayClient(
                 .addFormDataPart("question", question)
                 .build()
             runCatching {
-                http().newCall(req("/vision/query").post(body).build()).execute().use { resp ->
+                longHttp().newCall(req("/vision/query").post(body).build()).execute().use { resp ->
                     val obj = JSONObject(resp.body?.string() ?: "{}")
                     if (resp.isSuccessful) {
                         VisionResult.Success(obj.optString("text"), obj.optString("spoken"),
@@ -329,7 +354,7 @@ class GatewayClient(
      *  Best-effort + fire-and-forget: returns true if the host reports it warmed. */
     suspend fun warmVision(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            http().newCall(req("/vision/warm")
+            longHttp().newCall(req("/vision/warm")
                 .post(ByteArray(0).toRequestBody(null)).build())
                 .execute().use { resp ->
                     resp.isSuccessful &&

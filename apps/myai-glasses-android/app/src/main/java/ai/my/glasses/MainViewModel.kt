@@ -733,6 +733,12 @@ class MainViewModel(
             pendingVisionJpeg = null
             when (val r = client.transcribe(wav)) {
                 is TranscribeResult.Success -> when {
+                    // A NEW capture started while we were transcribing (a barge-in /
+                    // re-tap during the transcribe window, which can be long for a
+                    // 2-min recording). This transcript is stale — drop it, or we'd
+                    // stream a reply + TTS into the freshly-reopened mic (feedback,
+                    // and the echo stalls hands-free endpointing).
+                    _ui.value.listening -> _ui.value = _ui.value.copy(busy = false)
                     // Long-press Look & Ask: answer the spoken question against the
                     // frozen frame. Empty transcript → grounded generic look.
                     pendingJpeg != null -> {
@@ -886,10 +892,15 @@ class MainViewModel(
     private suspend fun captureForVision(): ByteArray? {
         // Higher resolution than the 1280px default: fine detail (leaf venation, a
         // car badge, small product/label text) is what lets Look-and-Ask name the
-        // SPECIFIC thing. Still well under the image byte cap at q85.
-        var jpeg = adapter.captureStillJpeg(maxDimensionPx = 1920, jpegQuality = 85)
-        if (jpeg == null && adapter.connect())
-            jpeg = adapter.captureStillJpeg(maxDimensionPx = 1920, jpegQuality = 85)
+        // SPECIFIC thing. Still well under the image byte cap at q85. Fall back to
+        // 1280 on a low-RAM OutOfMemoryError from the transient decode, not a crash.
+        suspend fun grab(): ByteArray? = try {
+            adapter.captureStillJpeg(maxDimensionPx = 1920, jpegQuality = 85)
+        } catch (e: OutOfMemoryError) {
+            adapter.captureStillJpeg(maxDimensionPx = 1280, jpegQuality = 85)
+        }
+        var jpeg = grab()
+        if (jpeg == null && adapter.connect()) jpeg = grab()
         return jpeg
     }
 
@@ -1132,10 +1143,20 @@ class MainViewModel(
     override fun onCleared() {
         super.onCleared()
         speakJob?.cancel()
-        voice.cancelRecording()
-        voice.stopPlayback()
-        voice.releaseBluetoothMic()
-        MicForegroundService.stop(appContext)
+        // cancelRecording() joins the capture thread (up to 2s) and
+        // releaseBluetoothMic() makes binder calls — both would ANR on the main
+        // thread (same reason closeMic runs off-main). viewModelScope is already
+        // cancelled here, so run the blocking teardown on a detached daemon thread.
+        val v = voice
+        val ctx = appContext
+        kotlin.concurrent.thread(isDaemon = true, name = "myai-teardown") {
+            runCatching {
+                v.cancelRecording()
+                v.stopPlayback()
+                v.releaseBluetoothMic()
+                MicForegroundService.stop(ctx)
+            }
+        }
         // The DeviceSession outlives this ViewModel (the adapter is process-wide)
         // and nothing was ever stopping it — disconnect() had no callers at all.
         // requestDisconnect() runs on the adapter's own scope and is cancelled by
