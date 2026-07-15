@@ -37,6 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -502,7 +503,13 @@ class MainViewModel(
         viewModelScope.launch {
             _ui.value = _ui.value.copy(refreshing = true)
             try {
-                if (credentials.isPaired) doRefreshHealth()
+                // Hard ceiling so the spinner ALWAYS clears: the probe calls are
+                // already bounded (GatewayClient uses a call-timeout for
+                // non-streaming requests), but this guarantees it even if a future
+                // call path forgets to. withTimeoutOrNull swallows the timeout.
+                if (credentials.isPaired) {
+                    withTimeoutOrNull(REFRESH_TIMEOUT_MS) { doRefreshHealth() }
+                }
             } finally {
                 _ui.value = _ui.value.copy(refreshing = false)
             }
@@ -1129,6 +1136,10 @@ class MainViewModel(
         val RETRYABLE_STREAM_CODES =
             setOf("MYAI_HOST_UNREACHABLE", "REQUEST_TIMEOUT", "LLM_UNAVAILABLE")
         const val MAX_ASK_ATTEMPTS = 3
+
+        /** Hard ceiling on a pull-to-refresh so the spinner always clears, even on
+         *  a stalled connection. Comfortably above the per-call timeouts. */
+        const val REFRESH_TIMEOUT_MS = 20_000L
 
         fun factory(
             appContext: Context,

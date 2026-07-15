@@ -42,6 +42,10 @@ class GatewayClient(
 
     private var pinnedFp: String? = null
     private var pinnedHttp: OkHttpClient? = null
+    // Cache of (streaming client → its bounded-timeout derivative) so http()
+    // doesn't rebuild one every call. Keyed by identity of the base client, so it
+    // refreshes automatically when the pinned client changes.
+    @Volatile private var boundedCache: Pair<OkHttpClient, OkHttpClient>? = null
 
     private fun clientFor(fp: String?): OkHttpClient {
         if (fp.isNullOrBlank()) return plainHttp
@@ -81,7 +85,26 @@ class GatewayClient(
         }
     }
 
-    private fun http(): OkHttpClient = clientFor(certSha256())
+    /** Streaming client — readTimeout=0 (no read timeout), for SSE only
+     *  (respond/visionStream), where long gaps between events are normal. */
+    private fun streamHttp(): OkHttpClient = clientFor(certSha256())
+
+    /** Default client for NON-streaming requests. Bounds the whole call so a
+     *  half-open connection on flaky Wi-Fi can't hang a request FOREVER — with the
+     *  streaming client's readTimeout=0, health()/capabilities() could block
+     *  indefinitely, leaving the pull-to-refresh spinner spinning after refresh.
+     *  Derived from the streaming client so it shares the connection pool + TLS
+     *  pinning; connectTimeout stays 5s (fast-fail when unreachable). */
+    private fun http(): OkHttpClient {
+        val base = streamHttp()
+        boundedCache?.let { (b, s) -> if (b === base) return s }
+        val bounded = base.newBuilder()
+            .readTimeout(12, TimeUnit.SECONDS)
+            .callTimeout(15, TimeUnit.SECONDS)
+            .build()
+        boundedCache = base to bounded
+        return bounded
+    }
 
     private fun req(path: String): Request.Builder {
         val b = Request.Builder().url(baseUrl().trimEnd('/') + "/api/wearables/v1" + path)
@@ -208,7 +231,7 @@ class GatewayClient(
             val payload = JSONObject().put("text", text)
                 .put("store_transcript", storeTranscript)
             sessionId?.let { payload.put("session_id", it) }
-            val call = http().newCall(
+            val call = streamHttp().newCall(   // SSE: no read timeout
                 req("/respond").post(payload.toString().toRequestBody(jsonType)).build())
             val parser = SseParser()
             try {
@@ -325,7 +348,7 @@ class GatewayClient(
                     jpeg.toRequestBody("image/jpeg".toMediaType()))
                 .addFormDataPart("question", question)
                 .build()
-            val call = http().newCall(req("/vision/stream").post(body).build())
+            val call = streamHttp().newCall(req("/vision/stream").post(body).build())  // SSE
             val parser = SseParser()
             try {
                 call.execute().use { resp ->
