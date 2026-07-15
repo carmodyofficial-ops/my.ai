@@ -35,8 +35,8 @@ android {
         applicationId = "ai.my.glasses"
         minSdk = 31 // AudioManager.setCommunicationDevice (BT HFP mic routing)
         targetSdk = 36
-        versionCode = 40
-        versionName = "0.9.3"
+        versionCode = 42
+        versionName = "0.9.5"
         buildConfigField("boolean", "META_SDK", metaSdkEnabled.toString())
         manifestPlaceholders["metaAppId"] = metaAppId
         manifestPlaceholders["metaClientToken"] = metaClientToken
@@ -86,6 +86,9 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation(platform("androidx.compose:compose-bom:2025.09.00"))
     implementation("androidx.compose.material3:material3")
+    // Curated core icon set only (~40 common icons) — NOT material-icons-extended,
+    // which bundles thousands and bloats the APK ~30 MB (breaks flaky-Wi-Fi installs).
+    implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")

@@ -186,12 +186,13 @@ def delete_item(owner: str, note_id: str) -> bool:
     from the web's Archive/hide flag."""
     from core.database import get_db_session, Note
     with get_db_session() as db:
-        row = (db.query(Note)
-               .filter(Note.owner == owner, Note.id == note_id).first())
-        if row is None:
-            return False
-        db.delete(row)
-        return True
+        # Count-based bulk delete (not fetch-then-delete): a concurrent double-delete
+        # of the same id then returns 0 cleanly here (→ route 404), instead of a
+        # StaleDataError (→ 500) when the second flush matches no rows.
+        deleted = (db.query(Note)
+                   .filter(Note.owner == owner, Note.id == note_id)
+                   .delete(synchronize_session=False))
+        return deleted > 0
 
 
 # ── Chat history ───────────────────────────────────────────────────────────

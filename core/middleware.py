@@ -37,23 +37,47 @@ class BodySizeLimitMiddleware:
     swallowing anything it tries to send afterward.
     """
 
-    def __init__(self, app, max_body_bytes: int):
+    def __init__(self, app, max_body_bytes: int, path_overrides=None):
         self.app = app
         self.max_body_bytes = int(max_body_bytes)
+        # TIGHTER ceilings for specific low-cap upload path PREFIXES, so a chunked
+        # body (no Content-Length) can't spool all the way up to the coarse 128 MB
+        # global before a small-cap route (e.g. the 10 MB /vision image) rejects it.
+        # Longest matching prefix wins. Supplied by app.py where the routes' real
+        # caps are known — keeps this middleware generic.
+        self.path_overrides = sorted(
+            ((p, int(c)) for p, c in (path_overrides or {}).items()),
+            key=lambda kv: -len(kv[0]))
+
+    def _cap_for(self, path: str) -> int:
+        for prefix, cap in self.path_overrides:
+            if path.startswith(prefix):
+                return min(cap, self.max_body_bytes)
+        return self.max_body_bytes
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") != "http":
             # WebSocket/lifespan carry no large HTTP body — pass straight through.
             return await self.app(scope, receive, send)
 
+        cap = self._cap_for(scope.get("path", ""))
+        # We sit OUTSIDE CORSMiddleware, so a self-sent 413 wouldn't get an
+        # Access-Control-Allow-Origin and a cross-origin client would see an opaque
+        # error instead of the 413. Capture the request Origin to echo it back.
+        origin = None
+        for name, value in scope.get("headers") or ():
+            if name == b"origin":
+                origin = value
+                break
+
         # Fast path: a declared Content-Length over the ceiling is refused before
         # a single body byte is read (covers every well-behaved client).
         for name, value in scope.get("headers") or ():
             if name == b"content-length":
                 try:
-                    if int(value) > self.max_body_bytes:
-                        self._log(scope)
-                        return await self._reject(send)
+                    if int(value) > cap:
+                        self._log(scope, cap)
+                        return await self._reject(send, origin)
                 except (ValueError, TypeError):
                     pass
                 break
@@ -67,14 +91,14 @@ class BodySizeLimitMiddleware:
             message = await receive()
             if (message.get("type") == "http.request" and not rejected):
                 total += len(message.get("body", b"") or b"")
-                if total > self.max_body_bytes:
+                if total > cap:
                     if app_responded:
                         # App already responded (unusual for an upload route); we
                         # can't inject a 413, so just cut the body off.
                         return {"type": "http.disconnect"}
                     rejected = True
-                    self._log(scope)
-                    await self._reject(send)          # raw send — the real 413
+                    self._log(scope, cap)
+                    await self._reject(send, origin)  # raw send — the real 413
                     # Tell the inner app the client is gone so it stops reading and
                     # unwinds; its subsequent output is swallowed by guarded_send.
                     return {"type": "http.disconnect"}
@@ -98,20 +122,27 @@ class BodySizeLimitMiddleware:
                 return
             raise
 
-    def _log(self, scope):
+    def _log(self, scope, cap):
         logger.warning("Rejected oversized request body (> %d bytes) on %s %s",
-                       self.max_body_bytes, scope.get("method", "?"),
-                       scope.get("path", "?"))
+                       cap, scope.get("method", "?"), scope.get("path", "?"))
 
-    async def _reject(self, send):
+    async def _reject(self, send, origin=None):
         body = json.dumps(
             {"detail": {"code": "PAYLOAD_TOO_LARGE",
                         "message": "Request body too large"}}).encode()
+        headers = [(b"content-type", b"application/json"),
+                   (b"content-length", str(len(body)).encode()),
+                   (b"x-content-type-options", b"nosniff")]
+        # Echo the Origin so a cross-origin client can actually read the 413 (this
+        # response never reaches CORSMiddleware). Only for an error body — no
+        # resource is exposed by letting the browser see it.
+        if origin:
+            headers.append((b"access-control-allow-origin", origin))
+            headers.append((b"vary", b"Origin"))
         await send({
             "type": "http.response.start",
             "status": 413,
-            "headers": [(b"content-type", b"application/json"),
-                        (b"content-length", str(len(body)).encode())],
+            "headers": headers,
         })
         await send({"type": "http.response.body", "body": body})
 

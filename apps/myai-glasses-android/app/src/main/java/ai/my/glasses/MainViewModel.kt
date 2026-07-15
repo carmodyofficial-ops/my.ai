@@ -163,10 +163,13 @@ class MainViewModel(
     private var host: GlassesHost? = null
 
     init {
+        // Arm the glasses touchpad control (media-button capture + its notification)
+        // on app entry, regardless of pairing — so the touchpad works immediately.
+        // The gesture handler below still gates its ACTIONS on hostPaired.
+        GlassesControlService.start(appContext)
         if (credentials.isPaired) {
             dispatch(Event.HostPaired)
             refreshHealth()
-            GlassesControlService.start(appContext)  // arm the touchpad trigger
         }
         // Hands-free trigger: a long hold on the glasses touchpad (a held media
         // button captured by GlassesControlService) toggles the voice loop —
@@ -559,7 +562,11 @@ class MainViewModel(
         viewModelScope.launch {
             val n = async { client.notes() }
             val t = async { client.tasks() }
-            _ui.value = _ui.value.copy(notes = n.await(), tasks = t.await())
+            // Null = fetch failed → keep the prior list rather than blanking the card
+            // on a transient blip (which the delete gesture made user-visible).
+            _ui.value = _ui.value.copy(
+                notes = n.await() ?: _ui.value.notes,
+                tasks = t.await() ?: _ui.value.tasks)
         }
     }
 

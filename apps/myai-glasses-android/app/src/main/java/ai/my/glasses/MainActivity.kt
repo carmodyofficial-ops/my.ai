@@ -19,32 +19,50 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Build
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.TextButton
@@ -69,8 +87,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import ai.my.glasses.core.Failure
@@ -217,8 +237,8 @@ fun HomeScreen(vm: MainViewModel) {
                 // box) so the brand header + hamburger sit well clear of the phone
                 // clock/notifications, not just below them.
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                    .padding(start = 20.dp, end = 20.dp, bottom = 20.dp, top = 40.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(start = 20.dp, end = 20.dp, bottom = 28.dp, top = 40.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 BrandHeader(
                     connected = ui.paired,
@@ -244,19 +264,28 @@ private fun HistoryDrawer(vm: MainViewModel, ui: UiState,
     val ctx = LocalContext.current
     ModalDrawerSheet(
         drawerContainerColor = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth(0.82f),
+        modifier = Modifier.fillMaxWidth(0.84f),
     ) {
         Column(
             Modifier.fillMaxSize().statusBarsPadding()
-                .verticalScroll(rememberScrollState()).padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp, vertical = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text("my.ai", style = MaterialTheme.typography.headlineMedium, color = MyAiBrand)
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(verticalAlignment = Alignment.Bottom,
+                modifier = Modifier.padding(bottom = 10.dp)) {
+                Text("my.ai", style = MaterialTheme.typography.titleLarge, color = MyAiBrand)
+                Spacer(Modifier.width(6.dp))
+                Text("GLASSES", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 2.dp))
+            }
 
-            Text("Conversations", style = MaterialTheme.typography.titleMedium)
+            Text("CONVERSATIONS", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp, bottom = 2.dp))
             if (ui.chatHistory.isEmpty()) {
-                Text("No conversations yet", style = MaterialTheme.typography.bodySmall,
+                Text("No conversations yet", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             ui.chatHistory.forEach { c ->
@@ -269,44 +298,83 @@ private fun HistoryDrawer(vm: MainViewModel, ui: UiState,
                 }
             }
 
-            Spacer(Modifier.height(6.dp))
-            Text("Look & Ask", style = MaterialTheme.typography.titleMedium)
+            Text("LOOK & ASK", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 14.dp, bottom = 2.dp))
             if (ui.visionHistory.isEmpty()) {
-                Text("Nothing captured yet", style = MaterialTheme.typography.bodySmall,
+                Text("Nothing captured yet", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             ui.visionHistory.forEach { v ->
                 DrawerRow(v.question.ifBlank { "What am I looking at?" }, v.answer)
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(16.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            DrawerRow("🔧 Diagnostics", "Validate glasses audio + gesture on hardware",
-                onClick = onDiagnostics)
+            Row(
+                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small)
+                    .clickable(onClick = onDiagnostics)
+                    .padding(vertical = 12.dp, horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(Icons.Rounded.Build, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp))
+                Column {
+                    Text("Diagnostics", style = MaterialTheme.typography.bodyLarge)
+                    Text("Validate glasses audio + gesture on hardware",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
     }
 }
 
-/** Outlined "Look & Ask" control that distinguishes a tap (identify the main
- *  subject) from a long-press (freeze the frame, then speak a specific question).
- *  Material3's Button has no long-press hook, so this is a styled clickable Surface. */
+/** "Look & Ask" control that distinguishes a tap (identify the main subject) from
+ *  a long-press (freeze the frame, then speak a specific question). Material3's
+ *  Button has no long-press hook, so this is a Surface styled to match a
+ *  FilledTonalButton exactly, so it sits proportioned next to Talk. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun LookAndAskButton(enabled: Boolean, onTap: () -> Unit, onLongPress: () -> Unit) {
-    val content = if (enabled) MaterialTheme.colorScheme.primary
+private fun LookAndAskButton(
+    enabled: Boolean, onTap: () -> Unit, onLongPress: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val container = if (enabled) MaterialTheme.colorScheme.secondaryContainer
+                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    val content = if (enabled) MaterialTheme.colorScheme.onSecondaryContainer
                   else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-    val border = if (enabled) MaterialTheme.colorScheme.outline
-                 else MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)
     Surface(
-        shape = MaterialTheme.shapes.small,
-        color = Color.Transparent,
-        border = BorderStroke(1.dp, border),
-        modifier = Modifier.combinedClickable(
+        shape = MaterialTheme.shapes.large,
+        color = container,
+        modifier = modifier.combinedClickable(
             enabled = enabled, onClick = onTap, onLongClick = onLongPress),
     ) {
-        Text("Look & Ask", color = content,
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp))
+        Row(
+            Modifier.heightIn(min = 52.dp).fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Look & Ask", style = MaterialTheme.typography.labelLarge, color = content)
+        }
+    }
+}
+
+/** A rounded chat bubble; the tail corner flips for user (right) vs my.ai (left). */
+@Composable
+private fun ChatBubble(text: String, container: Color, content: Color, alignEnd: Boolean) {
+    Surface(
+        shape = RoundedCornerShape(
+            topStart = 16.dp, topEnd = 16.dp,
+            bottomStart = if (alignEnd) 16.dp else 5.dp,
+            bottomEnd = if (alignEnd) 5.dp else 16.dp),
+        color = container,
+        modifier = Modifier.widthIn(max = 320.dp),
+    ) {
+        Text(text, style = MaterialTheme.typography.bodyLarge, color = content,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
     }
 }
 
@@ -324,10 +392,14 @@ private fun DiagnosticsScreen(vm: MainViewModel, ui: UiState, onBack: () -> Unit
             .padding(start = 20.dp, end = 20.dp, bottom = 20.dp, top = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = onBack) { Text("‹ Back") }
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text("Diagnostics", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.weight(1f))
-            Text("Diagnostics", style = MaterialTheme.typography.titleLarge, color = MyAiBrand)
         }
         Text("On-device checks for the glasses audio + gesture.",
             style = MaterialTheme.typography.bodySmall,
@@ -381,10 +453,11 @@ private fun DrawerRow(title: String, subtitle: String, onClick: (() -> Unit)? = 
     Column(
         Modifier
             .fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(vertical = 6.dp),
+            .padding(vertical = 7.dp, horizontal = 4.dp),
     ) {
-        Text(title, style = MaterialTheme.typography.bodyMedium,
+        Text(title, style = MaterialTheme.typography.bodyLarge,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(subtitle, style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -418,27 +491,39 @@ private fun ChecklistCard(
         if (draft.isNotBlank()) { onAdd(draft); draft = "" }
     }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            if (items.isEmpty()) {
-                Text(empty, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else {
+    SectionCard(spacing = 10.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            if (items.isNotEmpty()) {
+                Text("${items.size}", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(horizontal = 8.dp, vertical = 2.dp))
+            }
+        }
+        if (items.isEmpty()) {
+            Text(empty, style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 items.take(8).forEach { row ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // Tapping toggles done both ways — a completed task stays
                         // visible (greyed + struck through) and can be re-activated.
                         if (showChecks && row.checkable) {
                             Checkbox(checked = row.done, onCheckedChange = { onCheck(row.id) })
+                        } else {
+                            Spacer(Modifier.width(4.dp))
                         }
                         val labelColor = if (row.done)
                             MaterialTheme.colorScheme.onSurfaceVariant
                         else MaterialTheme.colorScheme.onSurface
                         val strike = if (row.done)
                             TextDecoration.LineThrough else null
-                        Column(Modifier.weight(1f)) {
-                            Text(row.label, style = MaterialTheme.typography.bodyMedium,
+                        Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+                            Text(row.label, style = MaterialTheme.typography.bodyLarge,
                                 color = labelColor, textDecoration = strike,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                             row.sub?.let {
@@ -446,88 +531,144 @@ private fun ChecklistCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
-                        // Remove this item entirely (hard delete on the host).
-                        TextButton(onClick = { onDelete(row.id) }) {
-                            Text("✕", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        // Remove this item entirely (hard delete on the host). Hidden
+                        // for multi-item AI checklists (checkable=false): those are
+                        // read-only on glasses, so a one-tap delete of the whole
+                        // web/agent-managed note is too destructive — manage on web.
+                        if (row.checkable) {
+                            IconButton(onClick = { onDelete(row.id) },
+                                modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Rounded.Close, contentDescription = "Remove",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(4.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedTextField(
-                    value = draft, onValueChange = { draft = it },
-                    label = { Text(hint) },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                )
-                Button(enabled = draft.isNotBlank(), onClick = submit) { Text("Add") }
-            }
         }
+        OutlinedTextField(
+            value = draft, onValueChange = { draft = it },
+            label = { Text(hint) },
+            singleLine = true,
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { submit() }),
+            trailingIcon = {
+                if (draft.isNotBlank()) {
+                    IconButton(onClick = submit) {
+                        Icon(Icons.Rounded.Add, contentDescription = "Add",
+                            tint = MaterialTheme.colorScheme.secondary)
+                    }
+                }
+            },
+        )
     }
 }
 
-/** my.ai wordmark + a live connection dot — the brand anchor on every screen. */
+/** Reusable elevated card: one consistent shape, padding, and inner rhythm so
+ *  every surface in the app reads the same. */
+@Composable
+private fun SectionCard(
+    modifier: Modifier = Modifier,
+    spacing: Dp = 12.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(
+            Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(spacing),
+            content = content,
+        )
+    }
+}
+
+/** Small connection chip: a colored dot + state label. */
+@Composable
+private fun StatusPill(connected: Boolean) {
+    val color = if (connected) MyAiConnected else MaterialTheme.colorScheme.onSurfaceVariant
+    val bg = if (connected) MyAiConnected.copy(alpha = 0.15f)
+             else MaterialTheme.colorScheme.surfaceVariant
+    Row(
+        Modifier.clip(CircleShape).background(bg).padding(horizontal = 11.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(color))
+        Text(if (connected) "Connected" else "Not linked",
+            style = MaterialTheme.typography.labelMedium, color = color)
+    }
+}
+
+/** my.ai wordmark + a live connection chip — the brand anchor on every screen. */
 @Composable
 private fun BrandHeader(connected: Boolean, onMenu: (() -> Unit)? = null) {
     Row(
         Modifier.fillMaxWidth().padding(bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         onMenu?.let {
-            Text(
-                "☰",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .clickable(onClick = it)
-                    .padding(end = 12.dp),
-            )
+            IconButton(onClick = it, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.Menu, contentDescription = "History",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-        Text(
-            "my.ai",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MyAiBrand,
-        )
-        Text(
-            "  glasses",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("my.ai", style = MaterialTheme.typography.titleLarge, color = MyAiBrand)
+            Spacer(Modifier.width(6.dp))
+            Text("GLASSES", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 2.dp))
+        }
         Spacer(Modifier.weight(1f))
-        Box(
-            Modifier
-                .size(9.dp)
-                .clip(CircleShape)
-                .background(if (connected) MyAiConnected else MaterialTheme.colorScheme.outline),
-        )
+        StatusPill(connected)
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+/** A numbered step badge + title, for the setup flow. */
+@Composable
+private fun StepHeader(number: Int, title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(
+            Modifier.size(26.dp).clip(CircleShape)
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("$number", style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSecondaryContainer)
+        }
+        Text(title, style = MaterialTheme.typography.titleMedium)
+    }
 }
 
 /** First screen: both connection events, nothing else. */
 @Composable
 private fun SetupScreen(vm: MainViewModel, ui: UiState) {
-    Text("Connect", style = MaterialTheme.typography.headlineMedium)
-    Text("Link your glasses and your my.ai host — then you're in.")
+    Text("Link your glasses and your my.ai host — then you're in.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("1 · Glasses", style = MaterialTheme.typography.titleMedium)
-            StatusRow("Status", ui.glassesLabel)
-            ui.glassesDetail?.let {
-                Text("Glasses report: $it", color = MaterialTheme.colorScheme.error)
-            }
-            Text("Pair the glasses in the Meta AI app (Bluetooth), then pull " +
-                "down here to refresh. Voice also works with just the phone — " +
-                "glasses can join later.")
+    SectionCard {
+        StepHeader(1, "Glasses")
+        StatusRow("Status", ui.glassesLabel)
+        ui.glassesDetail?.let {
+            Text("Glasses report: $it", style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error)
         }
+        Text("Pair the glasses in the Meta AI app (Bluetooth), then pull " +
+            "down here to refresh. Voice also works with just the phone — " +
+            "glasses can join later.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
     // Host pairing: find the my.ai host on Wi-Fi and approve on the host. No
@@ -537,7 +678,8 @@ private fun SetupScreen(vm: MainViewModel, ui: UiState) {
     HostDiscoverySection(vm, ui)
 
     ui.failure?.let {
-        Text(recoveryHint(it), color = MaterialTheme.colorScheme.error)
+        Text(recoveryHint(it), style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error)
     }
 }
 
@@ -545,47 +687,47 @@ private fun SetupScreen(vm: MainViewModel, ui: UiState) {
 private fun HostDiscoverySection(vm: MainViewModel, ui: UiState) {
     // While awaiting approval, show the verify code prominently.
     ui.enroll?.let { e ->
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("2 · Approve on ${e.hostName}", style = MaterialTheme.typography.titleMedium)
-                if (e.verifyCode.isNotBlank()) {
-                    Text("Verification code",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(e.verifyCode,
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MyAiAccent)
-                }
-                Text(e.status)
-                Text("On your my.ai host, open the pair-glasses page and approve this " +
-                    "device — confirm the code above matches.",
-                    style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = vm::cancelEnroll) { Text("Cancel") }
+        SectionCard {
+            StepHeader(2, "Approve on ${e.hostName}")
+            if (e.verifyCode.isNotBlank()) {
+                Text("VERIFICATION CODE",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(e.verifyCode,
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MyAiAccent)
             }
+            Text(e.status, style = MaterialTheme.typography.bodyLarge)
+            Text("On your my.ai host, open the pair-glasses page and approve this " +
+                "device — confirm the code above matches.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(onClick = vm::cancelEnroll) { Text("Cancel") }
         }
         return
     }
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("2 · my.ai host", style = MaterialTheme.typography.titleMedium)
-            Text("Find your my.ai host on this Wi-Fi and approve this device on the " +
-                "host — no code to copy.", style = MaterialTheme.typography.bodySmall)
-            Button(
-                onClick = vm::discoverHosts,
-                enabled = !ui.scanning,
+    SectionCard {
+        StepHeader(2, "my.ai host")
+        Text("Find your my.ai host on this Wi-Fi and approve this device on the " +
+            "host — no code to copy.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Button(
+            onClick = vm::discoverHosts,
+            enabled = !ui.scanning,
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+        ) { Text(if (ui.scanning) "Scanning…" else "Find my.ai host on Wi-Fi") }
+        ui.discoveredHosts.forEach { h ->
+            OutlinedButton(
+                onClick = { vm.enrollWith(h) },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (ui.scanning) "Scanning…" else "Find my.ai host on Wi-Fi") }
-            ui.discoveredHosts.forEach { h ->
-                OutlinedButton(
-                    onClick = { vm.enrollWith(h) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("${h.name} · ${h.host}:${h.port}${if (h.tls) " · TLS" else ""}") }
-            }
-            if (!ui.scanning && ui.discoveredHosts.isEmpty()) {
-                Text("Tap to scan. Make sure the phone is on the same Wi-Fi as the host.",
-                    style = MaterialTheme.typography.bodySmall)
-            }
+            ) { Text("${h.name} · ${h.host}:${h.port}${if (h.tls) " · TLS" else ""}") }
+        }
+        if (!ui.scanning && ui.discoveredHosts.isEmpty()) {
+            Text("Tap to scan. Make sure the phone is on the same Wi-Fi as the host.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -616,55 +758,46 @@ private fun PairingConfirmDialog(prompt: PairingPrompt, vm: MainViewModel) {
 }
 
 /** The application proper: assistant + productivity, entered once paired. */
+/** A preference row: title + explanation on the left, a switch on the right. */
+@Composable
+private fun ToggleRow(title: String, subtitle: String,
+                      checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
 @Composable
 private fun MainScreen(vm: MainViewModel, ui: UiState) {
 
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            StatusRow("Glasses", ui.glassesLabel)
-            StatusRow("my.ai host", ui.hostLabel)
-            StatusRow("Model", ui.modelLabel)
-            StatusRow("Voice", ui.voiceLabel)
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Keep session context", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        if (ui.storeTranscript) "Follow-ups remembered in RAM this session"
-                        else "No storage — words aren't retained or logged",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                androidx.compose.material3.Switch(
-                    checked = ui.storeTranscript,
-                    onCheckedChange = vm::setStoreTranscript,
-                )
-            }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Hands-free", style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        if (ui.handsFree) "Auto-sends when you stop speaking"
-                        else "Tap Talk again to send",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                androidx.compose.material3.Switch(
-                    checked = ui.handsFree,
-                    onCheckedChange = vm::setHandsFree,
-                )
-            }
-            ui.failure?.let {
-                Text(recoveryHint(it), color = MaterialTheme.colorScheme.error)
-            }
-            ui.glassesDetail?.let {
-                Text("Glasses report: $it", color = MaterialTheme.colorScheme.error)
-            }
+    // ── Status + preferences ──────────────────────────────────────────────
+    SectionCard(spacing = 10.dp) {
+        StatusRow("Glasses", ui.glassesLabel)
+        StatusRow("my.ai host", ui.hostLabel)
+        StatusRow("Model", ui.modelLabel)
+        StatusRow("Voice", ui.voiceLabel)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        ToggleRow("Keep session context",
+            if (ui.storeTranscript) "Follow-ups remembered in RAM this session"
+            else "No storage — words aren't retained or logged",
+            ui.storeTranscript, vm::setStoreTranscript)
+        ToggleRow("Hands-free",
+            if (ui.handsFree) "Auto-sends when you stop speaking"
+            else "Tap Talk again to send",
+            ui.handsFree, vm::setHandsFree)
+        ui.failure?.let {
+            Text(recoveryHint(it), style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error)
+        }
+        ui.glassesDetail?.let {
+            Text("Glasses report: $it", style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error)
         }
     }
 
@@ -674,119 +807,136 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
     // having granted it (composition wouldn't otherwise re-read the setting).
     val mediaCtx = LocalContext.current
     if (!rememberNotificationAccess(mediaCtx)) {
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Enable glasses touchpad control", style = MaterialTheme.typography.titleMedium)
-                Text("Grant Notification access so a single tap on the glasses plays/pauses " +
-                    "your music (a 3-second hold talks to my.ai).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Button(onClick = {
-                    mediaCtx.startActivity(
-                        Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }) { Text("Grant access") }
+        SectionCard(spacing = 10.dp) {
+            Text("Enable glasses touchpad control", style = MaterialTheme.typography.titleMedium)
+            Text("Grant Notification access so a single tap on the glasses plays/pauses " +
+                "your music (a 3-second hold talks to my.ai).",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = {
+                mediaCtx.startActivity(
+                    Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }) { Text("Grant access") }
+        }
+    }
+
+    // ── Assistant ─────────────────────────────────────────────────────────
+    run {
+        var draft by remember { mutableStateOf("") }
+        // Text chat needs the host's chat model serving. If the host is up but
+        // Ollama/the model isn't, the inputs are disabled and we show why + a
+        // retry — a tap must not fail silently (UAT #2).
+        val chatReady = ui.canTalk && ui.llmReady
+        val send = {
+            // Not while listening: starting a turn would leave the open mic
+            // running (its later stopListening fires a second, overlapping turn).
+            if (chatReady && draft.isNotBlank() && !ui.busy && !ui.listening) {
+                vm.ask(draft); draft = ""
+            }
+        }
+        if (ui.canTalk && !ui.llmReady) {
+            SectionCard(spacing = 0.dp) {
+                Row(Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("No model available on the host — is Ollama running?",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f))
+                    OutlinedButton(enabled = !ui.refreshing, onClick = vm::refresh) {
+                        Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp)); Text("Retry")
+                    }
+                }
+            }
+        }
+        // Ask field with an inline Send affordance (its own button no longer
+        // crowds a 3-button row).
+        OutlinedTextField(
+            value = draft, onValueChange = { draft = it },
+            label = { Text("Ask my.ai") },
+            enabled = chatReady,
+            singleLine = true,
+            shape = MaterialTheme.shapes.large,
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+            keyboardActions = KeyboardActions(onSend = { send() }),
+            trailingIcon = {
+                val canSend = chatReady && draft.isNotBlank() && !ui.busy && !ui.listening
+                if (draft.isNotBlank()) {
+                    IconButton(onClick = send, enabled = canSend) {
+                        Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Send",
+                            tint = if (canSend) MaterialTheme.colorScheme.secondary
+                                   else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            },
+        )
+        // Primary voice actions — two equal, prominent buttons.
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Push-to-talk: hold to record, release to send. Needs STT AND the
+            // chat model (the transcript is answered by it).
+            Button(
+                enabled = chatReady && ui.sttAvailable && !ui.busy,
+                onClick = { if (ui.listening) vm.stopListening() else vm.startListening() },
+                modifier = Modifier.weight(1f).height(52.dp),
+            ) {
+                Text(when {
+                    ui.listening && ui.handsFree -> "Pause to send"
+                    ui.listening -> "Tap to send"
+                    else -> "Talk"
+                }, maxLines = 1)
+            }
+            LookAndAskButton(
+                // Disabled while listening: a tap/long-press mid-listen would
+                // start a look while the mic is still open (overlapping turns).
+                enabled = ui.canTalk && ui.visionAvailable && !ui.busy && !ui.listening,
+                onTap = vm::lookAndAsk,
+                onLongPress = vm::lookAndAskSpoken,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (ui.visionAvailable) {
+            Text("Tap to identify · hold to ask about it",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        // Secondary actions — only when there's a turn in flight or to clear.
+        if (ui.busy || ui.lastResponse.isNotBlank() || ui.lastQuestion.isNotBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (ui.busy) TextButton(onClick = vm::cancel) { Text("Stop") }
+                Spacer(Modifier.weight(1f))
+                TextButton(
+                    enabled = !ui.busy,
+                    onClick = { vm.newChat(); draft = "" },
+                ) { Text("New chat") }
+            }
+        }
+
+        // Response as chat bubbles (question + answer keep their context, UAT #4).
+        if (ui.lastQuestion.isNotBlank() || ui.lastResponse.isNotBlank() || ui.busy) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (ui.lastQuestion.isNotBlank()) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        ChatBubble(ui.lastQuestion,
+                            MaterialTheme.colorScheme.secondaryContainer,
+                            MaterialTheme.colorScheme.onSecondaryContainer, alignEnd = true)
+                    }
+                }
+                Column {
+                    Text("my.ai", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 3.dp))
+                    ChatBubble(ui.lastResponse.ifBlank { if (ui.busy) "…" else "—" },
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        MaterialTheme.colorScheme.onSurface, alignEnd = false)
+                }
             }
         }
     }
 
-    run {
-            var draft by remember { mutableStateOf("") }
-            // Text chat needs the host's chat model serving. If the host is up but
-            // Ollama/the model isn't, the inputs are disabled and we show why + a
-            // retry — a tap must not fail silently (UAT #2).
-            val chatReady = ui.canTalk && ui.llmReady
-            val send = {
-                // Not while listening: starting a turn would leave the open mic
-                // running (its later stopListening fires a second, overlapping turn).
-                if (chatReady && draft.isNotBlank() && !ui.busy && !ui.listening) {
-                    vm.ask(draft); draft = ""
-                }
-            }
-            if (ui.canTalk && !ui.llmReady) {
-                Card(Modifier.fillMaxWidth()) {
-                    Row(
-                        Modifier.padding(12.dp).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("No model available on the host — is Ollama running?",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.weight(1f))
-                        OutlinedButton(enabled = !ui.refreshing, onClick = vm::refresh) {
-                            Text("Retry")
-                        }
-                    }
-                }
-            }
-            OutlinedTextField(
-                value = draft, onValueChange = { draft = it },
-                label = { Text("Ask my.ai") },
-                enabled = chatReady,
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { send() }),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    enabled = chatReady && draft.isNotBlank() && !ui.busy && !ui.listening,
-                    onClick = send,
-                ) { Text(if (ui.busy) "Answering…" else "Ask") }
-                OutlinedButton(enabled = ui.busy, onClick = vm::cancel) { Text("Stop") }
-                // Reset to a fresh conversation (drops server context + clears the
-                // panel). Enabled once there's something to clear (UAT #5).
-                OutlinedButton(
-                    enabled = !ui.busy &&
-                        (ui.lastResponse.isNotBlank() || ui.lastQuestion.isNotBlank()),
-                    onClick = { vm.newChat(); draft = "" },
-                ) { Text("New chat") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Push-to-talk: hold to record, release to send. Needs STT AND the
-                // chat model (the transcript is answered by it).
-                Button(
-                    enabled = chatReady && ui.sttAvailable && !ui.busy,
-                    onClick = { if (ui.listening) vm.stopListening() else vm.startListening() },
-                ) {
-                    Text(when {
-                        ui.listening && ui.handsFree -> "Listening — pause to send"
-                        ui.listening -> "Listening — tap to send"
-                        else -> "Talk"
-                    })
-                }
-                LookAndAskButton(
-                    // Disabled while listening: a tap/long-press mid-listen would
-                    // start a look while the mic is still open (overlapping turns).
-                    enabled = ui.canTalk && ui.visionAvailable && !ui.busy && !ui.listening,
-                    onTap = vm::lookAndAsk,
-                    onLongPress = vm::lookAndAskSpoken,
-                )
-            }
-            if (ui.visionAvailable) {
-                Text("Tap to identify · hold to ask about it",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-
-            // Response panel: show the Q&A pair (question + answer), not a bare
-            // answer with no context (UAT #4).
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp)) {
-                    if (ui.lastQuestion.isNotBlank()) {
-                        Text("You", style = MaterialTheme.typography.labelLarge)
-                        Spacer(Modifier.height(2.dp))
-                        Text(ui.lastQuestion)
-                        Spacer(Modifier.height(10.dp))
-                    }
-                    Text("my.ai", style = MaterialTheme.typography.labelLarge)
-                    Spacer(Modifier.height(2.dp))
-                    Text(ui.lastResponse.ifBlank { if (ui.busy) "…" else "—" })
-                }
-            }
-    }
-
-    // Productivity: live previews + quick-add against the my.ai host.
+    // ── Productivity: live previews + quick-add against the my.ai host. ─────
     ChecklistCard(
         title = "Notes",
         items = ui.notes.map {
@@ -815,21 +965,31 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
         onDelete = vm::deleteItem,
     )
 
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // ── Footer: subdued, destructive-adjacent actions. ─────────────────────
+    Row(verticalAlignment = Alignment.CenterVertically) {
         // Disabled mid-turn: deleting the session out from under a running stream
         // left it running against a deleted session with busy stuck true (L2).
-        OutlinedButton(enabled = !ui.busy, onClick = vm::deleteConversation) {
-            Text("Delete conversation")
+        TextButton(enabled = !ui.busy, onClick = vm::deleteConversation) {
+            Text("Delete conversation",
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        OutlinedButton(onClick = vm::unpair) { Text("Unpair host") }
+        Spacer(Modifier.weight(1f))
+        TextButton(onClick = vm::unpair) {
+            Text("Unpair host", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
 @Composable
 private fun StatusRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Text(value, style = MaterialTheme.typography.bodyMedium)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(12.dp))
+        Text(value, style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.End, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f))
     }
 }
 

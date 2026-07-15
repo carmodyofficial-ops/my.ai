@@ -138,16 +138,19 @@ class GatewayClient(
     }
 
     // ── Productivity + history (owner-scoped previews / quick-add) ─────────
-    private suspend fun getArray(path: String, key: String): List<JSONObject> =
+    /** Returns the parsed array, or NULL on a fetch FAILURE (network error / non-2xx)
+     *  — distinct from an empty list (a genuinely empty result). Callers that must
+     *  not blank their UI on a blip can tell the two apart. */
+    private suspend fun getArray(path: String, key: String): List<JSONObject>? =
         withContext(Dispatchers.IO) {
             runCatching {
                 http().newCall(req(path).get().build()).execute().use { resp ->
-                    if (!resp.isSuccessful) return@use emptyList<JSONObject>()
+                    if (!resp.isSuccessful) return@use null
                     val arr = JSONObject(resp.body?.string() ?: "{}").optJSONArray(key)
                         ?: return@use emptyList<JSONObject>()
                     (0 until arr.length()).map { arr.getJSONObject(it) }
                 }
-            }.getOrDefault(emptyList())
+            }.getOrNull()
         }
 
     private suspend fun post(path: String, body: JSONObject): Boolean =
@@ -158,14 +161,17 @@ class GatewayClient(
             }.getOrDefault(false)
         }
 
-    suspend fun notes(): List<NoteItem> = getArray("/notes", "notes").map {
+    /** Null on fetch failure (so a refresh can keep the prior list instead of
+     *  blanking the card); empty list only when the host really has no notes. */
+    suspend fun notes(): List<NoteItem>? = getArray("/notes", "notes")?.map {
         NoteItem(it.optString("id"), it.optString("title"), it.optString("snippet"))
     }
 
     suspend fun addNote(title: String, content: String): Boolean =
         post("/notes", JSONObject().put("title", title).put("content", content))
 
-    suspend fun tasks(): List<TaskItem> = getArray("/tasks", "tasks").map {
+    /** Null on fetch failure (see [notes]); empty list only when there are none. */
+    suspend fun tasks(): List<TaskItem>? = getArray("/tasks", "tasks")?.map {
         TaskItem(it.optString("id"), it.optString("title"),
             it.optString("due_date").takeIf { d -> d.isNotBlank() && d != "null" },
             it.optInt("done"), it.optInt("total"), it.optBoolean("completed"))
@@ -186,13 +192,15 @@ class GatewayClient(
         }.getOrDefault(false)
     }
 
-    suspend fun chatHistory(): List<ChatItem> = getArray("/history/chats", "chats").map {
-        ChatItem(it.optString("id"), it.optString("name"), it.optInt("messages"))
-    }
+    suspend fun chatHistory(): List<ChatItem> =
+        getArray("/history/chats", "chats").orEmpty().map {
+            ChatItem(it.optString("id"), it.optString("name"), it.optInt("messages"))
+        }
 
-    suspend fun visionHistory(): List<VisionItem> = getArray("/history/vision", "vision").map {
-        VisionItem(it.optString("id"), it.optString("question"), it.optString("answer"))
-    }
+    suspend fun visionHistory(): List<VisionItem> =
+        getArray("/history/vision", "vision").orEmpty().map {
+            VisionItem(it.optString("id"), it.optString("question"), it.optString("answer"))
+        }
 
     /** Streamed conversation turn. Emits GatewayEvents until StreamEnd. */
     fun respond(text: String, sessionId: String?, storeTranscript: Boolean): Flow<GatewayEvent> =

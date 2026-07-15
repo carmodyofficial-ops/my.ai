@@ -56,8 +56,8 @@ def _status(sent):
     return start["status"]
 
 
-def _scope(headers=None):
-    return {"type": "http", "method": "POST", "path": "/upload",
+def _scope(headers=None, path="/upload"):
+    return {"type": "http", "method": "POST", "path": path,
             "headers": headers or []}
 
 
@@ -93,6 +93,40 @@ async def test_exactly_at_cap_passes():
     sent = await _drive(app, _scope([(b"content-length", b"100")]), [b"x" * 100])
     assert _status(sent) == 200        # boundary is inclusive (reject only when > cap)
     assert state["read"] == 100
+
+
+async def test_path_override_applies_tighter_cap():
+    # A low-cap upload prefix is rejected below the global ceiling, so a chunked
+    # body can't spool to the global 128 MB on a 10 MB route.
+    inner, state = _make_inner()
+    app = BodySizeLimitMiddleware(inner, max_body_bytes=1000,
+                                  path_overrides={"/tight": 100})
+    sent = await _drive(app, _scope([(b"content-length", b"500")], path="/tight/x"),
+                        [b"z" * 500])
+    assert _status(sent) == 413          # 500 > /tight cap of 100
+    assert state["read"] == 0
+
+
+async def test_path_override_does_not_affect_other_paths():
+    inner, state = _make_inner()
+    app = BodySizeLimitMiddleware(inner, max_body_bytes=1000,
+                                  path_overrides={"/tight": 100})
+    sent = await _drive(app, _scope([(b"content-length", b"500")], path="/other"),
+                        [b"z" * 500])
+    assert _status(sent) == 200          # 500 < the 1000 global ceiling
+    assert state["read"] == 500
+
+
+async def test_reject_echoes_origin_for_cross_origin_413():
+    inner, _ = _make_inner()
+    app = BodySizeLimitMiddleware(inner, max_body_bytes=100)
+    sent = await _drive(
+        app, _scope([(b"content-length", b"999"), (b"origin", b"https://my.ai")]),
+        [b"x" * 5])
+    start = next(m for m in sent if m["type"] == "http.response.start")
+    assert start["status"] == 413
+    hdrs = dict(start["headers"])
+    assert hdrs.get(b"access-control-allow-origin") == b"https://my.ai"   # readable cross-origin
 
 
 async def test_non_http_scope_passes_through_untouched():

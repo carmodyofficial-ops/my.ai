@@ -482,9 +482,21 @@ else:
 # other middleware or the route's multipart parser spools it to disk. Runs even
 # when auth is disabled, and ahead of auth so a giant unauthenticated body is
 # refused up front. Per-route caps remain the precise limits (see upload_limits).
-from src.upload_limits import MAX_REQUEST_BODY_BYTES
-app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=MAX_REQUEST_BODY_BYTES)
-logger.info(f"Request body ceiling: {MAX_REQUEST_BODY_BYTES} bytes")
+from src.upload_limits import (
+    MAX_REQUEST_BODY_BYTES, WEARABLES_IMAGE_MAX_BYTES, STT_MAX_AUDIO_BYTES)
+# Tighten the coarse global ceiling for the small-cap wearables upload paths, so a
+# chunked (no Content-Length) body can't spool up to 128 MB before the 10/25 MB
+# route cap rejects it. +1 MB covers the multipart envelope so a legit at-cap
+# upload isn't pre-rejected. (See BodySizeLimitMiddleware._cap_for.)
+_MB = 1024 * 1024
+app.add_middleware(
+    BodySizeLimitMiddleware, max_body_bytes=MAX_REQUEST_BODY_BYTES,
+    path_overrides={
+        "/api/wearables/v1/vision": WEARABLES_IMAGE_MAX_BYTES + _MB,
+        "/api/wearables/v1/transcribe": STT_MAX_AUDIO_BYTES + _MB,
+    })
+logger.info(f"Request body ceiling: {MAX_REQUEST_BODY_BYTES} bytes "
+            f"(wearables upload paths tightened)")
 
 # ========= STATIC FILES =========
 os.makedirs(STATIC_DIR, exist_ok=True)
