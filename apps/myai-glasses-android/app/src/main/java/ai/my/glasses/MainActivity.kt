@@ -346,18 +346,23 @@ private fun LookAndAskButton(
                     else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     val content = if (enabled) MaterialTheme.colorScheme.onSecondaryContainer
                   else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    // CircleShape (fully-rounded stadium) matches the adjacent Talk Button's
+    // default Material3 shape, so the two 52dp buttons look identical. Clip BEFORE
+    // combinedClickable so the press ripple stays inside the rounded corners.
     Surface(
-        shape = MaterialTheme.shapes.large,
+        shape = CircleShape,
         color = container,
-        modifier = modifier.combinedClickable(
-            enabled = enabled, onClick = onTap, onLongClick = onLongPress),
+        modifier = modifier
+            .clip(CircleShape)
+            .combinedClickable(enabled = enabled, onClick = onTap, onLongClick = onLongPress),
     ) {
         Row(
             Modifier.heightIn(min = 52.dp).fillMaxWidth().padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Look & Ask", style = MaterialTheme.typography.labelLarge, color = content)
+            Text("Look & Ask", style = MaterialTheme.typography.labelLarge, color = content,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -886,7 +891,7 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
                     ui.listening && ui.handsFree -> "Pause to send"
                     ui.listening -> "Tap to send"
                     else -> "Talk"
-                }, maxLines = 1)
+                }, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             LookAndAskButton(
                 // Disabled while listening: a tap/long-press mid-listen would

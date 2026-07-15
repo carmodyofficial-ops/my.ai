@@ -72,7 +72,7 @@ class VoiceSession(private val context: Context) {
     companion object {
         private const val TAG = "VoiceSession"
         const val SAMPLE_RATE = 16_000        // whisper-native; the stack resamples HFP
-        private const val MAX_UTTERANCE_SECONDS = 60   // hard stop: no endless capture
+        private const val MAX_UTTERANCE_SECONDS = 120  // hard stop; raised for long, detailed questions
         private const val MIN_UTTERANCE_BYTES = SAMPLE_RATE / 4 * 2  // 1/4 s of 16-bit @16k → ~250 ms
         // HFP/SCO link-up is typically 0.3–2 s; 3 s is a generous ceiling before
         // we give up and fall back to the phone mic.

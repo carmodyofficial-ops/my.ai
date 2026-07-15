@@ -144,14 +144,18 @@ class TTSService:
 
     # ── Public interface ──
 
-    def synthesize(self, text: str, use_cache: bool = True) -> Optional[bytes]:
+    def synthesize(self, text: str, use_cache: bool = True,
+                   speed: Optional[float] = None) -> Optional[bytes]:
         settings = self._load_settings()
         if settings.get("tts_enabled") is False:
             return None
         provider = settings["tts_provider"]
         model = settings["tts_model"]
         voice = settings["tts_voice"]
-        speed = _safe_speed(settings.get("tts_speed", "1"))
+        # An explicit `speed` overrides the global tts_speed setting (e.g. the
+        # glasses ask for a slightly faster rate) — else use the configured speed.
+        speed = _safe_speed(speed if speed is not None
+                            else settings.get("tts_speed", "1"))
 
         if provider in ("disabled", "browser"):
             return None

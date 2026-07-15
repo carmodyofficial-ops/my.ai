@@ -37,6 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.awaitAll
@@ -521,9 +522,15 @@ class MainViewModel(
     }
 
     private suspend fun doRefreshHealth() {
-        val healthy = client.health()
+        // Probe health + capabilities CONCURRENTLY (they're independent) so a slow
+        // link pays one round-trip, not two — the refresh felt long when sequential.
+        val (healthy, capsInit) = coroutineScope {
+            val h = async { client.health() }
+            val c = async { client.capabilities() }
+            h.await() to c.await()
+        }
         dispatch(if (healthy) Event.HostHealthy else Event.HostUnreachable)
-        var caps = client.capabilities()
+        var caps = capsInit
         // Resilience (UAT #2): right after a reconnect the model endpoint can
         // momentarily resolve empty and report the LLM unavailable. Retry once
         // before trusting a negative, so we don't flash "no model available" over
@@ -877,8 +884,12 @@ class MainViewModel(
     /** Grab a still; a glasses-mic Talk can drop the DAT camera session, so
      *  re-establish it and retry once (USE_GLASSES_MIC). Mock: synthetic JPEG. */
     private suspend fun captureForVision(): ByteArray? {
-        var jpeg = adapter.captureStillJpeg()
-        if (jpeg == null && adapter.connect()) jpeg = adapter.captureStillJpeg()
+        // Higher resolution than the 1280px default: fine detail (leaf venation, a
+        // car badge, small product/label text) is what lets Look-and-Ask name the
+        // SPECIFIC thing. Still well under the image byte cap at q85.
+        var jpeg = adapter.captureStillJpeg(maxDimensionPx = 1920, jpegQuality = 85)
+        if (jpeg == null && adapter.connect())
+            jpeg = adapter.captureStillJpeg(maxDimensionPx = 1920, jpegQuality = 85)
         return jpeg
     }
 
@@ -910,28 +921,42 @@ class MainViewModel(
     }
 
     // ── TTS queue (streaming spoken sentences) ────────────────────────────────
-    // /respond now streams one spoken event per completed sentence, so the first
-    // sentence's audio starts ~1s in instead of after the whole reply. These are
-    // played STRICTLY IN ORDER here: a fresh channel per turn, a single consumer
-    // that fetches TTS + plays each item to completion before the next.
+    // /respond streams one spoken event per completed sentence. We PIPELINE it: a
+    // synthesizer coroutine fetches TTS ahead of playback (into a small buffer)
+    // while the player plays sentences strictly in order — so the fetch+synth for
+    // the next sentence overlaps the current one's playback and there's no dead air
+    // between sentences (the fetch used to happen only AFTER each sentence ended).
     private var speakChannel: Channel<String>? = null
     private var speakJob: Job? = null
 
     private fun ensureSpeakConsumer() {
         if (speakJob?.isActive == true) return
-        val ch = Channel<String>(Channel.UNLIMITED)
-        speakChannel = ch
+        val textCh = Channel<String>(Channel.UNLIMITED)
+        speakChannel = textCh
         speakJob = viewModelScope.launch {
+            // Synthesize a few sentences ahead so audio is ready when the player
+            // needs it. Buffer bounded so we don't fetch the whole reply at once.
+            val audioCh = Channel<ByteArray>(capacity = 3)
+            val synth = launch {
+                try {
+                    for (t in textCh) {
+                        if (t.isBlank()) continue
+                        val audio = client.speech(t) ?: continue   // skip a failed chunk
+                        audioCh.send(audio)
+                    }
+                } finally {
+                    audioCh.close()
+                }
+            }
             try {
-                for (t in ch) {
-                    if (t.isBlank()) continue
-                    val audio = client.speech(t) ?: continue   // skip a failed chunk
+                for (audio in audioCh) {
                     dispatch(Event.SpeakingChanged(true))
                     val done = CompletableDeferred<Unit>()
                     voice.playAudio(audio) { done.complete(Unit) }
                     done.await()   // barge-in cancels this coroutine → loop ends
                 }
             } finally {
+                synth.cancel()
                 dispatch(Event.SpeakingChanged(false))
             }
         }

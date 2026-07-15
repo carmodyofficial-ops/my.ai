@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import re
 
-DEFAULT_MAX_SPOKEN_CHARS = 1100  # ≈ 20-30 s at normal TTS speed
+DEFAULT_MAX_SPOKEN_CHARS = 2400  # ceiling on run-on TTS; ≈ 45-60 s. Only caps
+# genuinely long answers — concise ones are unaffected, and the full text is
+# always on the phone. Raised so thorough answers aren't cut off mid-thought.
 
 _CODE_FENCE_RE = re.compile(r"```.*?(?:```|$)", re.DOTALL)
 _INLINE_CODE_RE = re.compile(r"`([^`\n]{1,120})`")

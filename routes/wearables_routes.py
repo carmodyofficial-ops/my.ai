@@ -45,9 +45,12 @@ from src.upload_limits import (
 logger = logging.getLogger(__name__)
 
 MAX_TEXT_CHARS = 4000
-MAX_QUESTION_CHARS = 500
-MAX_SPEECH_CHARS = 2000
+MAX_QUESTION_CHARS = 2000   # a spoken/typed Look-and-Ask question (raised for long, detailed questions)
+MAX_SPEECH_CHARS = 3000
 MAX_AGENT_ROUNDS = 6
+# Vision answers can be thorough (identification often needs explaining); the
+# spoken cap (see spoken.py) still bounds run-on TTS, full text is on the phone.
+VISION_MAX_TOKENS = 1500
 # Don't speak a streamed segment until it's at least this long: merges tiny
 # fragments an abbreviation boundary produces ("Dr.", "e.g.") into the next real
 # sentence so the glasses TTS isn't choppy. The final flush emits any short tail.
@@ -82,31 +85,39 @@ WEARABLES_DISABLED_TOOLS = {
 SPOKEN_SYSTEM_PROMPT = (
     "You are my.ai speaking through smart glasses. The user HEARS your answer. "
     "Lead with the direct answer in the first sentence. Keep it to 2-4 short "
-    "sentences unless the user asks for more. Plain conversational prose only: "
-    "no markdown, no bullet lists, no tables, no code blocks, never read a URL "
-    "aloud. If a lot more detail exists, end with a brief offer like 'Want more "
-    "detail?'. Never speak passwords, tokens, keys, or other secrets. "
-    "You can remember facts about the user, manage their notes/to-dos/reminders, "
-    "and search past chats when asked (e.g. 'remember I'm allergic to peanuts', "
-    "'remind me to call mom at 5'); after doing so, confirm in ONE short sentence."
+    "sentences for a simple question, but give a THOROUGH, complete answer when the "
+    "question is detailed, multi-part, or asks for depth — the full text is also on "
+    "their phone, so don't truncate a genuinely rich answer. Plain conversational "
+    "prose only: no markdown, no bullet lists, no tables, no code blocks, never read "
+    "a URL aloud. Never speak passwords, tokens, keys, or other secrets. You can "
+    "remember facts about the user, manage their notes/to-dos/reminders, search past "
+    "chats, and search the web when asked; after an action, confirm in ONE sentence."
 )
 
-# Look-and-Ask uses a DEDICATED vision prompt (not the chat one): the chat prompt
-# optimizes for brevity and produces vague scene summaries. This one forces CONCRETE,
-# grounded answers — read text verbatim, give counts/colors/brands/prices, identify
-# the single main subject — which is the whole point of pointing the glasses at
-# something. Still spoken-friendly (short, no markdown).
+# Look-and-Ask uses a DEDICATED vision prompt (not the chat one). It pushes for a
+# SPECIFIC identification (species/model/product, not "a flower"/"a car") and lets
+# the model WEB-SEARCH from what it sees to pin the exact thing down — the whole
+# point of pointing the glasses at something.
 VISION_SYSTEM_PROMPT = (
     "You are my.ai, seeing through the wearer's smart glasses and speaking aloud. "
-    "You are given ONE photo of what they are looking at, plus their question. "
-    "Answer the question DIRECTLY and CONCRETELY from what is actually visible. "
-    "Be specific: identify the exact object (not the whole scene), read any text, "
-    "numbers, or labels VERBATIM, and state colors, counts, brands, prices, and "
-    "readings you can actually see. Do NOT hedge with 'appears to be' or 'likely' "
-    "when it is clear — only flag uncertainty when the photo genuinely doesn't show "
-    "it, and if the answer isn't visible, say so in one sentence. Keep it to 1-3 "
-    "short spoken sentences: plain conversational prose, no markdown, no lists, "
-    "never spell out a URL. Lead with the answer."
+    "You are given ONE photo of what they are looking at, plus their question. Your "
+    "job is to be SPECIFIC and ACCURATE, never general. Identify the EXACT thing: a "
+    "plant's species (common name + genus/species), a car's make, model, and rough "
+    "year, a product's brand and name, an animal's breed or species, a landmark's "
+    "name — not just 'a flower' or 'a car'. Read any text, numbers, labels, or "
+    "badges VERBATIM, and state colors, counts, and prices you can see. "
+    "To pin down a specific identification, USE THE web_search TOOL: put the "
+    "distinctive VISIBLE features into the query (leaf shape, flower form, body "
+    "style, badge/logo, packaging text) and name the specific match. Search whenever "
+    "identifying a species / model / product / landmark would benefit; answer "
+    "directly WITHOUT searching for simple questions (colors, counts, reading text). "
+    "Do NOT hedge with 'appears to be' when it's clear. If even after searching you "
+    "can't be certain, give your best SPECIFIC guess and say how confident you are — "
+    "never retreat to a vague label. "
+    "Speak plain conversational prose: no markdown, no lists, never spell a URL "
+    "aloud. Lead with the specific answer; keep it to 1-2 sentences for a simple "
+    "look, but be thorough when the wearer asks for detail or the ID needs "
+    "explaining."
 )
 # What we ask the model when the wearer just taps Look & Ask without speaking a
 # question — steer it to name the specific primary subject, not describe everything.
@@ -849,10 +860,18 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
             raise gw_error(503, gw.TTS_UNAVAILABLE,
                            "Text-to-speech is not configured on the host")
         request_id = _new_request_id()
+        # Glasses speak a touch faster than the web default — the wearer wants
+        # snappy replies. Tunable via `wearables_tts_speed`; scoped to this path so
+        # it doesn't change the web app's TTS.
+        from src import settings as _settings
+        try:
+            tts_speed = float(_settings.get_setting("wearables_tts_speed", 1.15) or 1.15)
+        except (TypeError, ValueError):
+            tts_speed = 1.15
         # use_cache=False: the assistant's spoken answer can contain private
         # content the user asked about, and the retention policy says audio is
         # transient. The default on-disk SHA-keyed cache would persist it.
-        audio = await asyncio.to_thread(tts_service.synthesize, text, False)
+        audio = await asyncio.to_thread(tts_service.synthesize, text, False, tts_speed)
         if not audio:
             logger.error(f"[wearables] speech synthesis failed req={request_id}")
             raise gw_error(502, gw.TTS_FAILED, "Speech synthesis failed")
@@ -995,12 +1014,22 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
             errored = False
             agen = None
             try:
-                from src.llm_core import stream_llm
-                agen = stream_llm(vision["chat_url"], vision["model"], messages,
-                                  temperature=0.2, max_tokens=700,
-                                  headers={}, timeout=120,
-                                  # Refresh the warm window (see /vision/warm).
-                                  extra_payload={"keep_alive": _vision_keep_alive()})
+                # Web-grounded Look-and-Ask: run through the agent loop so the model
+                # can SEE the image AND web_search to name the specific species /
+                # model / product from what it sees (the model decides when to
+                # search; a "what color" look just answers). Hard-capped to web
+                # tools only — nothing else can be armed (owner is an admin).
+                from src.agent_loop import stream_agent_loop
+                agen = stream_agent_loop(
+                    vision["chat_url"], vision["model"], messages,
+                    headers={}, temperature=0.2, max_tokens=VISION_MAX_TOKENS,
+                    owner=owner,
+                    relevant_tools={"web_search", "web_fetch"},
+                    tool_allowlist={"web_search", "web_fetch"},
+                    disabled_tools=set(WEARABLES_DISABLED_TOOLS),
+                    redact_user_text=True,
+                    max_rounds=MAX_AGENT_ROUNDS,
+                )
                 async for chunk in agen:
                     if isinstance(chunk, str) and chunk.startswith("event: error"):
                         # Curate upstream errors: raw frames can carry endpoint URLs
@@ -1015,37 +1044,40 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
                         errored = True
                         break
                     if not (isinstance(chunk, str) and chunk.startswith("data: ")):
-                        yield chunk
-                        continue
+                        continue   # non-data frame — skip
                     payload = chunk[6:].strip()
                     if payload == "[DONE]":
                         continue   # we emit our own terminal frames below
                     try:
                         d = json.loads(payload)
                     except (ValueError, TypeError):
-                        yield chunk
                         continue
-                    if (isinstance(d, dict) and isinstance(d.get("delta"), str)
+                    # ONLY the model's visible answer text is forwarded + spoken.
+                    # Thinking deltas and the agent-loop control frames
+                    # (tool_start/tool_output/agent_step/metrics) are internal —
+                    # never spoken, never shown, never logged.
+                    if not (isinstance(d, dict) and isinstance(d.get("delta"), str)
                             and not d.get("thinking")):
-                        full_parts.append(d["delta"])
-                        # Same per-sentence spoken streaming as /respond: buffer
-                        # short fragments, cap total spoken length.
-                        if not spoken_capped:
-                            joined = "".join(full_parts)
-                            end = last_sentence_end(joined, spoken_cursor)
-                            if end > spoken_cursor:
-                                seg = spoken_text(joined[spoken_cursor:end])["spoken"]
-                                if len(seg) >= MIN_STREAM_SEGMENT_CHARS:
-                                    spoken_cursor = end
-                                    spoken_chars += len(seg)
-                                    if seg:
-                                        yield "data: " + json.dumps({
-                                            "type": "spoken", "text": seg,
-                                            "partial": True, "truncated": False,
-                                            "request_id": request_id}) + "\n\n"
-                                    if spoken_chars >= DEFAULT_MAX_SPOKEN_CHARS:
-                                        spoken_capped = True
-                    yield chunk
+                        continue
+                    full_parts.append(d["delta"])
+                    # Same per-sentence spoken streaming as /respond: buffer short
+                    # fragments, cap total spoken length.
+                    if not spoken_capped:
+                        joined = "".join(full_parts)
+                        end = last_sentence_end(joined, spoken_cursor)
+                        if end > spoken_cursor:
+                            seg = spoken_text(joined[spoken_cursor:end])["spoken"]
+                            if len(seg) >= MIN_STREAM_SEGMENT_CHARS:
+                                spoken_cursor = end
+                                spoken_chars += len(seg)
+                                if seg:
+                                    yield "data: " + json.dumps({
+                                        "type": "spoken", "text": seg,
+                                        "partial": True, "truncated": False,
+                                        "request_id": request_id}) + "\n\n"
+                                if spoken_chars >= DEFAULT_MAX_SPOKEN_CHARS:
+                                    spoken_capped = True
+                    yield chunk   # forward the delta so the phone shows the answer
             except Exception as exc:
                 logger.error(f"[wearables] vision stream error req={request_id}: "
                              f"{type(exc).__name__}")

@@ -2690,7 +2690,11 @@ async def stream_agent_loop(
     # verify + cite, never as instructions. Separate from the curated packs above.
     if _last_user and len(_last_user.split()) >= 4:
         try:
-            from src.settings import get_setting
+            # NB: use the module-level get_setting (imported at top). A local
+            # `from src.settings import get_setting` here would make get_setting a
+            # function-local everywhere, so any path skipping this branch (e.g. a
+            # short <4-word query, or a multimodal vision message) would hit an
+            # UnboundLocalError at the later get_setting call in the round loop.
             if get_setting("corpus_chat_injection", True):
                 from src.knowledge_corpus import corpus_reference_block
                 _min = float(get_setting("corpus_injection_min_score", 0.45) or 0.45)

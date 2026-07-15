@@ -105,10 +105,12 @@ class _TTS:
         self.available = available
         self._audio = audio
 
-    def synthesize(self, text, use_cache=True):
+    def synthesize(self, text, use_cache=True, speed=None):
         # The gateway passes use_cache=False so spoken answers aren't persisted
-        # to the on-disk TTS cache (privacy: audio is transient).
+        # to the on-disk TTS cache (privacy: audio is transient), and a glasses
+        # speed override (faster than the web default).
         self.last_use_cache = use_cache
+        self.last_speed = speed
         return self._audio
 
 
@@ -509,10 +511,16 @@ async def test_speech_unavailable_and_happy_path():
         await ep(_device_req("alice", body={"text": "hi"}))
     assert exc.value.detail["code"] == "TTS_UNAVAILABLE"
 
-    ep_ok = _endpoints()[("POST", "/speech")]
+    tts = _TTS()
+    router_ok = W.setup_wearables_routes(_STT(), tts)
+    ep_ok = {(m, r.path): r.endpoint for r in router_ok.routes
+             for m in (getattr(r, "methods", set()) or set())}[
+        ("POST", "/api/wearables/v1/speech")]
     resp = await ep_ok(_device_req("alice", body={"text": "# md **here**"}))
     assert resp.media_type == "audio/mpeg"  # _TTS returns ID3-magic bytes
     assert resp.body == b"ID3fakeaudio"
+    assert tts.last_use_cache is False                        # transient, not cached
+    assert tts.last_speed is not None and tts.last_speed > 1.0  # glasses speak faster
 
 
 # --- vision -----------------------------------------------------------------------
@@ -570,23 +578,23 @@ async def test_vision_happy_path_sends_data_uri(monkeypatch):
 
 
 async def test_vision_stream_grounds_and_streams(monkeypatch):
-    """Streaming Look-and-Ask: same SSE vocabulary as /respond, driven by the
-    dedicated grounding prompt, with the spoken question passed through."""
+    """Streaming Look-and-Ask runs through the AGENT LOOP (web-grounded) with the
+    dedicated grounding prompt + image, and is hard-capped to web tools only."""
     import services.wearables_gateway.capabilities as C
-    import src.llm_core as llm
+    import src.agent_loop as al
     monkeypatch.setattr(C, "resolve_vision_model",
                         lambda force_refresh=False: {
                             "model": "qwen3.6:27b",
                             "chat_url": "http://fake/v1/chat/completions"})
     captured = {}
 
-    async def _fake_stream(url, model, messages, **kw):
+    async def _fake_loop(url, model, messages, **kw):
         captured.update(url=url, model=model, messages=messages, kw=kw)
         for d in ("That is a red ", "octagonal stop sign."):
             yield "data: " + json.dumps({"delta": d}) + "\n\n"
         yield "data: [DONE]\n\n"
 
-    monkeypatch.setattr(llm, "stream_llm", _fake_stream)
+    monkeypatch.setattr(al, "stream_agent_loop", _fake_loop)
     ep = _endpoints()[("POST", "/vision/stream")]
     resp = await ep(_device_req("alice"),
                     image=_Upload(b"\xff\xd8fakejpeg", content_type="image/jpeg"),
@@ -602,15 +610,15 @@ async def test_vision_stream_grounds_and_streams(monkeypatch):
     assert events[-1]["type"] == "done"
     assert frames[-1] == "data: [DONE]\n\n"
     assert sum(1 for f in frames if "[DONE]" in f) == 1   # upstream [DONE] swallowed
-    # The GROUNDING system prompt (not the chat one) drives it, and the spoken
-    # question + the image both reach the model.
+    # The GROUNDING system prompt drives it; the spoken question + image both reach
+    # the model; and web-search is armed (nothing else — hard cap).
     assert captured["messages"][0]["content"] == W.VISION_SYSTEM_PROMPT
     user = captured["messages"][-1]["content"]
     assert next(c for c in user if c["type"] == "text")["text"] == "what does this sign say?"
     assert next(c for c in user if c["type"] == "image_url"
                 )["image_url"]["url"].startswith("data:image/jpeg;base64,")
-    # A look refreshes the model's warm window (keep_alive passthrough).
-    assert captured["kw"].get("extra_payload", {}).get("keep_alive")
+    assert "web_search" in captured["kw"].get("tool_allowlist", set())
+    assert "bash" not in captured["kw"].get("tool_allowlist", set())
 
 
 async def test_vision_warm_preloads_model(monkeypatch):
@@ -646,7 +654,7 @@ async def test_vision_stream_empty_answer_emits_error_not_silent_done(monkeypatc
     """An empty stream is a failure (parity with /vision/query's 502), not a silent
     'done' — the wearer must get an error cue, and nothing is logged to history."""
     import services.wearables_gateway.capabilities as C
-    import src.llm_core as llm
+    import src.agent_loop as al
     import services.wearables_gateway.productivity as _PROD
     monkeypatch.setattr(C, "resolve_vision_model",
                         lambda force_refresh=False: {
@@ -658,7 +666,7 @@ async def test_vision_stream_empty_answer_emits_error_not_silent_done(monkeypatc
     async def _empty_stream(url, model, messages, **kw):
         yield "data: [DONE]\n\n"      # model produced nothing usable
 
-    monkeypatch.setattr(llm, "stream_llm", _empty_stream)
+    monkeypatch.setattr(al, "stream_agent_loop", _empty_stream)
     ep = _endpoints()[("POST", "/vision/stream")]
     resp = await ep(_device_req("alice"),
                     image=_Upload(b"\xff\xd8x", content_type="image/jpeg"),
@@ -674,7 +682,7 @@ async def test_vision_stream_upstream_error_doesnt_log_partial_or_leak(monkeypat
     must NOT follow with a 'truncated:False' spoken frame, and must NOT forward the
     raw upstream text (internal URLs) to the device."""
     import services.wearables_gateway.capabilities as C
-    import src.llm_core as llm
+    import src.agent_loop as al
     import services.wearables_gateway.productivity as _PROD
     monkeypatch.setattr(C, "resolve_vision_model",
                         lambda force_refresh=False: {
@@ -689,7 +697,7 @@ async def test_vision_stream_upstream_error_doesnt_log_partial_or_leak(monkeypat
             {"status": 502, "text": "boom at http://internal-ollama:11434"}) + "\n\n"
         yield "data: [DONE]\n\n"
 
-    monkeypatch.setattr(llm, "stream_llm", _err_stream)
+    monkeypatch.setattr(al, "stream_agent_loop", _err_stream)
     ep = _endpoints()[("POST", "/vision/stream")]
     resp = await ep(_device_req("alice"),
                     image=_Upload(b"\xff\xd8x", content_type="image/jpeg"),
@@ -718,19 +726,19 @@ async def test_vision_stream_blank_question_uses_grounded_default(monkeypatch):
     """A plain tap (no spoken question) falls back to the specific-subject prompt,
     not a vague 'what am I looking at'."""
     import services.wearables_gateway.capabilities as C
-    import src.llm_core as llm
+    import src.agent_loop as al
     monkeypatch.setattr(C, "resolve_vision_model",
                         lambda force_refresh=False: {
                             "model": "qwen3.6:27b",
                             "chat_url": "http://fake/v1/chat/completions"})
     captured = {}
 
-    async def _fake_stream(url, model, messages, **kw):
+    async def _fake_loop(url, model, messages, **kw):
         captured.update(messages=messages)
         yield "data: " + json.dumps({"delta": "A ceramic mug."}) + "\n\n"
         yield "data: [DONE]\n\n"
 
-    monkeypatch.setattr(llm, "stream_llm", _fake_stream)
+    monkeypatch.setattr(al, "stream_agent_loop", _fake_loop)
     ep = _endpoints()[("POST", "/vision/stream")]
     resp = await ep(_device_req("alice"),
                     image=_Upload(b"\xff\xd8fakejpeg", content_type="image/jpeg"),
