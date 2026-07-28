@@ -315,13 +315,37 @@ class ApplyPatchTool:
             if rc != 0:
                 return {"error": "apply_patch: patch does not apply cleanly (checked, nothing changed).",
                         "output": _truncate((so + se).strip(), MAX_OUTPUT_CHARS)}
+            files = sorted({x.strip() for x in targets if x.strip() != "dev/null"})
+            abs_files = [os.path.join(cwd, f) for f in files]
+            # Snapshot every target AFTER --check passes and BEFORE the real
+            # apply, so a multi-file patch is undoable like any other edit. A
+            # file the patch creates snapshots as "did not exist", so undoing it
+            # removes the file rather than leaving an empty one.
+            checkpoint_ids = []
+            try:
+                from src.file_checkpoints import snapshot
+                for _p in abs_files:
+                    _cid = snapshot(_p, tool="apply_patch")
+                    if _cid:
+                        checkpoint_ids.append(_cid)
+            except Exception:
+                pass
             so, se, rc, to, t = await _run(["git", "apply", tmp], cwd, ctx, DEFAULT_GIT_TIMEOUT)
             if rc != 0:
                 return {"error": "apply_patch: git apply failed.",
                         "output": _truncate((so + se).strip(), MAX_OUTPUT_CHARS)}
-            files = sorted({x.strip() for x in targets if x.strip() != "dev/null"})
+            # Report the changed paths so the post-edit syntax check covers them
+            # (previously apply_patch returned no path at all and was skipped).
+            try:
+                from src.file_ledger import record_read
+                for _p in abs_files:
+                    record_read(_p)
+            except Exception:
+                pass
             return {"output": f"Applied patch to {len(files)} file(s): {', '.join(files) or '(unknown)'}",
-                    "exit_code": 0}
+                    "exit_code": 0,
+                    "paths": abs_files,
+                    "checkpoint_ids": checkpoint_ids}
         except OSError as e:
             return {"error": f"apply_patch: {e}", "exit_code": 1}
         finally:

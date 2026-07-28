@@ -494,6 +494,12 @@ def setup_chat_routes(
         workspace, workspace_rejected = _resolve_request_workspace(
             request, form_data.get("workspace")
         )
+        # Per-tool-call approval. Requires BOTH the operator's setting and an
+        # explicit client opt-in: a caller that cannot render the approval card
+        # (scheduled runs, wearables, API clients) must never be paused on a
+        # decision nobody can give — it would stall and then fail-closed deny.
+        # Only the browser sends supports_approval, so only the browser can pause.
+        _supports_approval = str(form_data.get("supports_approval", "")).lower() in ("1", "true", "yes")
         # Plan mode is a modifier on agent mode — it only makes sense with tools.
         if plan_mode:
             chat_mode = "agent"
@@ -1278,6 +1284,25 @@ def setup_chat_routes(
                     except (TypeError, ValueError):
                         _max_rounds = _DEFAULT_ROUNDS
                     _max_rounds = max(1, min(_max_rounds, 200))
+                    # Per-tool-call approval: operator setting AND a client that
+                    # can answer. "destructive" covers code execution and file
+                    # removal/relocation; edits are excluded because they are now
+                    # snapshotted and undoable (src/file_checkpoints.py), so
+                    # gating them would only add approval fatigue.
+                    _approval_cb = None
+                    _approval_tools = None
+                    try:
+                        from src.tool_approvals import (
+                            approval_enabled, make_approval_cb, tools_for_mode,
+                        )
+                        _appr_mode = str(get_setting("agent_approval_mode", "off") or "off")
+                        if _supports_approval and approval_enabled(_appr_mode):
+                            _approval_cb = make_approval_cb(_user)
+                            _approval_tools = tools_for_mode(_appr_mode)
+                            logger.info("[approval] gate active (mode=%s) for owner=%s",
+                                        _appr_mode, _user)
+                    except Exception:
+                        logger.debug("[approval] setup skipped", exc_info=True)
 
                     async for chunk in stream_agent_loop(
                         sess.endpoint_url,
@@ -1300,6 +1325,8 @@ def setup_chat_routes(
                         plan_mode=plan_mode,
                         approved_plan=approved_plan or None,
                         workspace=workspace or None,
+                        approval_cb=_approval_cb,
+                        approval_tools=_approval_tools,
                     ):
                         if chunk.startswith("data: ") and not chunk.startswith("data: [DONE]"):
                             try:
@@ -1459,6 +1486,35 @@ def setup_chat_routes(
         _verify_session_owner(request, session_id)
         stopped = agent_runs.stop(session_id)
         return {"stopped": stopped}
+
+    # ------------------------------------------------------------------ #
+    # POST /api/chat/approve — resolve a pending per-tool-call approval
+    # ------------------------------------------------------------------ #
+    @router.post("/api/chat/approve")
+    async def chat_approve(request: Request) -> Dict[str, Any]:
+        """Answer an `approval_required` event raised by a running agent turn.
+
+        Owner-scoped inside the registry: an approval can only be resolved by
+        the owner of the stream that raised it, so one user can never approve
+        another's pending command.
+        """
+        from src.tool_approvals import resolve as _approval_resolve
+        owner = effective_user(request)
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(400, "JSON body required")
+        if not isinstance(body, dict):
+            raise HTTPException(400, "JSON object required")
+        approval_id = str(body.get("id") or "").strip()
+        approved = bool(body.get("approved", False))
+        if not approval_id:
+            raise HTTPException(400, "id is required")
+        if not _approval_resolve(approval_id, approved, owner):
+            raise HTTPException(
+                404, "no such pending approval (expired, already resolved, or not yours)")
+        logger.info("[approval] %s -> %s", approval_id, "approved" if approved else "denied")
+        return {"ok": True, "id": approval_id, "approved": approved}
 
     # ------------------------------------------------------------------ #
     # GET /api/chat/stream_status — check if a stream is active for a session

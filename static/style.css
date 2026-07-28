@@ -2426,6 +2426,114 @@ body.bg-pattern-sparkles {
       opacity: 0.6;
       text-decoration: line-through;
     }
+    /* Approval card — the agent is PAUSED waiting for allow/deny on a mutating
+       tool. Deliberately high-contrast: the run is blocked until it's answered,
+       so it must not read as just another transcript bubble. */
+    .approval-card {
+      margin: 10px 0;
+      padding: 10px 12px;
+      border: 1px solid var(--accent-primary, var(--red));
+      border-left-width: 3px;
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--accent-primary, var(--red)) 7%, var(--bg));
+    }
+    .approval-head { display: flex; align-items: center; gap: 7px; font-size: 0.9rem; }
+    .approval-icon { color: var(--accent-primary, var(--red)); }
+    .approval-title code {
+      background: color-mix(in srgb, var(--fg) 8%, transparent);
+      padding: 1px 5px; border-radius: 4px;
+    }
+    .approval-cmd {
+      margin: 8px 0 0;
+      padding: 7px 9px;
+      background: var(--code-bg, var(--bg));
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.8rem;
+      max-height: 180px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .approval-actions {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      margin-top: 9px;
+    }
+    .approval-actions button {
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--bg); color: var(--fg);
+      padding: 4px 14px; cursor: pointer; font-size: 0.83rem;
+    }
+    .approval-allow:hover:not(:disabled) {
+      border-color: var(--color-save-green, #4caf50); color: var(--color-save-green, #4caf50);
+    }
+    .approval-deny:hover:not(:disabled) {
+      border-color: var(--red, #e74c3c); color: var(--red, #e74c3c);
+    }
+    .approval-actions button:disabled { opacity: 0.5; cursor: default; }
+    .approval-status { font-size: 0.8rem; opacity: 0.8; }
+    .approval-card.approved {
+      border-color: var(--color-save-green, #4caf50);
+      background: color-mix(in srgb, var(--color-save-green, #4caf50) 7%, var(--bg));
+    }
+    .approval-card.approved .approval-status { color: var(--color-save-green, #4caf50); }
+    .approval-card.denied {
+      border-color: var(--border);
+      background: transparent;
+      opacity: 0.75;
+    }
+    .approval-card.denied .approval-status { color: var(--red, #e74c3c); }
+
+    /* Agent plan panel — pinned live todo checklist during multi-step runs.
+       Driven by _setStoredPlan() in chat.js from the `plan_update` SSE event. */
+    .agent-plan-panel {
+      position: fixed;
+      right: 18px;
+      bottom: 96px;
+      z-index: 60;
+      width: 290px;
+      max-width: calc(100vw - 36px);
+      background: var(--panel, var(--bg));
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+      font-size: 0.84rem;
+      overflow: hidden;
+    }
+    .agent-plan-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .agent-plan-title { font-weight: 600; }
+    .agent-plan-count { margin-left: auto; opacity: 0.7; font-variant-numeric: tabular-nums; }
+    .agent-plan-head button {
+      background: none; border: none; color: var(--fg);
+      cursor: pointer; opacity: 0.6; font-size: 1rem; line-height: 1;
+      padding: 0 3px;
+    }
+    .agent-plan-head button:hover { opacity: 1; }
+    .agent-plan-list {
+      list-style: none; margin: 0; padding: 6px 10px 10px;
+      max-height: 46vh; overflow-y: auto;
+    }
+    .agent-plan-list li {
+      display: flex; gap: 7px; align-items: baseline;
+      padding: 3px 0; line-height: 1.4;
+    }
+    .agent-plan-mark { width: 1em; flex: 0 0 auto; opacity: 0.75; }
+    .agent-plan-list li.done { opacity: 0.55; }
+    .agent-plan-list li.done .agent-plan-text { text-decoration: line-through; }
+    .agent-plan-list li.done .agent-plan-mark { color: var(--color-save-green, #4caf50); opacity: 1; }
+    .agent-plan-list li.active { font-weight: 600; }
+    .agent-plan-list li.active .agent-plan-mark { color: var(--accent-primary, var(--red)); opacity: 1; }
+    .agent-plan-panel.collapsed .agent-plan-list { display: none; }
+    @media (max-width: 768px) {
+      .agent-plan-panel { right: 10px; left: 10px; width: auto; bottom: 84px; }
+      .agent-plan-list { max-height: 32vh; }
+    }
+    @media print { .agent-plan-panel { display: none !important; } }
+
     /* Plan window: a draggable/dockable modal (shares .modal framework) */
     .plan-window-content {
       width: 520px;
@@ -3779,7 +3887,8 @@ body.bg-pattern-sparkles {
        they stop covering the text on touch screens. Tap again to bring back. */
     pre.buttons-hidden .copy-code,
     pre.buttons-hidden .edit-code,
-    pre.buttons-hidden .run-code { opacity:0 !important; pointer-events:none !important; }
+    pre.buttons-hidden .run-code,
+    pre.buttons-hidden .apply-code { opacity:0 !important; pointer-events:none !important; }
 
     /* Editing state — subtle border on the code block */
     /* Editing state: was a 1px subtle outline that was almost invisible on
@@ -3816,11 +3925,61 @@ body.bg-pattern-sparkles {
     pre:hover .run-code { opacity:0.7; }
     pre .run-code:hover { opacity:1; color:var(--hl-function, #61afef); border-color:var(--hl-function, #61afef); }
 
+    /* Apply-to-file button — positioned left of run button */
+    pre .apply-code {
+      position:absolute; right:114px; top:6px;
+      background:var(--bg); color:var(--fg);
+      border:1px solid var(--border); border-radius:6px;
+      width:28px; height:28px; padding:0; cursor:pointer;
+      opacity:0; transition: opacity .15s, color .15s, border-color .15s;
+      display:flex; align-items:center; justify-content:center;
+    }
+    pre .apply-code.bottom { top:auto; bottom:6px; }
+    pre:hover .apply-code { opacity:0.7; }
+    pre .apply-code:hover { opacity:1; color:var(--color-save-green, #4caf50); border-color:var(--color-save-green, #4caf50); }
+    pre .apply-code.copied {
+      opacity:1;
+      color: var(--color-save-green, #4caf50);
+      border-color: var(--color-save-green, #4caf50);
+      background: color-mix(in srgb, var(--color-save-green, #4caf50) 18%, var(--bg));
+      animation: code-copy-pulse 0.36s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    /* Apply-to-file inline panel: path input -> Preview (dry-run) -> Confirm write */
+    .apply-code-panel {
+      margin: 4px 0 10px; padding: 8px 10px;
+      background: var(--panel, var(--bg));
+      border: 1px solid var(--border); border-radius: 8px;
+      font-size: 0.85rem;
+    }
+    .apply-code-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .apply-code-path {
+      flex: 1 1 220px; min-width: 150px;
+      background: var(--bg); color: var(--fg);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 5px 8px; font-family: var(--font-mono, monospace); font-size: 0.82rem;
+    }
+    .apply-code-panel button {
+      background: var(--bg); color: var(--fg);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 5px 12px; cursor: pointer; font-size: 0.82rem;
+    }
+    .apply-code-panel button:hover { background: var(--bg); border-color: var(--color-save-green, #4caf50); }
+    .apply-code-confirm { border-color: var(--color-save-green, #4caf50) !important; color: var(--color-save-green, #4caf50); }
+    .apply-code-status { margin-top: 7px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .apply-code-status code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+    .apply-code-ok { color: var(--color-save-green, #4caf50); }
+    .apply-code-err { color: var(--red, #e06c75); }
+    .apply-add { color: var(--color-save-green, #4caf50); }
+    .apply-del { color: var(--red, #e06c75); }
+
     /* Compact (single-line) code blocks: slim buttons so the row doesn't
        double the height of a 1-line bash. Copy is text ("Copy" → "✓ Copied"),
        Run and Edit keep their icons but at smaller sizes. Edit swaps to
        a "Save" text label when its .active state is on. */
     pre.pre-compact { padding-right: 200px; min-height: 0; }
+    /* Applying a single-line command to a FILE is rare and the slim row has no
+       room, so hide the apply button on compact one-liners (copy/run still fit). */
+    pre.pre-compact .apply-code { display: none; }
     pre.pre-compact .copy-code,
     pre.pre-compact .edit-code,
     pre.pre-compact .run-code {
@@ -3871,6 +4030,7 @@ body.bg-pattern-sparkles {
       pre .copy-code { opacity:0.7; }
       pre .edit-code { opacity:0.7; }
       pre .run-code { opacity:0.7; }
+      pre .apply-code { opacity:0.7; }
     }
 
     /* Code runner output panel */
@@ -4336,7 +4496,8 @@ body.bg-pattern-sparkles {
       /* Code block buttons — slightly bigger touch targets */
       pre .copy-code,
       pre .edit-code,
-      pre .run-code {
+      pre .run-code,
+      pre .apply-code {
         width: 44px;
         height: 44px;
       }
@@ -9031,6 +9192,14 @@ body.hide-thinking .thinking-section { display: none !important; }
 .agent-thread-node.open .agent-thread-content {
   display: block;
 }
+/* Show the command + live stdout tail WHILE a step runs. tool_progress already
+   streams output into .agent-thread-content, but a running node never received
+   .open — so all of it rendered into a hidden div and the user saw only a timer.
+   Industry-standard agents show the running command inline. On completion the JS
+   decides whether to stay open (diffs) or collapse (plain commands). */
+.agent-thread-node.running .agent-thread-content {
+  display: block;
+}
 .agent-thread-cmd {
   background: color-mix(in srgb, var(--fg) 5%, transparent);
   border: 1px solid var(--border);
@@ -9138,15 +9307,51 @@ body.hide-thinking .thinking-section { display: none !important; }
 .agent-tool-diff .diff-summary-stats .diff-stat-add { color: var(--green, #2ecc71); }
 .agent-tool-diff .diff-summary-stats .diff-stat-del { color: var(--red, #e74c3c); }
 .agent-tool-diff .diff-summary-stats .diff-stat-new { color: var(--accent, var(--red)); opacity: 0.85; }
+/* Undo — reverts this file to the snapshot taken before the edit. Sits in the
+   diff header so the change and the way to take it back are in one place. */
+.diff-undo-btn {
+  margin-left: auto;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 1px 8px; font-size: 0.75rem; cursor: pointer;
+  opacity: 0.75; transition: opacity .15s, color .15s, border-color .15s;
+}
+.diff-undo-btn:hover:not(:disabled) {
+  opacity: 1; color: var(--red, #e74c3c); border-color: var(--red, #e74c3c);
+}
+.diff-undo-btn:disabled { cursor: default; }
+.diff-undo-btn.undone {
+  opacity: 1;
+  color: var(--color-save-green, #4caf50);
+  border-color: var(--color-save-green, #4caf50);
+}
+/* The stats span previously absorbed the free space; keep it snug so the
+   Undo button's margin-left:auto pushes it to the right edge. */
+.agent-tool-diff summary { display: flex; align-items: center; gap: 8px; }
 .diff-pre {
   margin: 0;
   padding: 8px 10px;
   overflow-x: auto;
+  /* Bound the height so a large refactor's diff doesn't push the whole
+     conversation off-screen now that diffs render expanded by default. */
+  max-height: 420px;
+  overflow-y: auto;
   font-family: var(--mono, monospace);
   font-size: 0.82em;
   line-height: 1.45;
 }
 .diff-pre span { display: block; white-space: pre; }
+/* Gutter markers. The renderer strips the leading +/- from the text (it would
+   double up with markdown "- " bullets), which left add/delete encoded by
+   BACKGROUND COLOUR ALONE — invisible to colourblind users, in high-contrast
+   mode, and in print. Re-add the marker as a generated gutter column so the
+   encoding is redundant (colour + glyph) without touching the text itself. */
+.diff-pre .diff-add::before,
+.diff-pre .diff-del::before,
+.diff-pre .diff-ctx::before { width: 1ch; display: inline-block; opacity: 0.75; }
+.diff-pre .diff-add::before { content: '+'; }
+.diff-pre .diff-del::before { content: '\2212'; }  /* − */
+.diff-pre .diff-ctx::before { content: ' '; }
 .diff-pre .diff-add { background: color-mix(in srgb, #2ecc71 22%, transparent); }
 .diff-pre .diff-del { background: color-mix(in srgb, #e74c3c 22%, transparent); }
 .diff-pre .diff-hunk { color: var(--accent); opacity: 0.85; }

@@ -56,45 +56,15 @@ COWORK_LIMITS: dict[str, int] = {
 # before each mutating/effectful tool and awaits a decision from the client. The
 # loop emits an `approval_required` SSE; the client POSTs /api/cowork/approve to
 # resolve it. Pending decisions live here as futures keyed by approval id.
-_PENDING_APPROVALS: dict[str, dict] = {}
-_APPROVAL_TTL = 300  # seconds to wait for a decision before auto-denying
-
-
-def _make_approval_cb(owner: str):
-    """Return a callback the agent loop calls (synchronously) to register a
-    pending approval and get back an awaitable that resolves to the user's
-    decision. Registering synchronously — before the loop emits the
-    approval_required event — closes the race where a fast client could POST the
-    decision before the future exists.
-    """
-    def _cb(meta: dict):
-        approval_id = str(meta.get("id") or "")
-        loop = asyncio.get_running_loop()
-        fut: asyncio.Future = loop.create_future()
-        _PENDING_APPROVALS[approval_id] = {"future": fut, "owner": owner}
-
-        async def _wait() -> bool:
-            try:
-                return bool(await asyncio.wait_for(fut, timeout=_APPROVAL_TTL))
-            except (asyncio.TimeoutError, asyncio.CancelledError):
-                return False  # no/late decision → deny (fail-closed)
-            finally:
-                _PENDING_APPROVALS.pop(approval_id, None)
-
-        return _wait()
-    return _cb
-
-
-def _resolve_approval(approval_id: str, approved: bool, owner: str) -> bool:
-    """Resolve a pending approval. Returns False if unknown/expired or owned by
-    someone else (an approval can only be answered by the stream's own owner)."""
-    entry = _PENDING_APPROVALS.get(approval_id)
-    if not entry or entry.get("owner") != owner:
-        return False
-    fut = entry.get("future")
-    if fut is not None and not fut.done():
-        fut.set_result(bool(approved))
-    return True
+# The registry itself now lives in src/tool_approvals.py so the cowork route and
+# the browser chat route share ONE implementation (they previously could not —
+# chat had none at all). Semantics are unchanged: synchronous registration to
+# close the resolve-before-register race, owner-scoped resolution, and a
+# fail-closed TTL that denies when no decision arrives.
+from src.tool_approvals import (  # noqa: E402
+    make_approval_cb as _make_approval_cb,
+    resolve as _resolve_approval,
+)
 
 
 def map_host_workspace_to_container(host_path: str) -> str | None:

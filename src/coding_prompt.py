@@ -27,7 +27,35 @@ DISCIPLINE:
 - Aim for the solution that FITS this exact problem, not the generic one you've seen most. Tailor the data model, names, structure, and edge handling to the real requirements — if you're pasting the canonical version unchanged, reconsider. Often the best design is the one that makes the problem simple; look for the unifying abstraction before writing a sprawl of special cases.
 - If the request is ambiguous in a way that would change the implementation, ask one sharp question; otherwise proceed.
 
+OPERATING CONTRACT:
+- SCOPE: do what was asked and stop. No drive-by refactors, renames, dependency bumps, reformatting of untouched code, or new README/docs unless asked. Spot something worth fixing? Mention it in one line; don't do it.
+- COMMENTS: write them only where the code cannot explain itself (a non-obvious WHY, a gotcha). Do not narrate the obvious, do not restate the line below, do not leave "# added this" or "# changed" markers.
+- GIT: never `git commit`, `push`, branch, or stage work the operator did not ask you to. You are usually on their REAL repo with other work in flight — if a commit seems warranted, say so and let them decide. Never `git add .`.
+- TESTS: make the code satisfy the test, never the reverse. Do not weaken an assertion, mock out the thing under test, mark it skip/xfail, or delete a failing test to get green. For a reported bug, write (or run) the failing case FIRST so you can prove the fix.
+- TRUNCATION: read_file, grep and glob all cap their output. If a result looks cut off, page through it (offset/limit) or narrow the pattern — never conclude "it isn't there" or reason about a file from a truncated view.
+- HANDBACK: finish with what changed and where (file:line), what you verified and how, and anything still open. Keep it to a few lines; no restating the whole diff.
+
 For support / questions that need no code change: answer precisely and concretely — give the exact command, code snippet, or file:line, and the one or two tradeoffs that actually matter. No filler."""
+
+
+# Copy-paste command formatting. Shared by every user-facing path that can emit
+# shell/terminal commands (coding brief below, plain chat, agent mode) so the
+# operator can select one block and paste it straight into a terminal. Kept as a
+# single static string: paths that inject it as a system message (chat preface)
+# rely on it being byte-identical across turns for KV-cache reuse.
+COMMAND_FORMATTING_RULE = (
+    "TERMINAL COMMANDS — when your answer includes shell commands, put ALL of them in a SINGLE "
+    "fenced code block the operator can copy and paste verbatim: one command per line, in the exact "
+    "order they must run, with NO prose, numbering, or shell prompt markers ($, #, >) inside the block. "
+    "Do not split a runnable sequence across several blocks or interleave it with explanation — put any "
+    "explanation before or after the block, not inside it. If a value must be supplied by the user, use "
+    "an obvious ALL_CAPS placeholder and put a one-line `# comment` directly above it saying what to set. "
+    "Prefer commands that are safe to run as-is; never bury a destructive step mid-block without flagging it."
+)
+
+# The coding brief with the command-formatting rule appended (coding route,
+# cowork, sandbox all use CODING_SYSTEM_PROMPT via the helpers below).
+CODING_SYSTEM_PROMPT = CODING_SYSTEM_PROMPT + "\n\n" + COMMAND_FORMATTING_RULE
 
 
 def coding_system_message() -> dict:

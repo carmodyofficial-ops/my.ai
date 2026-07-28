@@ -16,6 +16,46 @@ _CODENAV_SKIP_DIRS = frozenset({
 _CODENAV_MAX_HITS = 200
 _CODENAV_MAX_LINE = 400
 
+_LINE_NUM_RE = None  # compiled lazily in _strip_line_nums
+
+
+def _line_numbers_enabled() -> bool:
+    """Whether read_file returns cat -n style line numbers (operator-tunable)."""
+    try:
+        from src.settings import get_setting
+        return bool(get_setting("agent_read_file_line_numbers", True))
+    except Exception:
+        return True
+
+
+def _add_line_numbers(text: str, start: int = 1) -> str:
+    """Prefix each line with a right-aligned number + tab (cat -n style)."""
+    if not text:
+        return text
+    # Preserve a trailing-newline-only final element rather than numbering "".
+    lines = text.split("\n")
+    trailing = ""
+    if lines and lines[-1] == "":
+        lines = lines[:-1]
+        trailing = "\n"
+    return "\n".join(f"{i:6d}\t{ln}" for i, ln in enumerate(lines, start)) + trailing
+
+
+def _strip_line_nums(text: str) -> str:
+    """Remove a leading `&lt;spaces&gt;&lt;digits&gt;\\t` prefix from every line.
+
+    Defensive counterpart to _add_line_numbers: a weaker model may copy the
+    numbered output straight into `old_string`, which would never match the real
+    file. The edit tools retry with this applied, so numbering can never turn a
+    correct edit into a failure.
+    """
+    global _LINE_NUM_RE
+    if _LINE_NUM_RE is None:
+        import re as _re
+        _LINE_NUM_RE = _re.compile(r"^[ \t]*\d+\t", _re.MULTILINE)
+    return _LINE_NUM_RE.sub("", text or "")
+
+
 def _unified_diff(old: str, new: str, path: str) -> Optional[Dict[str, Any]]:
     if old == new:
         return None
@@ -65,17 +105,38 @@ class EditFileTool:
             return {"error": "edit_file: old_string required (use write_file to create a file)", "exit_code": 1}
         if old == new:
             return {"error": "edit_file: old_string and new_string are identical", "exit_code": 1}
+        from src.file_ledger import check_editable, record_read
+        _gate = check_editable(path, tool="edit_file")
+        if _gate:
+            return {"error": _gate, "exit_code": 1}
+        from src.file_checkpoints import snapshot
+        _cp = snapshot(path, tool="edit_file")
 
         def _apply():
-            """Helper function that performs the actual string replacement and file writing logic."""
+            """Perform the string replacement and write the file.
+
+            If the literal old_string does not match, retry once with line-number
+            prefixes stripped from both sides — a model that copied read_file's
+            numbered output verbatim should still land its edit.
+            """
             with open(path, "r", encoding="utf-8") as f:
                 original = f.read()
-            count = original.count(old)
+            needle, new_text, denumbered = old, new, False
+            count = original.count(needle)
+            if count == 0:
+                _cand = _strip_line_nums(old)
+                if _cand != old and original.count(_cand) > 0:
+                    needle, count, denumbered = _cand, original.count(_cand), True
             if count == 0:
                 return original, None, "not_found"
             if count > 1 and not replace_all:
                 return original, None, f"not_unique:{count}"
-            updated = original.replace(old, new) if replace_all else original.replace(old, new, 1)
+            if denumbered:
+                # old_string carried line numbers, so new_string almost certainly
+                # does too — strip them from the replacement as well.
+                new_text = _strip_line_nums(new)
+            updated = (original.replace(needle, new_text) if replace_all
+                       else original.replace(needle, new_text, 1))
             with open(path, "w", encoding="utf-8") as f:
                 f.write(updated)
             return original, updated, "ok"
@@ -97,8 +158,13 @@ class EditFileTool:
             n = status.split(":", 1)[1]
             return {"error": f"edit_file: old_string is not unique in {path} ({n} matches). Add surrounding context or set replace_all=true.", "exit_code": 1}
 
+        # Re-stamp: the file on disk is now OUR content, so a follow-up edit in the
+        # same turn must not be rejected as "changed on disk".
+        record_read(path)
         n = original.count(old)
         result = {"output": f"Edited {path} ({n} replacement{'s' if n != 1 else ''})", "exit_code": 0, "path": path}
+        if _cp:
+            result["checkpoint_id"] = _cp
         diff = _unified_diff(original, updated, path)
         if diff:
             result["diff"] = diff
@@ -152,6 +218,20 @@ class ReadFileTool:
             return {"error": f"read_file: {path}: {e}", "exit_code": 1}
         if not (offset > 0 or limit > 0) and len(data) > MAX_READ_CHARS:
             data = data[:MAX_READ_CHARS] + f"\n... [truncated at {MAX_READ_CHARS} chars]"
+        # Stamp the read-ledger so edit_file/write_file can verify this file was
+        # actually read before it is overwritten (src/file_ledger.py).
+        try:
+            from src.file_ledger import record_read
+            record_read(path)
+        except Exception:
+            pass
+        # Line-numbered output (cat -n style). The coding brief asks the model to
+        # cite file:line, which is impossible from unnumbered text; numbering also
+        # makes it far easier to build a unique old_string. Display-only — the
+        # edit tools strip these if a model echoes them back (see _strip_line_nums).
+        if _line_numbers_enabled():
+            start = max(offset, 1) if (offset > 0 or limit > 0) else 1
+            data = _add_line_numbers(data, start)
         return {"output": data, "exit_code": 0}
 
 class WriteFileTool:
@@ -164,6 +244,15 @@ class WriteFileTool:
             path = _resolve_tool_path(raw_path)
         except ValueError as e:
             return {"error": f"write_file: {e}", "exit_code": 1}
+        # write_file truncates. Refuse to clobber an EXISTING file the agent has
+        # not read this session, or one that changed on disk since it was read.
+        # Creating a new file is unaffected.
+        from src.file_ledger import check_editable, record_read
+        _gate = check_editable(path, tool="write_file")
+        if _gate:
+            return {"error": _gate, "exit_code": 1}
+        from src.file_checkpoints import snapshot
+        _cp = snapshot(path, tool="write_file")
         try:
             def _write():
                 old = ""
@@ -183,8 +272,11 @@ class WriteFileTool:
             return {"error": f"write_file: {path}: permission denied", "exit_code": 1}
         except OSError as e:
             return {"error": f"write_file: {path}: {e}", "exit_code": 1}
+        record_read(path)   # the file is now our content — keep the ledger fresh
         diff = _unified_diff(old_content, body, path)
         result = {"output": f"Wrote {size} bytes to {path}", "exit_code": 0, "path": path}
+        if _cp:
+            result["checkpoint_id"] = _cp
         if diff:
             result["diff"] = diff
         return result
@@ -206,6 +298,12 @@ class MultiEditTool:
             path = _resolve_tool_path(raw_path)
         except ValueError as e:
             return {"error": f"multi_edit: {e}", "exit_code": 1}
+        from src.file_ledger import check_editable, record_read
+        _gate = check_editable(path, tool="multi_edit")
+        if _gate:
+            return {"error": _gate, "exit_code": 1}
+        from src.file_checkpoints import snapshot
+        _cp = snapshot(path, tool="multi_edit")
 
         def _apply():
             with open(path, "r", encoding="utf-8") as f:
@@ -220,6 +318,11 @@ class MultiEditTool:
                 if old == "":
                     raise ValueError(f"multi_edit: edit #{i}: old_string is empty")
                 n = text.count(old)
+                if n == 0:
+                    # Same de-numbering fallback as edit_file (see _strip_line_nums).
+                    _cand = _strip_line_nums(old)
+                    if _cand != old and text.count(_cand) > 0:
+                        old, new, n = _cand, _strip_line_nums(new), text.count(_cand)
                 if n == 0:
                     raise ValueError(f"multi_edit: edit #{i}: old_string not found")
                 if n > 1 and not replace_all:
@@ -237,8 +340,11 @@ class MultiEditTool:
             return {"error": str(e), "exit_code": 1}
         except (IsADirectoryError, UnicodeDecodeError, PermissionError, OSError) as e:
             return {"error": f"multi_edit: {path}: {e}", "exit_code": 1}
+        record_read(path)   # keep the ledger fresh after our own write
         diff = _unified_diff(original, newtext, path)
         result = {"output": f"Applied {len(edits)} edit(s) to {path}", "exit_code": 0, "path": path}
+        if _cp:
+            result["checkpoint_id"] = _cp
         if diff:
             result["diff"] = diff
         return result
@@ -262,6 +368,11 @@ class DeleteFileTool:
         except ValueError as e:
             return {"error": f"delete_file: {e}", "exit_code": 1}
 
+        # Snapshot BEFORE removal — deletion is the least recoverable mutation,
+        # so undo mattering here matters most.
+        from src.file_checkpoints import snapshot
+        _cp = snapshot(path, tool="delete_file")
+
         def _del():
             if os.path.isdir(path):
                 return f"delete_file: {path} is a directory — this tool deletes files only"
@@ -277,7 +388,12 @@ class DeleteFileTool:
             return {"error": f"delete_file: {path}: {e}", "exit_code": 1}
         if err:
             return {"error": err, "exit_code": 1}
-        return {"output": f"Deleted {path}", "exit_code": 0}
+        from src.file_ledger import forget
+        forget(path)   # gone — a recreated file must be read again before editing
+        _res = {"output": f"Deleted {path}", "exit_code": 0}
+        if _cp:
+            _res["checkpoint_id"] = _cp
+        return _res
 
 class MoveFileTool:
     async def execute(self, content: str, ctx: dict) -> dict:
@@ -299,6 +415,12 @@ class MoveFileTool:
         except ValueError as e:
             return {"error": f"move_file: {e}", "exit_code": 1}
 
+        # A move mutates BOTH ends: the source disappears and the destination may
+        # be overwritten. Snapshot each so undo can reinstate the original state.
+        from src.file_checkpoints import snapshot
+        _cp_src = snapshot(src, tool="move_file")
+        _cp_dst = snapshot(dst, tool="move_file")
+
         def _move():
             if not os.path.exists(src):
                 return f"move_file: {src}: no such file"
@@ -313,7 +435,13 @@ class MoveFileTool:
             return {"error": f"move_file: {e}", "exit_code": 1}
         if err:
             return {"error": err, "exit_code": 1}
-        return {"output": f"Moved {src} -> {dst}", "exit_code": 0}
+        from src.file_ledger import forget, record_read
+        forget(src)          # source path no longer exists
+        record_read(dst)     # destination content is known (it is the source's)
+        _res = {"output": f"Moved {src} -> {dst}", "exit_code": 0}
+        if _cp_src:
+            _res["checkpoint_id"] = _cp_src
+        return _res
 
 class LsTool:
     async def execute(self, content: str, ctx: dict) -> dict:

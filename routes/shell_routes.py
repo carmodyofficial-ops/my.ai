@@ -406,6 +406,23 @@ class ShellExecRequest(BaseModel):
     use_tmux: bool = False  # run in tmux session (survives browser disconnect)
 
 
+class CodeApplyRequest(BaseModel):
+    path: str
+    content: str
+    # dry_run → compute + return the unified diff WITHOUT writing (preview step),
+    # so the UI can show what would change before the user confirms the write.
+    dry_run: bool = False
+
+
+class CodeUndoRequest(BaseModel):
+    """Undo a file change the agent made. Exactly one selector is used, in
+    precedence order: checkpoint_id (one file) > group (one whole turn) > last."""
+    session_id: str | None = None
+    checkpoint_id: str | None = None
+    group: str | None = None
+    last: bool = False          # undo the most recent turn's changes
+
+
 async def _create_shell(command: str, **kwargs):
     """Spawn a shell subprocess for `command`.
 
@@ -828,6 +845,108 @@ def setup_shell_routes() -> APIRouter:
             cmd, timeout=req.timeout if req.timeout is not None else EXEC_TIMEOUT
         )
         return result
+
+    @router.post("/api/code/apply")
+    async def code_apply(request: Request, req: CodeApplyRequest) -> Dict[str, Any]:
+        """Apply a chat code block to a host file (whole-file write). Admin only.
+
+        Reuses the agent file-write safety envelope verbatim — the target path
+        goes through `_resolve_tool_path` (workspace-aware; sensitive-file deny
+        list for .ssh/.env/id_rsa/…; allowlist-confined to DATA_DIR + tmp unless
+        an admin added roots via `tool_path_extra_roots`) — and returns a unified
+        diff. With dry_run=True it previews the diff without writing so the UI can
+        show what would change before the user confirms.
+        """
+        _require_admin(request)
+        _reject_cross_site(request)
+        from src.tool_execution import _resolve_tool_path
+        from src.agent_tools.filesystem_tools import _unified_diff
+
+        raw_path = (req.path or "").strip()
+        if not raw_path:
+            return {"ok": False, "error": "path is required"}
+        try:
+            path = _resolve_tool_path(raw_path)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        body = req.content if isinstance(req.content, str) else ""
+
+        def _read_old() -> str:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except (FileNotFoundError, IsADirectoryError, UnicodeDecodeError, OSError):
+                return ""
+
+        old = await asyncio.to_thread(_read_old)
+        existed = os.path.exists(path)
+        diff = _unified_diff(old, body, path)
+
+        if req.dry_run:
+            return {"ok": True, "dry_run": True, "path": path, "existed": existed,
+                    "unchanged": old == body, "diff": diff}
+        if old == body:
+            return {"ok": True, "path": path, "existed": existed, "unchanged": True,
+                    "message": f"No change — {path} already matches", "diff": None}
+        try:
+            def _write() -> int:
+                d = os.path.dirname(path)
+                if d:
+                    os.makedirs(d, exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(body)
+                return len(body)
+            size = await asyncio.to_thread(_write)
+        except PermissionError:
+            return {"ok": False, "error": f"{path}: permission denied"}
+        except OSError as e:
+            return {"ok": False, "error": f"{path}: {e}"}
+        logger.info("Code applied to host file: %s (%d bytes, existed=%s)", path, size, existed)
+        return {"ok": True, "path": path, "existed": existed, "bytes": size,
+                "message": f"Wrote {size} bytes to {path}", "diff": diff}
+
+    @router.get("/api/code/checkpoints")
+    async def code_checkpoints(request: Request, session_id: str = "",
+                               limit: int = 50) -> Dict[str, Any]:
+        """List pre-edit checkpoints for a session (most recent first). Admin only."""
+        _require_admin(request)
+        _reject_cross_site(request)
+        from src.file_checkpoints import list_checkpoints, latest_group
+        items = list_checkpoints(session_id or None, limit=limit)
+        return {"ok": True, "checkpoints": items,
+                "latest_group": latest_group(session_id or None)}
+
+    @router.post("/api/code/undo")
+    async def code_undo(request: Request, req: CodeUndoRequest) -> Dict[str, Any]:
+        """Restore file(s) to their pre-edit state. Admin only.
+
+        The agent's file tools snapshot each file before modifying it; this puts
+        a snapshot back. A change that CREATED a file is undone by removing it.
+        Restores are re-validated against the path allowlist and clear the read
+        ledger, so the agent must re-read a reverted file before editing again.
+        """
+        _require_admin(request)
+        _reject_cross_site(request)
+        from src.file_checkpoints import restore, restore_group, latest_group
+
+        sid = req.session_id or None
+        if req.checkpoint_id:
+            res = restore(req.checkpoint_id, session_id=sid)
+            if res.get("ok"):
+                logger.info("Checkpoint undo: %s -> %s", req.checkpoint_id, res.get("path"))
+            return res
+        group = req.group
+        if not group and req.last:
+            group = latest_group(sid)
+            if not group:
+                return {"ok": False, "error": "no checkpoints recorded for this session"}
+        if group:
+            res = restore_group(group, session_id=sid)
+            if res.get("ok"):
+                logger.info("Checkpoint undo: group %s (%d files)",
+                            group, len(res.get("restored") or []))
+            return res
+        return {"ok": False, "error": "specify checkpoint_id, group, or last=true"}
 
     @router.post("/api/shell/stream")
     async def shell_stream(request: Request, req: ShellExecRequest):

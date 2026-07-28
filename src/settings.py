@@ -132,25 +132,67 @@ DEFAULT_SETTINGS = {
     # prefill size. Remote endpoints are never capped. 0 disables. See
     # `src.model_context.LOCAL_CONTEXT_CAP_DEFAULT`.
     "local_context_window_cap": 32768,
-    # Coding turns benefit from a larger local window than the general cap above:
-    # the configured coding model (auto_model_coding) is typically smaller than
-    # the 120B complex model, so a bigger KV reservation is affordable, and
-    # long-horizon coding (reading many files, iterating over tool output) needs
-    # the room. Applied ONLY to the configured coding model; 0 = fall back to
-    # local_context_window_cap. See src.model_context.LOCAL_CONTEXT_CAP_CODING_DEFAULT.
+    # Extra KV-cache headroom reserved ONLY for the configured coding model
+    # (auto_model_coding). 0 = fall back to local_context_window_cap.
+    #
+    # 65536 is sized from the ACTUAL architecture of the models in play on a
+    # 128GB GB-10, not a guess:
+    #   gpt-oss-120b  36 layers, 8 KV heads, k/v len 64 -> <=72 KB/token
+    #                 (less in practice: it alternates 128-token sliding-window
+    #                 and full attention). 64k ctx = ~4.8 GB KV worst case, so
+    #                 ~70 GB total with 65 GB of MXFP4 weights vs ~114 GB free.
+    #   Qwen3-Coder-Next-FP8  hybrid: only 12 of 48 layers keep a KV cache
+    #                 (full_attention_interval=4), 2 KV heads x 256 head_dim
+    #                 -> ~24 KB/token. 64k ctx = ~1.6 GB. Far cheaper still.
+    # Long-horizon coding (many files + tool output) is exactly what needs the
+    # room. Raising this forces a one-time model reload on the next coding turn.
+    # Don't push to 131072 without cause: prefill at ~10 tok/s dominates, and
+    # the input budget scales to 0.85 x window, inviting huge slow prompts.
+    # See src.model_context.LOCAL_CONTEXT_CAP_CODING_DEFAULT.
     "local_context_window_cap_coding": 65536,
     # --- Per-turn LOCAL model auto-routing (src/model_router.py). Surfaced here
     # so they appear in Settings; the router reads these same defaults, so simply
     # listing them changes no behavior. Remote endpoints are never auto-routed. ---
     "auto_model_routing": True,
     "auto_model_routing_llm": True,
-    "auto_model_coding": "qwen3-coder:30b",
+    # Code should come from the most capable coding model that ACTUALLY LOADS on
+    # the host. On a single GB-10 (128GB unified), the strongest model that fits
+    # is the 120B — so coding uses it (was qwen3-coder:30b, which is weaker than
+    # the model general questions already got). To upgrade to Qwen3.5-397B, add a
+    # SECOND GB-10 (linked ~256GB) and change this to the served 397B tag; on one
+    # unit the 397B OOMs (weights ~198GB at Q4 > 128GB) and coding breaks.
+    "auto_model_coding": "seamon67/GPT-OSS-Heretic:v2-120b",
     "auto_model_complex": "seamon67/GPT-OSS-Heretic:v2-120b",
     "auto_model_simple": "gpt-oss:20b",
     # --- Deliberate + sustainable coding-loop features ---
     # Inject the senior-engineer coding brief (read-before-edit -> plan -> verify
     # -> iterate) on coding-classified chat/agent turns, not just cowork/sandbox.
     "coding_persona_enabled": True,
+    # Mechanically refuse to edit/overwrite a file the agent has not read this
+    # session, or one that changed on disk since it read it (src/file_ledger.py).
+    # Prompt text alone cannot prevent write_file silently truncating an unseen
+    # file, or clobbering a concurrent edit. Creating NEW files is unaffected.
+    "agent_read_before_edit": True,
+    # Pause before a mutating tool and wait for the user to allow/deny it, in the
+    # browser. "off" (default, unchanged behavior) | "destructive" (code
+    # execution + file delete/move/patch/git — the things checkpoints can't take
+    # back) | "all" (every mutating tool). Only applies to clients that can
+    # render the prompt; scheduled/wearable/API runs are never paused.
+    # See src/tool_approvals.py.
+    "agent_approval_mode": "off",
+    # Snapshot each file before the agent modifies it so a change can be undone
+    # (per file, or a whole turn). Stored under data/checkpoints, size- and
+    # count-capped. See src/file_checkpoints.py.
+    "agent_edit_checkpoints": True,
+    # Return cat -n style line numbers from read_file so the model can cite
+    # file:line (which the coding brief requires) and build unique old_strings.
+    # The edit tools strip these if a model echoes them back, so this is safe.
+    "agent_read_file_line_numbers": True,
+    # Ground PLAIN-CHAT coding turns with the curated knowledge packs + licensed
+    # corpus (the agent path already does this; plain chat runs tools-off and
+    # otherwise gets no grounding). Injected as UNTRUSTED context, not system, so
+    # the local KV cache is preserved. See ChatProcessor.build_context_preface.
+    "coding_chat_grounding": True,
     # Tell the agent to author its own todo (via update_plan) for multi-step work
     # and keep it pinned + ticked across rounds (a plan it owns, not user-gated).
     "agent_self_todo_enabled": True,

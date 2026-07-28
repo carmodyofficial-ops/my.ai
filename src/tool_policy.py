@@ -26,6 +26,13 @@ GUIDE_ONLY_DIRECTIVE = (
 SAFE_LOCAL_ABSTENTION_TOOLS: frozenset[str] = frozenset({
     "bash", "python", "shell", "terminal", "run_shell", "run_command",
     "run_bash", "execute", "git", "write_file", "edit_file",
+    # Previously missing, which left the guard easy to walk around: a copy-only
+    # turn could still mutate the filesystem via multi_edit/apply_patch or
+    # delete/move a file, and still execute code via code_sandbox/run_tests.
+    # lint_format rewrites files in format mode. Keep this set in sync with any
+    # new execution or file-mutation tool — see tests/test_tool_policy_abstention.
+    "multi_edit", "apply_patch", "delete_file", "move_file",
+    "code_sandbox", "run_tests", "lint_format",
 })
 
 SAFE_LOCAL_REASON = (

@@ -9,6 +9,7 @@ import settingsModule from './settings.js';
 import spinnerModule from './spinner.js';
 import { bindMenuDismiss } from './escMenuStack.js';
 import { matchModelKey } from './model/matchKey.js';
+import { toolLabel } from './toolLabels.js';
 
 const SEARCH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>';
 const REPORT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>';
@@ -2095,13 +2096,21 @@ export function addMessage(role, content, modelName, metadata) {
                 else if (line.startsWith(' ')) { text = line.slice(1); }
                 return `<span class="${cls}">${esc(text) || '&nbsp;'}</span>`;
               }).join('');  // spans are display:block \u2014 a literal \n would double-space
-              evDiffHtml = `<details class="agent-tool-output agent-tool-diff"><summary><span class="diff-file">${esc(d.file || 'diff')}</span> <span class="diff-summary-stats">${stat}</span></summary><pre class="diff-pre">${rows}</pre></details>`;
+              // Undo stays available after a reload — the checkpoint is persisted
+              // with the tool event, not held in memory.
+              const _undoBtn = ev.checkpoint_id
+                ? `<button type="button" class="diff-undo-btn" data-checkpoint="${esc(ev.checkpoint_id)}" title="Revert this change">Undo</button>`
+                : '';
+              evDiffHtml = `<details open class="agent-tool-output agent-tool-diff"><summary><span class="diff-file">${esc(d.file || 'diff')}</span> <span class="diff-summary-stats">${stat}</span>${_undoBtn}</summary><pre class="diff-pre">${rows}</pre></details>`;
             }
             const node = document.createElement('div');
-            node.className = 'agent-thread-node' + (ok ? '' : ' error');
+            // Match the live view: a reloaded step that changed code or failed
+            // stays expanded, so the diff/error is one glance away, not two clicks.
+            const _keepOpen = !!(ev.diff && ev.diff.text) || !ok;
+            node.className = 'agent-thread-node' + (ok ? '' : ' error') + (_keepOpen ? ' open' : '');
             // Hide the raw JSON command when a diff says it better (same as live).
             const evCmdHtml = (ev.command && !(ev.diff && ev.diff.text)) ? `<pre class="agent-thread-cmd">${esc(ev.command)}</pre>` : '';
-            node.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(ev.tool)}</span><span class="agent-thread-status">${ok ? 'done' : 'failed'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${evCmdHtml}${outHtml}${evDiffHtml}</div>`;
+            node.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(toolLabel(ev.tool))}</span><span class="agent-thread-status">${ok ? 'done' : 'failed'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${evCmdHtml}${outHtml}${evDiffHtml}</div>`;
             // Click handling is delegated globally \u2014 see chat.js init.
             threadWrap.appendChild(node);
           }

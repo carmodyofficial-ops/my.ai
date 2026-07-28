@@ -9,6 +9,8 @@ from src.chat_helpers import extract_urls
 from src.youtube_handler import is_youtube_url
 from src.search import comprehensive_web_search, fetch_webpage_content
 from src.prompt_security import UNTRUSTED_CONTEXT_POLICY, untrusted_context_message
+from src.coding_prompt import COMMAND_FORMATTING_RULE
+from src.settings import get_setting
 # K1I_INTELLIGENCE_IMPORT_BEGIN
 # Optional local intelligence runtime hook. Feature-flagged by MYAI_INTELLIGENCE_ENABLED.
 try:
@@ -223,6 +225,13 @@ class ChatProcessor:
             "role": "system",
             "content": UNTRUSTED_CONTEXT_POLICY,
         })
+        # Static (KV-cache safe) rule so plain-chat answers that include shell
+        # commands come back as one copy-paste-ready block — same rule the coding
+        # brief and agent rules carry, so behavior is uniform across every path.
+        preface.append({
+            "role": "system",
+            "content": COMMAND_FORMATTING_RULE,
+        })
 
         # Memory: pinned (always included) + extended (RAG-retrieved when relevant)
         self._last_used_memories = []  # track what was injected
@@ -296,6 +305,35 @@ class ChatProcessor:
                         preface.append(untrusted_context_message("retrieved documents", rag_content))
             except Exception as e:
                 logger.warning(f"RAG retrieval failed: {e}")
+
+        # Codebase / coding-knowledge grounding for coding-classified turns.
+        # The AGENT path already injects the curated knowledge packs + licensed
+        # corpus (src/agent_loop.py), but a PLAIN-CHAT coding question runs with
+        # tools off and never enters the agent loop — so it went unGrounded and
+        # the model guessed APIs. Mirror that grounding here, gated by the same
+        # coding classifier, and emit it as UNTRUSTED context messages (role
+        # "user", appended near the end) so the static system prefix stays
+        # byte-identical and the local backend keeps its KV cache.
+        if get_setting("coding_chat_grounding", True) and not agent_mode:
+            try:
+                from src.model_router import classify_heuristic
+                _cat, _conf = classify_heuristic(message)
+                _wc = len((message or "").split())
+                if _cat == "coding" and _conf in ("high", "med") and _wc >= 3:
+                    from src.coding_knowledge import coding_knowledge_message
+                    _kn = coding_knowledge_message(message)
+                    if _kn and _kn.get("content"):
+                        preface.append(untrusted_context_message(
+                            "coding reference (curated packs)", _kn["content"]))
+                    if get_setting("corpus_chat_injection", True) and _wc >= 4:
+                        from src.knowledge_corpus import corpus_reference_block
+                        _min = float(get_setting("corpus_injection_min_score", 0.45) or 0.45)
+                        _corpus = corpus_reference_block(message, k=3, min_score=_min)
+                        if _corpus:
+                            preface.append(untrusted_context_message(
+                                "coding reference (external corpus)", _corpus))
+            except Exception:
+                logger.debug("[coding-grounding] chat injection skipped", exc_info=True)
 
         # Add web search if enabled
         web_sources = []

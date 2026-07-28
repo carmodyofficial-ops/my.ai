@@ -1,9 +1,14 @@
 """Auto-delegate the chat model from the prompt — precise + conversation-aware.
 
 Picks the per-turn LOCAL model by categorizing the message:
-  coding   -> coding model  (default qwen3-coder:30b)
-  complex  -> big model     (default the 120B gpt-oss)   [also: any agent-mode turn]
-  simple   -> small model   (default gpt-oss:20b)
+  coding   -> coding model  (the most capable coder that loads on the host)
+  complex  -> big model     (the 120B gpt-oss)   [also: any agent-mode turn]
+  simple   -> small model   (gpt-oss:20b)
+Defaults live in src/settings.py (auto_model_coding / _complex / _simple).
+
+Coding covers not just "write me code" but command-line / ops requests — "give
+me a command to mount this drive", "how do I install X" — so terminal answers
+come from the strongest coder and inherit the copy-paste command formatting.
 
 Precision comes from three layers, fast-path first — clear prompts are instant and
 only genuinely ambiguous ones pay for more:
@@ -40,7 +45,10 @@ _CODE_NOUNS = ("function", "class", "method", "script", "code", "api", "endpoint
                "module", "regex", "algorithm", "snippet", "query", "loop", "array", "variable",
                "struct", "interface", "compiler", "dockerfile", "bug", "exception", "schema",
                "migration", "syntax", "parser", "decorator", "stack trace", "unit test")
-_TOOLS = ("git", "docker", "kubectl", "kubernetes", "npm", "pip", "sql", "bash", "terraform")
+_TOOLS = ("git", "docker", "kubectl", "kubernetes", "npm", "pip", "sql", "bash", "terraform",
+          "apt", "apt-get", "brew", "yum", "dnf", "pacman", "systemctl", "systemd", "ssh", "scp",
+          "curl", "wget", "crontab", "cron", "ollama", "conda", "cargo", "rsync", "vllm",
+          "fstab", "blkid", "lsblk", "nvidia-smi")
 # Bare language names only — common-English words (go/node/react/express) are
 # excluded; they're caught via file extensions, special langs, or the LLM tie-breaker.
 _LANGS = ("python", "javascript", "typescript", "golang", "rust", "java", "kotlin",
@@ -55,6 +63,25 @@ _FOLLOWUP = re.compile(
     r"remove|instead|continue|keep going|shorter|longer|simplify|the (error|bug|issue|test)|"
     r"can you (also|now)|do that|try (that|again))", re.I)
 
+# Command-line / ops intent. A request for something to paste into a terminal is
+# a coding request: it routes to the coding model so shell/ops answers come from
+# the strongest coder AND inherit the copy-paste command formatting. Sysadmin
+# verbs kept tight (common English like "run"/"start" excluded → they'd over-fire;
+# they fall through to the low-confidence tie-breaker instead).
+_OPS_ACTIONS = ("install", "uninstall", "reinstall", "mount", "unmount", "setup",
+                "enable", "disable", "restart", "reboot", "compile", "chmod", "chown",
+                "symlink", "provision", "partition", "quantize")
+_CMD_NOUNS = ("command", "commands", "terminal", "shell", "cli", "one-liner", "oneliner",
+              "code block", "codeblock")
+# Explicit "give me a command to X" / "in my terminal" / "cli" — strong coding.
+_CMD_REQUEST = re.compile(
+    r"\b(command|one[-\s]?liner|code\s?block|script|snippet)\b[^.?!]{0,40}\b(to|for|that|which|i can)\b"
+    r"|\b(give|write|show|need|want|get)\b[^.?!]{0,30}\b(command|one[-\s]?liner|code\s?block|script|snippet)\b"
+    r"|\b(in|into|from|to|on)\s+(the\s+|my\s+|your\s+)?terminal\b"
+    r"|\b(cli|command[-\s]?line)\b")
+# "how do I <thing>" is a TASK; "how does X work" (complex) is handled elsewhere.
+_HOWTO = re.compile(r"\bhow\s+(do|can|would|could|should)\s+i\b|\bhow\s+to\b")
+
 
 def _wb(words):
     return re.compile(r"\b(" + "|".join(re.escape(w) for w in words) + r")\b")
@@ -64,6 +91,8 @@ _RE_ACTIONS = _wb(_CODE_ACTIONS)
 _RE_NOUNS = _wb(_CODE_NOUNS)
 _RE_TOOLS = _wb(_TOOLS)
 _RE_LANGS = _wb(_LANGS)
+_RE_OPS = _wb(_OPS_ACTIONS)
+_RE_CMD_NOUNS = _wb(_CMD_NOUNS)
 _RE_COMPLEX = re.compile("|".join(re.escape(c) for c in _COMPLEX))  # phrases ok as substr
 
 
@@ -73,9 +102,14 @@ def _code_score(text: str) -> int:
     if _FILE_EXT.search(text):
         return 4
     signs = min(3, sum(1 for s in _SIGNS if s in text))
-    lang = bool(_RE_LANGS.search(text)) or any(s in text for s in _SPECIAL_LANGS) or bool(_RE_TOOLS.search(text))
+    tool = bool(_RE_TOOLS.search(text))
+    lang = bool(_RE_LANGS.search(text)) or any(s in text for s in _SPECIAL_LANGS) or tool
     noun = bool(_RE_NOUNS.search(text))
     act = bool(_RE_ACTIONS.search(text))
+    ops = bool(_RE_OPS.search(text))
+    cmd_noun = bool(_RE_CMD_NOUNS.search(text))
+    cmd_req = bool(_CMD_REQUEST.search(text))
+    howto = bool(_HOWTO.search(text))
     score = signs
     if noun:
         score += 1
@@ -85,6 +119,20 @@ def _code_score(text: str) -> int:
         score += 1          # a bare language alone is weak (-> low conf / tie-breaker)
         if noun or act or signs:
             score += 1       # language IN a coding context = strong
+    # Command-line / ops intent -> the user wants runnable terminal output.
+    if cmd_req:
+        score += 4          # explicit: "give me a command to ...", "in my terminal", "cli"
+    else:
+        if cmd_noun:
+            score += 1
+        if ops:
+            score += 1
+        if cmd_noun and (ops or tool or act):
+            score += 2       # "command to install X", "terminal ... systemctl"
+    # "how do I <tech>" is a task (coding); "how does X work" stays complex, so
+    # only boost when a concrete tech signal is also present.
+    if howto and (ops or cmd_noun or lang):
+        score += 2
     return score
 
 
@@ -203,8 +251,11 @@ async def select_model_for_turn(message, *, chat_mode: str, current_model: str,
             v = settings.get_setting(key, dflt)
             v = str(v).strip() if v is not None else ""
             return v or dflt
+        # Defaults mirror src/settings.py. Coding points at the strongest model
+        # that loads on a single GB-10 (the 120B), NOT a small coder — see the
+        # settings.py note on the Qwen3.5-397B / dual-GB-10 upgrade path.
         models = {
-            "coding": _routed_model("auto_model_coding", "qwen3-coder:30b"),
+            "coding": _routed_model("auto_model_coding", "seamon67/GPT-OSS-Heretic:v2-120b"),
             "complex": _routed_model("auto_model_complex", "seamon67/GPT-OSS-Heretic:v2-120b"),
             "simple": _routed_model("auto_model_simple", "gpt-oss:20b"),
         }

@@ -115,10 +115,9 @@ REQUEST_TIMEOUT = 5
 # compactor in one place. Remote endpoints are never capped (their real window is
 # wanted). 0 disables. Operator-tunable via setting `local_context_window_cap`.
 LOCAL_CONTEXT_CAP_DEFAULT = 32768
-# A larger cap reserved for the configured coding model only — see
-# `local_context_window_cap_coding`. The coding model is typically smaller than
-# the 120B complex model, so the extra KV reservation is affordable, and
-# long-horizon coding wants the room.
+# Larger cap for the configured coding model — see `local_context_window_cap_coding`,
+# where the per-architecture KV maths behind 65536 is worked out. Affordable on a
+# 128GB GB-10 for both the 120B (<=72 KB/token) and Qwen3-Coder-Next (~24 KB/token).
 LOCAL_CONTEXT_CAP_CODING_DEFAULT = 65536
 
 

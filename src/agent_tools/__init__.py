@@ -91,6 +91,11 @@ TOOL_TAGS = {"bash", "python", "run_tests", "git", "lint_format",
              # surface.
              "download_model", "serve_model",
              "list_served_models", "stop_served_model",
+             # tail_serve_output was missed when the rest of this block was
+             # added: it has a function schema, so the model is TOLD it exists,
+             # but every native call was rejected here as "Unknown function
+             # call" — a silently dead tool. Same bug class this block fixed.
+             "tail_serve_output",
              "list_downloads", "cancel_download",
              "search_hf_models", "list_cached_models",
              "list_serve_presets", "serve_preset", "adopt_served_model",

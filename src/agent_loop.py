@@ -93,6 +93,12 @@ _API_AGENT_RULES = """\
 - User identity facts/preferences ("my name is X", "call me X", "I live in X") use `manage_memory`, not contacts.
 """
 
+# Append the shared copy-paste command-formatting rule to both agent rule sets so
+# any agent turn that hands back shell commands emits one paste-ready block.
+from src.coding_prompt import COMMAND_FORMATTING_RULE as _CMD_FMT
+_AGENT_RULES = _AGENT_RULES + "- " + _CMD_FMT + "\n"
+_API_AGENT_RULES = _API_AGENT_RULES + "- " + _CMD_FMT + "\n"
+
 _LINK_RULES = """\
 ## Link conventions
 When referencing app entities by id, use clickable markdown anchors:
@@ -416,7 +422,7 @@ If the user asks for a reminder/alarm before the event, pass `reminder_minutes` 
     "pipeline": "- ```pipeline``` — Run a multi-step AI pipeline. Args (JSON) with ordered steps, each specifying a model and prompt. Use for complex workflows.",
     "ui_control": "- ```ui_control``` — Control the UI: toggle tools on/off, OPEN PANELS, open email reply drafts, switch models, change themes. Commands: `toggle <name> on/off` (names: bash/shell, web/search, research, incognito, document_editor/documents), `open_panel <name>` (panels: documents, gallery, email, sessions, notes, memories/brain, skills, settings, cookbook), `open_email_reply <uid> <folder> <reply|reply-all|ai-reply>` (opens an email compose document, does NOT send), `set_mode agent/chat`, `switch_model <name>`, `set_theme <preset>`, `create_theme <name> <bg> <fg> <panel> <border> <accent>` (optional key=val for advanced colors AND background effects: bgPattern=<none|dots|synapse|rain|constellations|perlin-flow|petals|sparkles|embers>, bgEffectColor=#RRGGBB, bgEffectIntensity=<num>, bgEffectSize=<num>, frosted=true|false). \"open documents\" / \"open library\" / \"show gallery\" / \"open inbox\" / \"open notes\" / \"open cookbook\" all map to `open_panel <name>`. Built-in theme presets: dark, light, midnight, paper, cyberpunk, retrowave, forest, ocean, ume, copper, terminal, organs, lavender, gpt, claude, cute. For any other vibe/name, use create_theme.",
     "ask_user": "- ```ask_user``` — Ask the user a multiple-choice question when the task is genuinely ambiguous and the answer changes what you do next (pick an approach, confirm an assumption, choose a target). Args (JSON): {\"question\": \"...\", \"options\": [{\"label\": \"...\", \"description\": \"...\"?}, ...], \"multi\": false?}. 2-6 options. The user gets clickable buttons; calling this ENDS your turn and their choice comes back as your next message. Prefer sensible defaults — only ask when you truly can't proceed well without their input.",
-    "update_plan": "- ```update_plan``` — While executing an approved plan, write the plan back: tick steps done or revise them. Args (JSON): {\"plan\": \"- [x] done step\\n- [ ] next step\"}. Always pass the COMPLETE checklist, not a diff. Call it after finishing each step (mark it `- [x]`) and whenever the user asks to change the plan. The user's docked plan window updates live. Does nothing if there's no active plan.",
+    "update_plan": "- ```update_plan``` — While executing an approved plan, write the plan back: tick steps done or revise them. Args (JSON): {\"plan\": \"- [x] done step\\n- [ ] next step\"}. Always pass the COMPLETE checklist, not a diff. Call it after finishing each step (mark it `- [x]`) and whenever the user asks to change the plan. The user's docked plan window updates live. You can also call this WITHOUT an approved plan to author your own todo list for a multi-step task — it is pinned in your context across rounds so a long task stays on track.",
     "list_served_models": "- ```list_served_models``` — Show what the Cookbook (LLM-serving subsystem) is currently running. NO args. Use this for ANY 'what's running' / 'what's serving' / 'show my cookbook' / 'is anything up' query. DO NOT shell out (`ps aux`, `docker ps`, etc.) — this tool is the source of truth. Failed serve tasks include recent logs plus diagnosis/retry suggestions; use those suggestions to call `serve_model` again with an adjusted command when appropriate.",
     "stop_served_model": "- ```stop_served_model``` — Stop a running model server. Args (JSON): {\"session_id\": \"<from list_served_models>\"}. Use for 'kill my cookbook' / 'stop the model' / 'shut down vLLM'.",
     "tail_serve_output": "- ```tail_serve_output``` — Read the actual tmux stderr/traceback of a CURRENTLY failing cookbook task. Args (JSON): {\"session_id\": \"<from list_served_models>\", \"tail\": 150?}. **Use ONLY after** you just launched something via `serve_model` AND `list_served_models` reports YOUR new task as `crashed`/`error`. DO NOT use it on old stopped/completed download tasks (they're historical noise — won't predict whether a new launch succeeds). DO NOT call it before launching a fresh attempt. When you do call it, bump `tail` to 400+ only if the visible error references 'see root cause above'.",
@@ -1919,6 +1925,16 @@ def _compute_final_metrics(
 _VERIFIER_EFFECTFUL_TOOLS = {
     "create_document", "update_document", "edit_document",
     "bash", "python", "write_file",
+    # The primary code-edit tools MUST be here. They were previously omitted, so
+    # the canonical coding turn — read files, then edit_file/multi_edit — never
+    # set _effectful_used and therefore silently skipped the completion verifier,
+    # the strong-judge escalation, and the VERIFY nudge. Only the static syntax
+    # check ran. (_code_work_done below already covered these, but it only picks
+    # WHICH judge model to use; this set is what decides whether to judge at all.)
+    "edit_file", "multi_edit", "apply_patch",
+    # State-changing filesystem + code-execution tools produce checkable artifacts
+    # in the same sense as bash/python.
+    "delete_file", "move_file", "code_sandbox",
 }
 _VERIFIER_MAX_ROUNDS = 2  # cap re-verify cycles per turn — never loop forever
 
@@ -2256,6 +2272,9 @@ async def stream_agent_loop(
     sandbox_build: bool = False,
     trusted_execution: bool = False,
     approval_cb=None,
+    # Narrow the set of tools that require approval (e.g. only the destructive
+    # tier). None → the full _APPROVAL_REQUIRED_TOOLS default.
+    approval_tools: Optional[Set[str]] = None,
     _is_teacher_run: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Streaming agent loop generator.
@@ -2652,6 +2671,22 @@ async def stream_agent_loop(
         active_email=active_email,
         sandbox_build=sandbox_build or trusted_execution,
     )
+    # Project awareness: tell the model WHERE it is working (workspace path, OS,
+    # git branch) and hand it the repo's own conventions file (AGENTS.md /
+    # CLAUDE.md / .cursorrules) when one exists. Without this the agent burned a
+    # round calling get_workspace just to learn the path, and had no way to honour
+    # per-project build/test/style conventions. No-op when no workspace is bound.
+    if workspace:
+        try:
+            from src.project_context import project_context_message
+            _proj_msg = project_context_message(workspace)
+            if _proj_msg:
+                _at = 1 if (messages and messages[0].get("role") == "system") else 0
+                messages.insert(_at, _proj_msg)
+                logger.info("[project] injected env + conventions (%d chars) for %s",
+                            len(_proj_msg.get("content", "")), workspace)
+        except Exception:
+            logger.debug("[project] context injection skipped", exc_info=True)
     # Scaffold budget scaling: a 32k local model shouldn't spend the same
     # scaffold (packs + corpus) as a 200k API model — on small windows the
     # reference material crowds out the conversation it's meant to serve.
@@ -2812,6 +2847,13 @@ async def stream_agent_loop(
     # a tool that produces a checkable artifact runs; the verifier only fires
     # on such turns and at most _VERIFIER_MAX_ROUNDS times.
     _effectful_used = False
+    # Group this turn's file snapshots so "undo that" reverts the whole change
+    # (all N files) rather than one edit of N. See src/file_checkpoints.py.
+    try:
+        from src.file_checkpoints import begin_group as _cp_begin
+        _cp_begin(session_id)
+    except Exception:
+        logger.debug("[checkpoint] group start skipped", exc_info=True)
     _verifier_rounds = 0
     _pf_verify_nudged = False  # ProForge VERIFY gate (3b): one evidence nudge/turn
     _verifier_instruction = _extract_last_user_message(messages)
@@ -3621,7 +3663,8 @@ async def stream_agent_loop(
             # emit the approval_required event, THEN we await the decision — so a
             # fast client can't resolve it before it's registered.
             _approval_denied = False
-            if approval_cb is not None and block.tool_type in _APPROVAL_REQUIRED_TOOLS:
+            _approval_set = approval_tools if approval_tools is not None else _APPROVAL_REQUIRED_TOOLS
+            if approval_cb is not None and block.tool_type in _approval_set:
                 import secrets as _secrets
                 _aid = _secrets.token_hex(8)
                 try:
@@ -3880,6 +3923,9 @@ async def stream_agent_loop(
 
             # Emit tool_output (include ui_event data if present)
             tool_output_data = {"type": "tool_output", "tool": block.tool_type, "command": cmd_display, "output": output_text, "exit_code": result.get("exit_code")}
+            # Pre-edit checkpoint id → the UI renders a per-change Undo control.
+            if result.get("checkpoint_id"):
+                tool_output_data["checkpoint_id"] = result["checkpoint_id"]
             if "ui_event" in result:
                 tool_output_data["ui_event"] = result["ui_event"]
                 for k in (
@@ -3967,16 +4013,26 @@ async def stream_agent_loop(
             # this the diff shows live but vanishes from saved history.
             if result.get("diff"):
                 tool_event["diff"] = result["diff"]
+            # Carry the pre-edit checkpoint so the UI can offer a per-change Undo
+            # (and so it survives a history reload).
+            if result.get("checkpoint_id"):
+                tool_event["checkpoint_id"] = result["checkpoint_id"]
             tool_events.append(tool_event)
             if block.tool_type in _VERIFIER_EFFECTFUL_TOOLS:
                 _effectful_used = True
             # Track edited files for the auto edit-verify syntax check, and
             # re-arm it (a fresh edit after a prior check should be re-checked).
-            if block.tool_type in _CODE_EDIT_TOOLS:
-                _ep = result.get("path")
-                if isinstance(_ep, str) and _ep:
-                    _edited_paths.add(_ep)
-                    _autoverify_count = 0
+            # `path` is the single-file tools; `paths` is apply_patch, which
+            # previously reported neither and so was never syntax-checked.
+            _eps = []
+            if isinstance(result.get("path"), str) and result.get("path"):
+                _eps.append(result["path"])
+            if isinstance(result.get("paths"), list):
+                _eps.extend(p for p in result["paths"] if isinstance(p, str) and p)
+            if _eps and (block.tool_type in _CODE_EDIT_TOOLS
+                         or block.tool_type == "apply_patch"):
+                _edited_paths.update(_eps)
+                _autoverify_count = 0
             # Cumulative "this turn changed code" flag (never reset within the
             # turn, unlike _edited_paths) — scopes the strong-judge escalation
             # to coding work so notes/email turns don't pay judge latency.

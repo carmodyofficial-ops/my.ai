@@ -9,6 +9,7 @@ import Storage from './storage.js';
 import uiModule from './ui.js';
 import sessionModule from './sessions.js';
 import chatRenderer from './chatRenderer.js';
+import { TOOL_LABELS } from './toolLabels.js';
 import chatStream from './chatStream.js';
 import { addAITTSButton } from './tts-ai.js';
 import markdownModule from './markdown.js';
@@ -836,6 +837,11 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       if (_ws) {
         fd.append('workspace', _ws);
       }
+      // Declare that this client can render an approval prompt and answer it.
+      // The server only pauses a turn for callers that send this, so scheduled
+      // runs / wearables / API clients are never blocked on a decision that
+      // nobody is there to give (which would stall, then fail-closed deny).
+      fd.append('supports_approval', '1');
       if (presetsModule.getSelectedPreset()) {
         fd.append('preset_id', presetsModule.getSelectedPreset());
       }
@@ -1098,27 +1104,9 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       // Tool-aware thinking spinner
       let _lastToolName = '';
       const _searchIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="vertical-align:-2px;margin-right:4px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
-      const _toolLabels = {
-        'web_search': 'Searching',
-        'bash': 'Running',
-        'python': 'Running',
-        'create_document': 'Writing',
-        'update_document': 'Writing',
-        'read_document': 'Reading',
-        'edit_file': 'Editing',
-        'read_file': 'Reading',
-        'write_file': 'Writing',
-        'list_files': 'Browsing',
-        'image_gen': 'Generating',
-        'generate_image': 'Generating',
-        'manage_memory': 'Remembering',
-        'save_memory': 'Remembering',
-        'search_memory': 'Recalling',
-        'manage_session': 'Organizing',
-        'deep_research': 'Researching',
-        'list_models': 'Browsing',
-        'ui_control': 'Adjusting',
-      };
+      // Shared with the replay renderer so a step keeps one name for its whole
+      // life — live, completed, and after a reload. See ./toolLabels.js.
+      const _toolLabels = TOOL_LABELS;
       const _toolIcons = {
         'web_search': _searchIcon,
       };
@@ -1133,6 +1121,140 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           if (lower.includes(key) || key.includes(lower)) return label;
         }
         return 'Thinking';
+      }
+
+      // --- Agent plan panel (live todo checklist) ---------------------------
+      // The agent authors its own checklist with the `update_plan` tool and the
+      // backend streams it as a `plan_update` SSE event. The handler called
+      // `_setStoredPlan(...)`, which was never defined anywhere — so every plan
+      // update threw a ReferenceError that the stream's try/catch swallowed, and
+      // no plan was ever displayed. This implements it as the pinned panel the
+      // (previously dead) .plan-window-* styles were designed for: a persistent
+      // progress surface during long multi-step tasks, which is what industry
+      // coding agents show and what makes a 15-round run legible.
+      let _planPanelEl = null;
+
+      function _planParseItems(md) {
+        const items = [];
+        String(md || '').split('\n').forEach((raw) => {
+          const m = raw.match(/^\s*[-*]\s*\[([ xX])\]\s*(.+?)\s*$/);
+          if (m) items.push({ done: m[1].toLowerCase() === 'x', text: m[2] });
+        });
+        return items;
+      }
+
+      function _clearPlanPanel() {
+        if (_planPanelEl) { _planPanelEl.remove(); _planPanelEl = null; }
+      }
+
+      function _setStoredPlan(planText) {
+        const items = _planParseItems(planText);
+        if (!items.length) { _clearPlanPanel(); return; }
+        if (!_planPanelEl || !_planPanelEl.isConnected) {
+          _planPanelEl = document.createElement('div');
+          _planPanelEl.className = 'agent-plan-panel';
+          _planPanelEl.innerHTML =
+            '<div class="agent-plan-head">' +
+              '<span class="agent-plan-title">Plan</span>' +
+              '<span class="agent-plan-count"></span>' +
+              '<button type="button" class="agent-plan-toggle" title="Collapse">–</button>' +
+              '<button type="button" class="agent-plan-close" title="Dismiss">×</button>' +
+            '</div><ol class="agent-plan-list"></ol>';
+          _planPanelEl.querySelector('.agent-plan-close')
+            .addEventListener('click', _clearPlanPanel);
+          _planPanelEl.querySelector('.agent-plan-toggle')
+            .addEventListener('click', (e) => {
+              const c = _planPanelEl.classList.toggle('collapsed');
+              e.currentTarget.textContent = c ? '+' : '–';
+              e.currentTarget.title = c ? 'Expand' : 'Collapse';
+            });
+          document.body.appendChild(_planPanelEl);
+        }
+        const done = items.filter((i) => i.done).length;
+        _planPanelEl.querySelector('.agent-plan-count').textContent = `${done}/${items.length}`;
+        // First not-yet-done item is the one in flight — mark it so a long run
+        // always shows *where* it is, not just how far along.
+        const activeIdx = items.findIndex((i) => !i.done);
+        _planPanelEl.querySelector('.agent-plan-list').innerHTML = items.map((it, i) => {
+          const cls = it.done ? 'done' : (i === activeIdx ? 'active' : '');
+          const mark = it.done ? '✓' : (i === activeIdx ? '▸' : '·');
+          return `<li class="${cls}"><span class="agent-plan-mark">${mark}</span>` +
+                 `<span class="agent-plan-text">${esc(it.text)}</span></li>`;
+        }).join('');
+      }
+
+      // --- Per-tool-call approval ------------------------------------------
+      // The agent loop pauses before a mutating tool and emits
+      // `approval_required`; it stays blocked until we POST a decision (or the
+      // server's TTL fail-closes to deny). This is the browser client for a
+      // gate that previously only the `myai` terminal script could answer.
+      const _approvalCards = new Map();   // approval id -> element
+
+      async function _sendApprovalDecision(id, approved, card) {
+        card.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+        const status = card.querySelector('.approval-status');
+        if (status) status.textContent = approved ? 'Allowing…' : 'Denying…';
+        try {
+          const r = await fetch('/api/chat/approve', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, approved }),
+          });
+          if (!r.ok) {
+            const t = await r.text().catch(() => '');
+            if (status) status.textContent = 'Could not send decision' + (t ? ` — ${t}` : '');
+            card.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+          }
+          // On success the server emits approval_resolved, which finalizes the
+          // card — no need to update it twice.
+        } catch (e) {
+          if (status) status.textContent = 'Could not send decision — ' + String(e);
+          card.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+        }
+      }
+
+      function _showApprovalCard(json) {
+        const id = String(json.id || '');
+        if (!id || _approvalCards.has(id)) return;
+        const chatBox = document.getElementById('chat-history');
+        if (!chatBox) return;
+        const card = document.createElement('div');
+        card.className = 'approval-card';
+        const cmd = String(json.command || '').trim();
+        card.innerHTML =
+          '<div class="approval-head">' +
+            '<span class="approval-icon">⚠</span>' +
+            `<span class="approval-title">Allow <code>${esc(json.tool || 'tool')}</code>?</span>` +
+          '</div>' +
+          (cmd ? `<pre class="approval-cmd">${esc(cmd)}</pre>` : '') +
+          '<div class="approval-actions">' +
+            '<button type="button" class="approval-allow">Allow</button>' +
+            '<button type="button" class="approval-deny">Deny</button>' +
+            '<span class="approval-status">Waiting for your decision…</span>' +
+          '</div>';
+        card.querySelector('.approval-allow')
+          .addEventListener('click', () => _sendApprovalDecision(id, true, card));
+        card.querySelector('.approval-deny')
+          .addEventListener('click', () => _sendApprovalDecision(id, false, card));
+        chatBox.appendChild(card);
+        _approvalCards.set(id, card);
+        uiModule.scrollHistory();
+        // Focus Allow so a keyboard user can act without hunting for the button.
+        try { card.querySelector('.approval-allow').focus({ preventScroll: true }); } catch (e) {}
+      }
+
+      function _resolveApprovalCard(id, approved) {
+        const card = _approvalCards.get(String(id || ''));
+        if (!card) return;
+        _approvalCards.delete(String(id || ''));
+        card.classList.add(approved ? 'approved' : 'denied');
+        card.querySelectorAll('button').forEach((b) => b.remove());
+        const status = card.querySelector('.approval-status');
+        if (status) {
+          // Covers the timeout path too: the server denies on TTL expiry and
+          // still emits approval_resolved, so a stale card never hangs.
+          status.textContent = approved ? '✓ Allowed' : '✗ Denied — skipped';
+        }
       }
 
       function _showThinkingSpinner(label) {
@@ -2192,7 +2314,12 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                       else if (line.startsWith(' ')) { text = line.slice(1); }
                       return `<span class="${cls}">${esc(text) || '&nbsp;'}</span>`;
                     }).join('');  // spans are display:block — a literal \n here would double-space the diff
-                    diffHtml = `<details class="agent-tool-output agent-tool-diff"><summary><span class="diff-file">${esc(d.file || 'diff')}</span> <span class="diff-summary-stats">${stat}</span></summary><pre class="diff-pre">${rows}</pre></details>`;
+                    // Undo control — the agent snapshotted this file before the
+                    // edit, so a change can be reverted from the diff that shows it.
+                    const _undoBtn = json.checkpoint_id
+                      ? `<button type="button" class="diff-undo-btn" data-checkpoint="${esc(json.checkpoint_id)}" title="Revert this change">Undo</button>`
+                      : '';
+                    diffHtml = `<details open class="agent-tool-output agent-tool-diff"><summary><span class="diff-file">${esc(d.file || 'diff')}</span> <span class="diff-summary-stats">${stat}</span>${_undoBtn}</summary><pre class="diff-pre">${rows}</pre></details>`;
                   }
                   // For file edits the "command" is the raw JSON args — redundant
                   // next to the diff, so hide it when we have a diff to show.
@@ -2203,8 +2330,16 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   // click again. Click handling is delegated (see init at
                   // bottom of file) so no per-node listener needed.
                   const _wasOpen = currentToolBubble.classList.contains('open');
-                  currentToolBubble.className = 'agent-thread-node' + (ok ? '' : ' error') + (_wasOpen ? ' open' : '');
-                  currentToolBubble.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(json.tool)}</span><span class="agent-thread-status">${ok ? 'done' : 'failed'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${cmdHtml2}${outHtml}${diffHtml}</div>`;
+                  // Keep a step expanded after it finishes when it produced a
+                  // DIFF or FAILED \u2014 the code change and the error are the two
+                  // things a user always wants to see, and leaving them collapsed
+                  // cost two clicks to reach. Plain successful commands collapse.
+                  const _keepOpen = _wasOpen || !!(json.diff && json.diff.text) || !ok;
+                  // Use the friendly verb ("Writing"), not the raw tool name, so
+                  // the step doesn't rename itself the instant it completes.
+                  const _doneLabel = _toolLabels[String(json.tool || '').toLowerCase()] || json.tool;
+                  currentToolBubble.className = 'agent-thread-node' + (ok ? '' : ' error') + (_keepOpen ? ' open' : '');
+                  currentToolBubble.innerHTML = `<div class="agent-thread-dot"></div><div class="agent-thread-header"><span class="agent-thread-icon">${ok ? '\u2713' : '\u2717'}</span><span class="agent-thread-tool">${esc(_doneLabel)}</span><span class="agent-thread-status">${ok ? 'done' : 'failed'}</span><span class="agent-thread-chevron">\u25B6</span></div><div class="agent-thread-content">${cmdHtml2}${outHtml}${diffHtml}</div>`;
                   // Reset so thinking spinner between tools says "Thinking" not the old tool's label
                   _lastToolName = '';
                   uiModule.scrollHistory();
@@ -2460,6 +2595,19 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                 // the stored plan + live-refresh the docked plan window.
                 const _pu = (json.data && json.data.plan) ? json.data.plan : '';
                 if (_pu) _setStoredPlan(_pu);
+
+              } else if (json.type === 'approval_required') {
+                // The agent is PAUSED awaiting a decision. Render the prompt.
+                // A detached/background stream can't be answered by a hidden
+                // tab, so leave it — the server's TTL fail-closes to deny.
+                if (_isBg) continue;
+                _cancelThinkingTimer();
+                _removeThinkingSpinner();
+                _showApprovalCard(json);
+
+              } else if (json.type === 'approval_resolved') {
+                if (_isBg) continue;
+                _resolveApprovalCard(json.id, !!json.approved);
 
               } else if (json.type === 'agent_step') {
                 if (_isBg) continue;
@@ -3600,6 +3748,93 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     obs.observe(document.body, { childList: true, subtree: true });
   })();
 
+  // Apply-to-file flow for a code block. Opens an inline panel under the <pre>:
+  // type a target path -> Preview (dry-run diff) -> Confirm write. The write goes
+  // to POST /api/code/apply, which is admin-only and confines the path with the
+  // same safety as the agent write tool. Re-clicking the button closes the panel.
+  function _applyCodeEsc(s) {
+    return String(s).replace(/[&<>"]/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+  function _applyCodeFlow(btn) {
+    const pre = btn.closest('pre');
+    if (!pre) return;
+    if (pre._applyPanel && pre._applyPanel.isConnected) {
+      pre._applyPanel.remove(); pre._applyPanel = null; return;
+    }
+    const code = btn.getAttribute('data-code') || '';
+    // Guess a target path from the sentence just before the block (models often
+    // say "Create src/foo.py:" above the fence). Falls back to empty.
+    let guess = '';
+    const prev = pre.previousElementSibling;
+    if (prev) {
+      const m = (prev.textContent || '').match(/([\w./+-]+\.[A-Za-z0-9]{1,8})\b/);
+      if (m) guess = m[1];
+    }
+    const panel = document.createElement('div');
+    panel.className = 'apply-code-panel';
+    panel.innerHTML =
+      '<div class="apply-code-row">' +
+      '<input type="text" class="apply-code-path" spellcheck="false" placeholder="path/to/file" />' +
+      '<button type="button" class="apply-code-preview">Preview</button>' +
+      '<button type="button" class="apply-code-cancel">Cancel</button>' +
+      '</div><div class="apply-code-status"></div>';
+    const input = panel.querySelector('.apply-code-path');
+    const status = panel.querySelector('.apply-code-status');
+    input.value = guess;
+    const closePanel = () => { panel.remove(); pre._applyPanel = null; };
+    panel.querySelector('.apply-code-cancel').addEventListener('click', closePanel);
+
+    const req = async (dryRun) => {
+      const path = input.value.trim();
+      if (!path) { status.innerHTML = '<span class="apply-code-err">Enter a target path.</span>'; return null; }
+      status.textContent = dryRun ? 'Checking…' : 'Writing…';
+      try {
+        const r = await fetch('/api/code/apply', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path, content: code, dry_run: dryRun }),
+        });
+        return await r.json();
+      } catch (e) {
+        status.innerHTML = '<span class="apply-code-err">Request failed: ' + _applyCodeEsc(e) + '</span>';
+        return null;
+      }
+    };
+    const showConfirm = (j) => {
+      if (!j) return;
+      if (!j.ok) { status.innerHTML = '<span class="apply-code-err">✕ ' + _applyCodeEsc(j.error || 'failed') + '</span>'; return; }
+      if (j.unchanged) { status.innerHTML = '<span class="apply-code-ok">No change — the file already matches.</span>'; return; }
+      const d = j.diff || {};
+      const kind = j.existed ? 'Overwrite' : 'Create';
+      status.innerHTML =
+        '<span>' + kind + ' <code>' + _applyCodeEsc(j.path) + '</code> ' +
+        '(<span class="apply-add">+' + (d.added || 0) + '</span> ' +
+        '<span class="apply-del">−' + (d.removed || 0) + '</span>)</span> ' +
+        '<button type="button" class="apply-code-confirm">Confirm write</button>';
+      status.querySelector('.apply-code-confirm').addEventListener('click', async () => {
+        const w = await req(false);
+        if (w && w.ok) {
+          status.innerHTML = '<span class="apply-code-ok">✓ ' + _applyCodeEsc(w.message || ('Wrote to ' + w.path)) + '</span>';
+          btn.classList.add('copied');
+          setTimeout(() => btn.classList.remove('copied'), 1500);
+        } else if (w) {
+          status.innerHTML = '<span class="apply-code-err">✕ ' + _applyCodeEsc(w.error || 'write failed') + '</span>';
+        }
+      });
+    };
+    panel.querySelector('.apply-code-preview').addEventListener('click', async () => {
+      showConfirm(await req(true));
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); panel.querySelector('.apply-code-preview').click(); }
+      else if (e.key === 'Escape') { e.preventDefault(); closePanel(); }
+    });
+    pre.parentNode.insertBefore(panel, pre.nextSibling);
+    pre._applyPanel = panel;
+    input.focus();
+  }
+
   /**
    * Initialize event listeners
    */
@@ -3609,8 +3844,19 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       const btn = e.target.closest('.copy-code');
       if (!btn) return;
       e.stopPropagation();
-      const code = btn.getAttribute('data-code');
+      let code = btn.getAttribute('data-code');
       if (code && uiModule) {
+        // Terminal paste-readiness: for shell blocks, strip a leading "$ " (or
+        // zsh "% ") prompt marker per line so the copied text runs as-is even if
+        // the model emitted prompt-style output. Deliberately NOT stripping "#":
+        // it is a bash comment, and "> " is a redirection, so touching either
+        // would corrupt real commands. Non-shell blocks are copied verbatim.
+        const langEl = btn.closest('pre')?.querySelector('code');
+        const lang = (langEl?.getAttribute('data-lang') || '').toLowerCase();
+        const SHELL_LANGS = ['bash', 'sh', 'shell', 'zsh', 'console', 'shell-session', 'shellsession'];
+        if (SHELL_LANGS.includes(lang)) {
+          code = code.replace(/^[ \t]*[$%] +/gm, '');
+        }
         uiModule.copyToClipboard(code);
         // Visual feedback: swap the icon to a checkmark (regular size)
         // and add .copied which the CSS uses to flash green + pulse.
@@ -3638,6 +3884,54 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       if (!btn) return;
       e.stopPropagation();
       if (codeRunnerModule) codeRunnerModule.run(btn);
+    });
+
+    // Apply-to-file button delegation
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.apply-code');
+      if (!btn) return;
+      e.stopPropagation();
+      _applyCodeFlow(btn);
+    });
+
+    // Undo a file change from the diff that shows it. The click must not also
+    // toggle the <details>/thread node it lives in, hence preventDefault.
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.diff-undo-btn');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.disabled) return;
+      const cid = btn.getAttribute('data-checkpoint');
+      if (!cid) return;
+      const orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Undoing…';
+      try {
+        const r = await fetch('/api/code/undo', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            checkpoint_id: cid,
+            session_id: sessionModule.getCurrentSessionId() || '',
+          }),
+        });
+        const j = await r.json();
+        if (j && j.ok) {
+          btn.textContent = j.action === 'deleted' ? '✓ Removed' : '✓ Reverted';
+          btn.classList.add('undone');
+        } else {
+          btn.textContent = 'Undo failed';
+          btn.title = (j && j.error) ? String(j.error) : 'undo failed';
+          btn.disabled = false;
+          setTimeout(() => { btn.textContent = orig; }, 2500);
+        }
+      } catch (err) {
+        btn.textContent = 'Undo failed';
+        btn.title = String(err);
+        btn.disabled = false;
+        setTimeout(() => { btn.textContent = orig; }, 2500);
+      }
     });
 
     // Edit code button delegation — toggle contentEditable on the code element
@@ -3688,7 +3982,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     // Tapping a code block body (not its buttons) toggles the overlay
     // copy/edit/run buttons, which otherwise cover the text on mobile.
     document.addEventListener('click', (e) => {
-      if (e.target.closest('.copy-code, .edit-code, .run-code')) return;
+      if (e.target.closest('.copy-code, .edit-code, .run-code, .apply-code, .apply-code-panel')) return;
       const pre = e.target.closest('pre');
       if (!pre || !pre.querySelector('.copy-code')) return;
       // Don't hide while editing — the buttons (incl. the Done checkmark) matter.
@@ -3714,6 +4008,8 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       if (editBtn) editBtn.classList.toggle('bottom', isBottom);
       const runBtn = pre.querySelector('.run-code');
       if (runBtn) runBtn.classList.toggle('bottom', isBottom);
+      const applyBtn = pre.querySelector('.apply-code');
+      if (applyBtn) applyBtn.classList.toggle('bottom', isBottom);
       pre.dataset.btnPosComputed = '1';
     }, true);
 

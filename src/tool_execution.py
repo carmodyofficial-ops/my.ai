@@ -558,6 +558,11 @@ async def execute_tool_block(
     way out so the binding never leaks to the next tool call.
     """
     token = _active_workspace.set(workspace or None)
+    # Bind the session for the read-before-edit ledger (src/file_ledger.py) the
+    # same way, so the file tools can enforce "read it before you overwrite it"
+    # without every tool signature growing a session parameter.
+    from src import file_ledger
+    ledger_token = file_ledger.set_active_session(session_id)
     try:
         return await _execute_tool_block_impl(
             block,
@@ -568,6 +573,7 @@ async def execute_tool_block(
             tool_policy=tool_policy,
         )
     finally:
+        file_ledger.reset_active_session(ledger_token)
         _active_workspace.reset(token)
 
 
