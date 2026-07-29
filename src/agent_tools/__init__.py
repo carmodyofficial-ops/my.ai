@@ -23,6 +23,7 @@ from .coding_tools import RunTestsTool, GitTool, LintFormatTool, ApplyPatchTool,
 from .code_sandbox import CodeSandboxTool
 from .web_tools import WebSearchTool, WebFetchTool
 from .filesystem_tools import ReadFileTool, WriteFileTool, EditFileTool, MultiEditTool, DeleteFileTool, MoveFileTool, LsTool, GlobTool, GrepTool, GetWorkspaceTool
+from .symbol_tools import FindSymbolTool
 from .document_tools import CreateDocumentTool, UpdateDocumentTool, EditDocumentTool, SuggestDocumentTool, ManageDocumentTool
 
 TOOL_HANDLERS = {
@@ -46,6 +47,7 @@ TOOL_HANDLERS = {
     "ls": LsTool().execute,
     "glob": GlobTool().execute,
     "grep": GrepTool().execute,
+    "find_symbol": FindSymbolTool().execute,
     "create_document": CreateDocumentTool().execute,
     "update_document": UpdateDocumentTool().execute,
     "edit_document": EditDocumentTool().execute,
@@ -63,7 +65,7 @@ SHELL_TIMEOUT = 60
 PYTHON_TIMEOUT = 30
 
 # Tool types that trigger execution
-TOOL_TAGS = {"bash", "python", "run_tests", "git", "lint_format",
+TOOL_TAGS = {"bash", "python", "run_tests", "git", "lint_format", "find_symbol",
              "apply_patch", "http_request", "manage_corpus",
              "code_sandbox", "web_search", "web_fetch", "read_file", "write_file", "edit_file",
              "multi_edit", "delete_file", "move_file",

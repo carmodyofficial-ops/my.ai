@@ -26,7 +26,7 @@ from src.tool_security import owner_is_admin_or_single_user
 # coder always has exactly the file + shell tools it needs, regardless of prompt.
 SANDBOX_CODING_TOOLS = {
     "read_file", "write_file", "edit_file", "multi_edit", "delete_file", "move_file",
-    "grep", "glob", "ls",
+    "grep", "glob", "ls", "find_symbol",
     "get_workspace", "bash", "python", "run_tests", "git", "lint_format", "apply_patch",
     # Read-only parallel investigation of the sandbox mirror (see COWORK_TOOLS).
     "dispatch_subagents",

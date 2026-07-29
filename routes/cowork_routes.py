@@ -32,7 +32,7 @@ from src.coding_prompt import coding_system_message
 # project dir the client is in.
 COWORK_TOOLS = {
     "read_file", "write_file", "edit_file", "multi_edit", "delete_file", "move_file",
-    "grep", "glob", "ls", "get_workspace",
+    "grep", "glob", "ls", "get_workspace", "find_symbol",
     "bash", "python", "run_tests", "git", "lint_format", "code_sandbox", "apply_patch",
     "web_search", "web_fetch", "http_request",
     # Parallel READ-ONLY investigation of the bound workspace. Explorers cannot

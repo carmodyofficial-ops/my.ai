@@ -272,6 +272,12 @@ List a directory (dirs first, sizes shown). PREFER over `bash ls`.""",
 ```
 Find files by name pattern, newest first. A bare pattern on one line also works. PREFER over `bash find`.""",
 
+    "find_symbol": """\
+```find_symbol
+{"symbol": "<identifier>", "mode": "definition|references|both", "path": "<dir, optional>", "glob": "*.py"}
+```
+Find where a NAMED symbol is DEFINED (default) or USED. Python is parsed with a real AST so definitions are exact; other languages use per-language patterns and are marked with `?`. PREFER over grep when you know the identifier — grep makes you guess a regex ("def foo", "foo =") and then sift false positives. Use grep for free text, comments or partial names.""",
+
     "grep": """\
 ```grep
 {"pattern": "<regex>", "path": "<dir, optional>", "glob": "*.py", "ignore_case": false, "context": 3}

@@ -251,6 +251,23 @@ FUNCTION_TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "find_symbol",
+            "description": "Find where a NAMED symbol (function, class, constant, variable) is DEFINED or USED. Python files are parsed with a real AST, so definitions are exact rather than pattern guesses; other languages fall back to per-language definition patterns, which are flagged with '?' in the output. PREFER this over grep when you know the identifier and want its definition or call sites — grep makes you invent a regex ('def foo', 'foo =', 'class foo') and then sift false positives. Use grep instead for free text, comments, or partial/fuzzy names.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "Bare identifier, e.g. 'stream_agent_loop' (no dots, spaces or regex)"},
+                    "mode": {"type": "string", "enum": ["definition", "references", "both"], "description": "definition (default) = where it is declared; references = where it is used; both = both sections"},
+                    "path": {"type": "string", "description": "Directory or file to search (optional; defaults to the project root)"},
+                    "glob": {"type": "string", "description": "Only search files matching this glob, e.g. '*.py' (optional)"}
+                },
+                "required": ["symbol"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "glob",
             "description": "Find files by glob pattern (recursive), newest first. e.g. '**/*.py'. PREFER this over `bash find/ls` for locating files — confined to the allowed roots.",
             "parameters": {

@@ -77,6 +77,10 @@ NON_ADMIN_BLOCKED_TOOLS = {
 PLAN_MODE_READONLY_TOOLS = {
     "read_file",
     "grep",
+    # Symbol navigation is pure read — it opens files and never writes. Being on
+    # this allowlist is also what gives explorer sub-agents access to it, since
+    # they run behind the same fail-closed plan-mode denylist.
+    "find_symbol",
     "glob",
     "ls",
     "get_workspace",
