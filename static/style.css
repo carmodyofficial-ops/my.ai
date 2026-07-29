@@ -2426,6 +2426,45 @@ body.bg-pattern-sparkles {
       opacity: 0.6;
       text-decoration: line-through;
     }
+    /* @-mention file picker (static/js/fileMention.js). Anchored above the
+       composer so it never covers the text being typed. */
+    .file-mention-popup {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 0;
+      z-index: 70;
+      min-width: 260px;
+      max-width: min(560px, 90vw);
+      max-height: 240px;
+      overflow-y: auto;
+      background: var(--panel, var(--bg));
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 6px 22px rgba(0, 0, 0, 0.2);
+      font-size: 0.84rem;
+      padding: 4px;
+    }
+    .file-mention-item {
+      display: flex;
+      align-items: baseline;
+      gap: 2px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-family: var(--mono, monospace);
+    }
+    .file-mention-item:hover { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+    .file-mention-item.active { background: color-mix(in srgb, var(--accent-primary, var(--red)) 16%, transparent); }
+    /* Directory dimmed, filename emphasised — the basename is what you scan for. */
+    .fm-dir { opacity: 0.55; }
+    .fm-base { font-weight: 600; }
+    @media (max-width: 768px) {
+      .file-mention-popup { min-width: 0; left: 0; right: 0; max-width: none; }
+    }
+
     /* Approval card — the agent is PAUSED waiting for allow/deny on a mutating
        tool. Deliberately high-contrast: the run is blocked until it's answered,
        so it must not read as just another transcript bubble. */

@@ -11,6 +11,17 @@ from src.tool_security import owner_is_admin_or_single_user
 _MAX_BROWSE_DIRS = 500
 
 
+# Extensions the @-mention picker never offers: compiled artefacts, archives
+# and media. read_file cannot render them, so they are noise in a file picker.
+_UNMENTIONABLE_EXTS = (
+    ".pyc", ".pyo", ".pyd", ".so", ".o", ".a", ".class", ".jar", ".war",
+    ".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".rar", ".whl", ".egg",
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp", ".svgz",
+    ".mp4", ".webm", ".mov", ".mp3", ".wav", ".ogg", ".pdf",
+    ".db", ".sqlite", ".sqlite3", ".bin", ".dat", ".lock", ".woff", ".woff2",
+)
+
+
 def setup_workspace_routes():
     router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 
@@ -90,6 +101,95 @@ def setup_workspace_routes():
             # roots and sensitive dirs may be browsed through but not chosen).
             "selectable": vet_workspace(target) is not None,
         }
+
+    @router.get("/files")
+    def list_files(request: Request,
+                   workspace: str = Query(default=""),
+                   q: str = Query(default=""),
+                   limit: int = Query(default=30)):
+        """Search FILES inside a bound workspace, for the composer's @-mention.
+
+        Distinct from /browse, which lists directories anywhere on the host so a
+        workspace can be picked. Results here never leave the given folder: it is
+        re-vetted on arrival (it comes from the client) and paths come back
+        RELATIVE to it.
+
+        Scope, stated honestly: the gate is admin + vet_workspace, i.e. exactly
+        the set of folders that may be BOUND as a workspace for the agent's file
+        tools. Listing files in such a folder is no more than the agent's own
+        ls/glob would return once bound, and /browse already lets an admin walk
+        the host's directory tree. This adds no reach beyond existing policy.
+
+        Prefers `git ls-files` so the project's own .gitignore decides what is
+        searchable — otherwise a repo with a large build directory or vendored
+        dependencies drowns the real source. Falls back to a bounded walk.
+
+        ADMIN-ONLY, matching /browse: a caller who cannot use read_file must not
+        be able to enumerate the project either.
+        """
+        owner = effective_user(request)
+        if not owner_is_admin_or_single_user(owner):
+            raise HTTPException(status_code=403, detail="Workspace file search is admin-only")
+
+        from src.tool_execution import vet_workspace
+        root = vet_workspace(os.path.expanduser((workspace or "").strip())) if workspace else None
+        if not root:
+            raise HTTPException(status_code=400, detail="a valid workspace is required")
+
+        needle = (q or "").strip().lower()
+        try:
+            limit = max(1, min(int(limit), 100))
+        except (TypeError, ValueError):
+            limit = 30
+
+        rels: list[str] = []
+        try:
+            import subprocess as _sp
+            p = _sp.run(["git", "-C", root, "ls-files", "--cached", "--others",
+                         "--exclude-standard"],
+                        capture_output=True, text=True, timeout=10)
+            if p.returncode == 0:
+                rels = [ln.strip() for ln in (p.stdout or "").splitlines() if ln.strip()]
+        except Exception:
+            rels = []
+        if not rels:
+            # Same skip set as symbol search (src/agent_tools/symbol_tools.py):
+            # build output AND directories that typically hold COPIES of the
+            # source, so a project keeping dev-mirrors or backups doesn't offer
+            # the same file several times from stale snapshots.
+            from src.agent_tools.symbol_tools import _SKIP_DIRS as skip
+            for dp, dns, fns in os.walk(root):
+                dns[:] = [d for d in dns if d not in skip and not d.startswith(".")]
+                for fn in fns:
+                    if fn.startswith("."):
+                        continue
+                    rels.append(os.path.relpath(os.path.join(dp, fn), root))
+                    if len(rels) >= 20000:      # bounded: never walk forever
+                        break
+                if len(rels) >= 20000:
+                    break
+
+        # Drop compiled/binary/media files: read_file cannot usefully show them,
+        # so offering them in an @-mention picker is pure noise (and a stray
+        # .pyc can outrank the source file it was built from).
+        rels = [r for r in rels if not r.lower().endswith(_UNMENTIONABLE_EXTS)]
+
+        if needle:
+            # Rank basename matches above path matches — typing "chat" should
+            # offer chat.py before deep/nested/other/chatty_helper.py.
+            exact, partial = [], []
+            for r in rels:
+                base = os.path.basename(r).lower()
+                if needle in base:
+                    exact.append(r)
+                elif needle in r.lower():
+                    partial.append(r)
+            matches = sorted(exact, key=len) + sorted(partial, key=len)
+        else:
+            matches = sorted(rels, key=len)
+
+        return {"workspace": root, "files": matches[:limit],
+                "truncated": len(matches) > limit}
 
     @router.get("/vet")
     def vet(request: Request, path: str = Query(default="")):
