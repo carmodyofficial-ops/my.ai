@@ -9,6 +9,7 @@ import { providerLogo } from './providers.js';
 import { initModelPicker, updateModelPicker } from './modelPicker.js';
 import themeModule from './theme.js';
 import spinnerModule from './spinner.js';
+import * as workspaceModule from './workspace.js';
 
 const API_BASE = window.location.origin;
 
@@ -1908,6 +1909,20 @@ export function getCurrentEndpointUrl() {
 export function setCurrentSessionId(id) {
   _sessionNavToken++;
   currentSessionId = id;
+  // Adopt this conversation's project. The workspace used to be a single
+  // browser-global value, so opening a different chat silently kept the previous
+  // project — with two repos open the agent could edit the wrong one. The server
+  // re-vets whatever we send, so this only changes which folder is OFFERED.
+  // A session with no saved project keeps the current one (first bind wins),
+  // rather than yanking the folder away from an existing workflow.
+  if (id) {
+    try {
+      const s = sessions.find(x => x && x.id === id);
+      if (s && s.workspace && s.workspace !== workspaceModule.getWorkspace()) {
+        workspaceModule.setWorkspace(s.workspace);
+      }
+    } catch (e) { /* non-fatal: the picker just keeps its current value */ }
+  }
   if (!id) {
     Storage.remove('lastSessionId');
     history.replaceState(null, '', window.location.pathname);

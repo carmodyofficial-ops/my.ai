@@ -491,9 +491,12 @@ def setup_chat_routes(
         plan_mode = False
         chat_mode = str(form_data.get("mode", "")).lower()  # 'chat' or 'agent'
         # Workspace: confine the agent's file/shell tools to this folder.
-        workspace, workspace_rejected = _resolve_request_workspace(
-            request, form_data.get("workspace")
-        )
+        # `workspace_explicit` records whether the CLIENT named one on this
+        # request; when it didn't, we fall back to the project remembered on the
+        # session row (see below) so switching chats switches project.
+        _ws_raw = form_data.get("workspace")
+        workspace_explicit = bool(str(_ws_raw or "").strip())
+        workspace, workspace_rejected = _resolve_request_workspace(request, _ws_raw)
         # Per-tool-call approval. Requires BOTH the operator's setting and an
         # explicit client opt-in: a caller that cannot render the approval card
         # (scheduled runs, wearables, API clients) must never be paused on a
@@ -619,6 +622,30 @@ def setup_chat_routes(
             # upstream isn't called with model="" (which surfaces as a
             # generic 401/503).
             _recover_empty_session_model(sess, session, owner=owner)
+            # Per-session project binding. The workspace used to live only in
+            # browser localStorage and was GLOBAL, so opening a different chat
+            # silently kept the previous project — with two repos open the agent
+            # could edit the wrong one. Remember it on the session, and when a
+            # request names no workspace, restore this session's.
+            # SECURITY: the remembered value is re-vetted through
+            # _resolve_request_workspace exactly like a client-supplied one, so a
+            # stale or tampered row can never widen the agent's file access.
+            try:
+                if workspace_explicit:
+                    if getattr(sess, "workspace", None) != (workspace or None):
+                        sess.workspace = workspace or None
+                        session_manager.update_session_workspace(session, workspace or None)
+                elif getattr(sess, "workspace", None):
+                    _remembered, _rej = _resolve_request_workspace(request, sess.workspace)
+                    if _remembered:
+                        workspace = _remembered
+                    elif _rej:
+                        # The saved folder is gone or no longer allowed — drop it
+                        # rather than silently running against no workspace.
+                        session_manager.update_session_workspace(session, None)
+                        workspace_rejected = workspace_rejected or _rej
+            except Exception:
+                logger.debug("[workspace] per-session binding skipped", exc_info=True)
             if not getattr(sess, "model", "").strip():
                 raise HTTPException(
                     400,

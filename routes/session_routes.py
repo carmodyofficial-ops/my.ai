@@ -308,6 +308,9 @@ def setup_session_routes(session_manager: SessionManager, config: dict, webhook_
                      "has_documents": s.id in doc_session_ids,
                      "has_images": s.id in img_session_ids,
                      "mode": mode_map.get(s.id),
+                     # Project this conversation is bound to, so switching chats
+                     # can switch project instead of carrying one global folder.
+                     "workspace": getattr(s, "workspace", None),
                      "message_count": msg_count_map.get(s.id, 0)}
                     for s in user_sessions.values()
                     if not s.archived

@@ -149,6 +149,13 @@ class Session(TimestampMixin, Base):
     total_output_tokens = Column(Integer, default=0)
     mode = Column(String, nullable=True)  # 'agent', 'chat', or 'research'
     crew_member_id = Column(String, nullable=True)  # links to crew_members.id
+    # Project this conversation is about. Previously the workspace lived only in
+    # browser localStorage and was GLOBAL, so switching chats did not switch
+    # project — with two projects open the agent could edit the wrong repo.
+    # NULL = no project bound (the historical default); the client still sends
+    # the workspace per request and the server re-vets it, so this is a
+    # remembered preference, never an authorization decision.
+    workspace = Column(String, nullable=True)
 
     # Relationship to chat messages
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
@@ -767,6 +774,30 @@ def _migrate_add_document_archived_column():
             logging.getLogger(__name__).info("Migrated: added 'archived' to documents")
     except Exception as e:
         logging.getLogger(__name__).warning(f"documents.archived migration failed: {e}")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _migrate_add_session_workspace_column():
+    """Add `workspace` to sessions (per-conversation project). Guarded + idempotent."""
+    import sqlite3
+    db_path = DATABASE_URL.replace("sqlite:///", "")
+    if not os.path.exists(db_path):
+        return
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.execute("PRAGMA table_info(sessions)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "workspace" not in columns:
+            conn.execute("ALTER TABLE sessions ADD COLUMN workspace TEXT")
+            conn.commit()
+            logging.getLogger(__name__).info("Migrated: added 'workspace' to sessions")
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"sessions.workspace migration failed: {e}")
     finally:
         try:
             conn.close()
@@ -1820,6 +1851,7 @@ def init_db():
     _migrate_add_supports_tools_column()
     _migrate_add_task_run_model_column()
     _migrate_add_owner_column()
+    _migrate_add_session_workspace_column()
     _migrate_add_document_archived_column()
     _migrate_add_last_message_at_column()
     _migrate_add_folder_column()

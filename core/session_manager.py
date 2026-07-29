@@ -564,6 +564,33 @@ class SessionManager:
         finally:
             db.close()
 
+    def update_session_workspace(self, session_id: str, workspace):
+        """Remember which project this conversation is about (None = unbind).
+
+        Stored so switching chats switches project — the workspace used to be a
+        single browser-global value. This is a remembered PREFERENCE only: every
+        request re-vets the path before the agent's tools are confined to it, so
+        a stale or tampered row cannot widen file access.
+        """
+        if session_id not in self.sessions:
+            return
+        db = SessionLocal()
+        try:
+            db_session = db.query(DbSession).filter(DbSession.id == session_id).first()
+            if db_session:
+                db_session.workspace = workspace or None
+                db_session.updated_at = datetime.now(timezone.utc)
+                db.commit()
+                try:
+                    self.sessions[session_id].workspace = workspace or None
+                except Exception:
+                    pass
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error updating session workspace: {e}")
+        finally:
+            db.close()
+
     def archive_session(self, session_id: str):
         """Archive a session."""
         if session_id not in self.sessions:
