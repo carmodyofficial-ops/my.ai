@@ -5,6 +5,13 @@ Two gaps this closes:
     patch could not be undone;
   * it returned neither `path` nor `paths`, so patched files were skipped by
     the post-edit syntax check that covers every other edit tool.
+
+Isolation note: this test pins the tool's working directory by patching
+`agent_cwd` rather than binding the workspace contextvar. Earlier versions did
+the latter (directly, then via execute_tool_block) and both passed alone but
+failed in a full-suite run with `git apply` resolving the wrong directory — the
+ambient binding did not reach the tool. Nothing here now depends on ambient
+per-turn state, so the result is the same however the suite is ordered.
 """
 import json
 import os
@@ -12,19 +19,20 @@ import subprocess
 
 import pytest
 
-from src import file_checkpoints, file_ledger
+from src import file_checkpoints
 from src.agent_tools.coding_tools import ApplyPatchTool
-from src.tool_execution import _active_workspace
 
 
-def _git(repo, *args, **kw):
+def _git(repo, *args):
     return subprocess.run(["git", "-C", repo, *args], check=True,
-                          capture_output=True, text=True, **kw)
+                          capture_output=True, text=True)
 
 
 @pytest.fixture
 def repo_with_patch(tmp_path, monkeypatch):
+    # Keep checkpoints out of the real data dir.
     monkeypatch.setattr("src.constants.DATA_DIR", str(tmp_path / "data"), raising=False)
+
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
@@ -36,29 +44,31 @@ def repo_with_patch(tmp_path, monkeypatch):
     patch = _git(str(repo), "diff").stdout
     _git(str(repo), "checkout", "--", ".")
     assert f.read_text() == "x = 1\n"
+    assert patch.strip(), "fixture produced an empty patch"
 
-    ws_token = _active_workspace.set(str(repo))
-    sess_token = file_ledger.set_active_session("patch-test")
-    group = file_checkpoints.begin_group("patch-test")
-    yield {"repo": str(repo), "file": f, "patch": patch, "group": group}
-    file_ledger.reset_active_session(sess_token)
-    _active_workspace.reset(ws_token)
+    # ApplyPatchTool resolves its working directory through agent_cwd() at call
+    # time, so patching it here is exact and order-independent.
+    monkeypatch.setattr("src.tool_execution.agent_cwd", lambda: str(repo))
+    return {"repo": str(repo), "file": f, "patch": patch}
 
 
 @pytest.mark.asyncio
 async def test_apply_patch_reports_paths_and_is_undoable(repo_with_patch):
     ctx = repo_with_patch
-    result = await ApplyPatchTool().execute(
-        json.dumps({"patch": ctx["patch"]}), {})
-    assert result.get("exit_code") == 0
+    result = await ApplyPatchTool().execute(json.dumps({"patch": ctx["patch"]}), {})
+
+    assert result.get("exit_code") == 0, result
     assert ctx["file"].read_text() == "x = 2\n"
 
     # Changed files are reported, so the post-edit syntax check can see them.
-    assert result.get("paths")
+    assert result.get("paths"), result
     assert os.path.basename(result["paths"][0]) == "m.py"
 
-    # And the pre-patch state was snapshotted, so the change is undoable.
-    assert result.get("checkpoint_ids")
-    res = file_checkpoints.restore_group(ctx["group"], session_id="patch-test")
-    assert res["ok"]
+    # The pre-patch state was snapshotted, so the change is undoable. Restore by
+    # checkpoint id rather than group: the group is another ambient binding, and
+    # the ids come straight back from the call.
+    ids = result.get("checkpoint_ids")
+    assert ids, result
+    for cid in ids:
+        assert file_checkpoints.restore(cid)["ok"]
     assert ctx["file"].read_text() == "x = 1\n"

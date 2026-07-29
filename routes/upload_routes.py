@@ -12,11 +12,15 @@ from src.upload_handler import count_recent_uploads
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/upload", tags=["upload"])
+# NOTE: the router is created INSIDE the setup function below, not here.
+# A module-level router shared across calls meant every call appended ANOTHER
+# copy of every route to the same object, so resolving a route by path could
+# return a stale closure bound to an earlier manager. See session_routes.py.
 UPLOAD_RESPONSE_HEADERS = {"X-Content-Type-Options": "nosniff"}
 
 def setup_upload_routes(upload_handler):
     """Setup upload routes with the provided handler"""
+    router = APIRouter(prefix="/api/upload", tags=["upload"])
 
     def _upload_root() -> str:
         from src.constants import UPLOAD_DIR

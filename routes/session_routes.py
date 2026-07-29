@@ -122,7 +122,14 @@ def _verify_session_owner(request: Request, session_id: str, session_manager=Non
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api", tags=["sessions"])
+# NOTE: the router is created INSIDE setup_session_routes (below), not here.
+# It used to be module-level while all 19 routes are registered by decorators
+# inside that function, so every call appended ANOTHER copy of every route to
+# the same shared object. A second call left two `GET /api/sessions` routes
+# bound to two different session managers, and anything resolving a route by
+# path got the FIRST (stale) one. That made tests order-dependent — a suite
+# already had one silently asserting against a previous test's manager — and
+# would double-register every route if the app ever set these routes up twice.
 
 def _current_user_is_admin(request: Request, user: str | None) -> bool:
     if not user:
@@ -204,7 +211,12 @@ def _pick_endpoint_for_sort(owner=None):
     return None, None, None
 
 def setup_session_routes(session_manager: SessionManager, config: dict, webhook_manager=None):
-    """Setup session routes with the provided manager and config"""
+    """Setup session routes with the provided manager and config.
+
+    Returns a FRESH router each call, so routes cannot accumulate across calls
+    (see the note where the module-level router used to live).
+    """
+    router = APIRouter(prefix="/api", tags=["sessions"])
 
     REQUEST_TIMEOUT = config.get("REQUEST_TIMEOUT", 20)
     OPENAI_API_KEY = config.get("OPENAI_API_KEY")

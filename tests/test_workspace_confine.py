@@ -100,10 +100,17 @@ async def test_read_write_edit_confined_e2e(ws, admin):
     _, r = await execute_tool_block(_block("write_file", "note.txt\nhello"), owner="a", workspace=ws)
     assert r["exit_code"] == 0 and os.path.isfile(os.path.join(ws, "note.txt"))
     _, r = await execute_tool_block(_block("read_file", "note.txt"), owner="a", workspace=ws)
-    assert r["exit_code"] == 0 and r["output"] == "hello"
+    # read_file returns cat -n style line numbers now; the point of this
+    # assertion is that the confined read returned the file we wrote.
+    assert r["exit_code"] == 0 and r["output"] == "     1\thello"
 
     with open(os.path.join(ws, "f.txt"), "w") as f:
         f.write("foo bar")
+    # edit_file refuses to modify a file that has not been read this session
+    # (src/file_ledger.py), so read it through the same confined path first —
+    # which is what a real turn does, and keeps this an honest end-to-end.
+    _, r = await execute_tool_block(_block("read_file", "f.txt"), owner="a", workspace=ws)
+    assert r["exit_code"] == 0
     _, r = await execute_tool_block(
         _block("edit_file", json.dumps({"path": "f.txt", "old_string": "foo", "new_string": "baz"})),
         owner="a", workspace=ws,

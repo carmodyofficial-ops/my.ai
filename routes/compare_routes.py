@@ -16,7 +16,10 @@ from routes.session_routes import _reject_raw_endpoint_url_for_non_admin
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/compare", tags=["compare"])
+# NOTE: the router is created INSIDE the setup function below, not here.
+# A module-level router shared across calls meant every call appended ANOTHER
+# copy of every route to the same object, so resolving a route by path could
+# return a stale closure bound to an earlier manager. See session_routes.py.
 
 
 def _owned_endpoint_by_url(db, base_url, owner):
@@ -66,6 +69,7 @@ class RecordVoteRequest(BaseModel):
 
 def setup_compare_routes(session_manager: SessionManager):
     """Setup comparison routes."""
+    router = APIRouter(prefix="/api/compare", tags=["compare"])
 
     @router.post("/start")
     def start_comparison(

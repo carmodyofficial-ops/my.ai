@@ -18,7 +18,10 @@ from src.mcp_manager import McpManager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/mcp", tags=["mcp"])
+# NOTE: the router is created INSIDE the setup function below, not here.
+# A module-level router shared across calls meant every call appended ANOTHER
+# copy of every route to the same object, so resolving a route by path could
+# return a stale closure bound to an earlier manager. See session_routes.py.
 
 
 def _mcp_oauth_base_dir() -> Path:
@@ -116,6 +119,7 @@ def _mcp_oauth_redirect_uri() -> str:
 
 def setup_mcp_routes(mcp_manager: McpManager):
     """Setup MCP routes with the provided manager."""
+    router = APIRouter(prefix="/api/mcp", tags=["mcp"])
 
     @router.get("/servers")
     def list_servers(request: Request):

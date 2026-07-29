@@ -31,13 +31,16 @@ class _Request:
 
 def _upload_endpoints(upload_handler, monkeypatch):
     import fastapi.dependencies.utils as dependency_utils
-    from routes.upload_routes import router, setup_upload_routes
+    from routes.upload_routes import setup_upload_routes
 
     monkeypatch.setattr(dependency_utils, "ensure_multipart_is_installed", lambda: None)
-    before = len(router.routes)
-    setup_upload_routes(upload_handler)
-    routes = router.routes[before:]
-    return {route.endpoint.__name__: route.endpoint for route in routes}
+    # setup_upload_routes now builds its OWN router and returns it as the first
+    # element of (router, cleanup_task). This used to import the module-level
+    # router and slice routes[before:] — a workaround for that shared router
+    # accumulating a fresh copy of every route on each call. Fixed at the
+    # source, so the slicing is gone too.
+    router, _cleanup = setup_upload_routes(upload_handler)
+    return {route.endpoint.__name__: route.endpoint for route in router.routes}
 
 
 def _make_upload_store(tmp_path, monkeypatch):

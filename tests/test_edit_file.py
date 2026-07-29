@@ -13,6 +13,21 @@ from src.tool_security import (
 )
 from src.agent_tools.filesystem_tools import EditFileTool
 from src.agent_tools import ToolBlock
+from src.file_ledger import record_read
+
+
+def _seed(path: str, content: str) -> str:
+    """Create a file and mark it as already READ for this session.
+
+    edit_file refuses to modify a file the agent has not read (see
+    src/file_ledger.py) — that gate is the point, so these behaviour tests
+    stamp the ledger instead of bypassing it, which is exactly what a real
+    turn does by calling read_file first.
+    """
+    with open(path, "w") as f:
+        f.write(content)
+    record_read(path)
+    return path
 
 
 # ── Permission policy ─────────────────────────────────────────────────────
@@ -58,8 +73,7 @@ async def test_edit_file_blocked_at_execution_for_non_admin(monkeypatch):
 # ── Behavior ──────────────────────────────────────────────────────────────
 @pytest.mark.asyncio
 async def test_edit_file_success():
-    p = os.path.join("/tmp", "ef_ok.py")
-    open(p, "w").write("def f():\n    return 1\n")
+    p = _seed(os.path.join("/tmp", "ef_ok.py"), "def f():\n    return 1\n")
     res = await EditFileTool().execute(json.dumps({"path": p, "old_string": "return 1", "new_string": "return 2"}), {})
     assert res["exit_code"] == 0
     assert open(p).read() == "def f():\n    return 2\n"
@@ -69,8 +83,7 @@ async def test_edit_file_success():
 
 @pytest.mark.asyncio
 async def test_edit_file_not_found():
-    p = os.path.join("/tmp", "ef_nf.txt")
-    open(p, "w").write("hello\n")
+    p = _seed(os.path.join("/tmp", "ef_nf.txt"), "hello\n")
     res = await EditFileTool().execute(json.dumps({"path": p, "old_string": "nope", "new_string": "x"}), {})
     assert res["exit_code"] == 1 and "not found" in res["error"]
     os.unlink(p)
@@ -78,8 +91,7 @@ async def test_edit_file_not_found():
 
 @pytest.mark.asyncio
 async def test_edit_file_non_unique():
-    p = os.path.join("/tmp", "ef_dup.txt")
-    open(p, "w").write("x\nx\n")
+    p = _seed(os.path.join("/tmp", "ef_dup.txt"), "x\nx\n")
     res = await EditFileTool().execute(json.dumps({"path": p, "old_string": "x", "new_string": "y"}), {})
     assert res["exit_code"] == 1 and "not unique" in res["error"]
     # replace_all resolves it

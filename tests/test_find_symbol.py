@@ -47,9 +47,21 @@ async def _find(**kw):
     return await FindSymbolTool().execute(json.dumps(kw), {})
 
 
+async def _find_in(project, **kw):
+    """Search the fixture project by EXPLICIT path.
+
+    The fixture also binds the workspace contextvar, but a contextvar set in a
+    sync fixture is not reliably visible inside the async test body, so relying
+    on it made these tests pass alone and fail in a full-suite run (the search
+    root fell back to the data dir). Passing `path` removes the ambiguity.
+    """
+    kw.setdefault("path", str(project))
+    return await FindSymbolTool().execute(json.dumps(kw), {})
+
+
 @pytest.mark.asyncio
 async def test_finds_function_definition_via_ast(project):
-    r = await _find(symbol="build_widget")
+    r = await _find_in(project, symbol="build_widget")
     assert r["exit_code"] == 0
     assert "core.py:9" in r["output"]      # def build_widget() is on line 9
     assert "[def]" in r["output"]
@@ -57,20 +69,20 @@ async def test_finds_function_definition_via_ast(project):
 
 @pytest.mark.asyncio
 async def test_finds_class_definition(project):
-    r = await _find(symbol="Widget")
+    r = await _find_in(project, symbol="Widget")
     assert "[class]" in r["output"]
     assert "core.py:4" in r["output"]
 
 
 @pytest.mark.asyncio
 async def test_finds_module_level_assignment(project):
-    r = await _find(symbol="CONST")
+    r = await _find_in(project, symbol="CONST")
     assert "[assign]" in r["output"]
 
 
 @pytest.mark.asyncio
 async def test_references_mode_excludes_the_definition_line(project):
-    r = await _find(symbol="build_widget", mode="references")
+    r = await _find_in(project, symbol="build_widget", mode="references")
     out = r["output"]
     assert "REFERENCES" in out
     assert "use.py" in out          # the import and the call site
@@ -80,7 +92,7 @@ async def test_references_mode_excludes_the_definition_line(project):
 
 @pytest.mark.asyncio
 async def test_non_python_definitions_are_flagged_as_heuristic(project):
-    r = await _find(symbol="buildWidget", glob="*.js")
+    r = await _find_in(project, symbol="buildWidget", glob="*.js")
     assert "buildWidget" in r["output"]
     # '?' marks a pattern match rather than a parsed one.
     assert "?" in r["output"]
@@ -93,19 +105,19 @@ async def test_copy_directories_do_not_pollute_results(project):
     Otherwise the model cites a path nobody edits — the failure this guards was
     real: searching this repo returned dev-mirror snapshots ahead of the source.
     """
-    r = await _find(symbol="build_widget")
+    r = await _find_in(project, symbol="build_widget")
     assert "mirrors" not in r["output"]
     assert r["output"].count("[def]") == 1
 
 
 @pytest.mark.asyncio
 async def test_rejects_non_identifier_input(project):
-    r = await _find(symbol="foo.*bar")
+    r = await _find_in(project, symbol="foo.*bar")
     assert "bare identifier" in r.get("error", "")
 
 
 @pytest.mark.asyncio
 async def test_missing_symbol_says_so_rather_than_failing(project):
-    r = await _find(symbol="no_such_symbol_here")
+    r = await _find_in(project, symbol="no_such_symbol_here")
     assert r["exit_code"] == 0
     assert "No definition" in r["output"]

@@ -18,7 +18,6 @@ import types
 from pathlib import Path
 
 import pytest
-from fastapi import APIRouter
 
 from src.upload_handler import count_recent_uploads, UploadHandler
 import routes.upload_routes as up
@@ -83,9 +82,10 @@ def _files(n):
 
 
 @pytest.fixture(autouse=True)
-def _reset_router(monkeypatch):
-    # Module-level router accumulates routes across setup calls; reset it.
-    monkeypatch.setattr(up, "router", APIRouter(prefix="/api/upload", tags=["upload"]))
+def _freeze_time(monkeypatch):
+    # The router no longer needs resetting: setup_upload_routes builds its own,
+    # so routes cannot accumulate across calls (they used to, on a shared
+    # module-level router). Only the clock still needs pinning here.
     # Freeze time so the seeded "recent upload" is deterministic.
     monkeypatch.setattr(up.time, "time", lambda: _NOW)
 
@@ -94,8 +94,8 @@ async def test_multifile_after_a_recent_upload_is_not_rejected():
     """The bug: one prior upload + a 3-file batch -> 429. Must now succeed."""
     h = _fake_handler()
     h.upload_rate_log["1.2.3.4"] = [_NOW - 1]  # step 1: a single file moments ago
-    up.setup_upload_routes(h)
-    endpoint = _endpoint(up.router)
+    router, _cleanup = up.setup_upload_routes(h)
+    endpoint = _endpoint(router)
 
     result = await endpoint(_request(), _files(3))
 
@@ -104,8 +104,8 @@ async def test_multifile_after_a_recent_upload_is_not_rejected():
 
 async def test_fresh_multifile_upload_succeeds():
     h = _fake_handler()
-    up.setup_upload_routes(h)
-    endpoint = _endpoint(up.router)
+    router, _cleanup = up.setup_upload_routes(h)
+    endpoint = _endpoint(router)
 
     result = await endpoint(_request(), _files(5))
 
@@ -118,8 +118,8 @@ async def test_genuine_recent_volume_still_throttled():
 
     h = _fake_handler()
     h.upload_rate_log["1.2.3.4"] = [_NOW - 1, _NOW - 2, _NOW - 3]  # 3 recent events
-    up.setup_upload_routes(h)
-    endpoint = _endpoint(up.router)
+    router, _cleanup = up.setup_upload_routes(h)
+    endpoint = _endpoint(router)
 
     with pytest.raises(HTTPException) as ei:
         await endpoint(_request(), _files(1))

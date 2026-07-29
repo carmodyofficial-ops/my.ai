@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from fastapi import APIRouter, FastAPI
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from core.models import ChatMessage
@@ -137,11 +137,11 @@ def _registered_compact_response(monkeypatch, history, active_run=False):
         captured["messages"] = messages
         return "Summary text"
 
-    monkeypatch.setattr(
-        session_routes,
-        "router",
-        APIRouter(prefix="/api", tags=["sessions"]),
-    )
+    # (No router reset needed.) This used to swap session_routes.router for a
+    # fresh APIRouter, because the module-level router meant every
+    # setup_session_routes() call appended another copy of every route. That is
+    # fixed at the source — setup_session_routes now builds its own router — so
+    # the workaround is gone along with the attribute it patched.
     monkeypatch.setattr(session_routes, "_verify_session_owner", lambda request, session_id: None)
     monkeypatch.setattr(history_routes, "_verify_session_owner", lambda request, session_id: None)
     monkeypatch.setattr(history_routes, "SessionLocal", lambda: _FakeDb())

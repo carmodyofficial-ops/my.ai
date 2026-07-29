@@ -131,7 +131,9 @@ def test_read_file_offset_limit(repo):
         f.write("\n".join(f"line{i}" for i in range(1, 11)) + "\n")
     r = _run("read_file", f'{{"path": "{p}", "offset": 3, "limit": 2}}')
     assert r["exit_code"] == 0
-    assert r["output"] == "line3\nline4\n"
+    # read_file returns cat -n style line numbers (so the model can cite
+    # file:line); the numbers are the REAL file lines, not 1..n of the slice.
+    assert r["output"] == "     3\tline3\n     4\tline4\n"
 
 
 def test_read_file_plain_path_backcompat(repo):
