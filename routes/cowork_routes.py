@@ -35,6 +35,10 @@ COWORK_TOOLS = {
     "grep", "glob", "ls", "get_workspace",
     "bash", "python", "run_tests", "git", "lint_format", "code_sandbox", "apply_patch",
     "web_search", "web_fetch", "http_request",
+    # Parallel READ-ONLY investigation of the bound workspace. Explorers cannot
+    # mutate (plan-mode denylist + no re-dispatch), so this is safe here and
+    # keeps the main context clean on large-codebase questions.
+    "dispatch_subagents",
 }
 
 # Resource caps for cowork bash/python. Generous (cowork does real builds on the

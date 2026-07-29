@@ -173,6 +173,12 @@ DEFAULT_SETTINGS = {
     # Prompt text alone cannot prevent write_file silently truncating an unseen
     # file, or clobbering a concurrent edit. Creating NEW files is unaffected.
     "agent_read_before_edit": True,
+    # Give dispatch_subagents' workers their own READ-ONLY tools (grep/glob/ls/
+    # read_file) when a workspace is bound, so they investigate the code instead
+    # of reasoning over pasted text. Off = the old tool-less single-shot workers.
+    # Read-only is enforced twice: plan-mode's fail-closed denylist plus an
+    # explicit block on re-dispatch. See src/ai_interaction.py.
+    "subagent_tools_enabled": True,
     # Pause before a mutating tool and wait for the user to allow/deny it, in the
     # browser. "off" (default, unchanged behavior) | "destructive" (code
     # execution + file delete/move/patch/git — the things checkpoints can't take

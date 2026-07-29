@@ -66,7 +66,10 @@ def test_every_fenced_section_is_accepted_by_the_tag_gate():
 # exist. This is real debt, not a desired state — the allowlist exists so the
 # gap cannot GROW silently. Shrink it; do not add to it.
 KNOWN_SCHEMA_WITHOUT_FENCED_SECTION = {
-    "dispatch_subagents", "http_request", "manage_corpus",
+    # dispatch_subagents was documented for fenced models on 2026-07-29 — it is
+    # deliberately absent from this list now, and the staleness test below keeps
+    # it that way.
+    "http_request", "manage_corpus",
     "request_sandbox_build", "trigger_research", "api_call", "edit_image",
     "adopt_served_model", "list_serve_presets", "serve_preset",
     "list_cookbook_servers",

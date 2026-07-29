@@ -25,7 +25,7 @@ FUNCTION_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "bash",
-            "description": "Run a shell command (full access). Prefer a dedicated tool whenever one fits the job (reading, writing, editing, searching, or listing files); use bash only for what no dedicated tool covers (installs, git, builds, running programs, system info). Do NOT create or edit files via bash redirects/heredocs/sed -- use the dedicated file tools. Use bash to BUILD and TEST your changes (e.g. python3 -m compileall -q <file>, pytest -q, npm test, git status/diff) and READ the output -- if a command fails, read the actual error and fix the cause before retrying.",
+            "description": "Run a shell command (full access). Prefer a dedicated tool whenever one fits the job (reading, writing, editing, searching, or listing files); use bash only for what no dedicated tool covers (installs, git, builds, running programs, system info). Do NOT create or edit files via bash redirects/heredocs/sed -- use the dedicated file tools. Use bash to BUILD and TEST your changes (e.g. python3 -m compileall -q <file>, pytest -q, npm test, git status/diff) and READ the output -- if a command fails, read the actual error and fix the cause before retrying. LONG-RUNNING WORK: make the FIRST line of the command `#!bg` to run it in the BACKGROUND and get an id back immediately, then poll instead of blocking -- a build or test suite that outlives the turn's timeout is killed otherwise (the timeout is 1h in chat but only 600s under cowork and 300s in the sandbox). Commands run in the workspace directory with NO TTY: never use interactive prompts, `input()`, editors, pagers, or `python -c` with multi-line code -- add `-y`/`--yes` and pipe pagers to `cat`.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -159,7 +159,7 @@ FUNCTION_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "code_sandbox",
-            "description": "Build and TEST code in an isolated, resource-limited scratch sandbox, then hand back code you have ACTUALLY RUN. Use this whenever the user asks you to write non-trivial code: write the file(s) (and a quick test), run them, READ the result, fix any error and call again until it passes, then present the verified code in your reply (mention it's tested). The sandbox is separate from the user's real files and auto-cleaned; it cannot read secrets/.env/.ssh. Prefer this over claiming code works untested.",
+            "description": "Build and TEST code in an isolated, resource-limited scratch sandbox, then hand back code you have ACTUALLY RUN. Use this whenever the user asks you to write non-trivial code: write the file(s) (and a quick test), run them, READ the result, fix any error and call again until it passes, then present the verified code in your reply (mention it's tested). LIMITS (a run exceeding any of these is killed, so keep tests small and avoid benchmarks/large downloads): 45s wall clock, 30s CPU, 2GB memory, 64MB max file size, no TTY. The sandbox is separate from the user's real files and auto-cleaned; it cannot read secrets/.env/.ssh. Prefer this over claiming code works untested.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -231,7 +231,7 @@ FUNCTION_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "grep",
-            "description": "Search file contents for a regular expression across a directory tree (uses ripgrep when available, respecting .gitignore). Returns file:line:match. PREFER this over `bash grep/rg` for code search — confined to the allowed roots, structured output.",
+            "description": "Search file contents for a regular expression across a directory tree (uses ripgrep when available, respecting .gitignore). Match lines are `file:line:text`; context lines are `file-line-text`. Set `context` (or `before`/`after`) to see the surrounding code in the SAME call instead of following up with read_file. PREFER this over `bash grep/rg` for code search — confined to the allowed roots, structured output. Capped at 200 matches; the output says so explicitly when it truncates, so treat a cap notice as 'narrow the pattern', never as 'that's all there is'.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -239,7 +239,10 @@ FUNCTION_TOOL_SCHEMAS = [
                     "path": {"type": "string", "description": "Directory or file to search (optional; defaults to the project root)"},
                     "glob": {"type": "string", "description": "Only search files matching this glob, e.g. '*.py' (optional)"},
                     "ignore_case": {"type": "boolean", "description": "Case-insensitive match (optional)"},
-                    "max_results": {"type": "integer", "description": "Max matches to return (optional)"}
+                    "context": {"type": "integer", "description": "Lines of context to show on BOTH sides of each match, 0-20 (optional). Usually 2-5 is enough to judge a hit without a separate read_file."},
+                    "before": {"type": "integer", "description": "Lines of context before each match, 0-20 (optional; overrides `context` for this side)"},
+                    "after": {"type": "integer", "description": "Lines of context after each match, 0-20 (optional; overrides `context` for this side)"},
+                    "max_results": {"type": "integer", "description": "Max MATCHES to return, capped at 200 (optional)"}
                 },
                 "required": ["pattern"]
             }
@@ -689,7 +692,7 @@ FUNCTION_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "dispatch_subagents",
-            "description": "Run several INDEPENDENT subtasks IN PARALLEL and get their results back, then synthesize them yourself. Use when a task splits into pieces that don't depend on each other — e.g. investigate several modules/files at once, analyze multiple options, or draft separate sections concurrently. Each sub-agent is a focused single-shot worker with NO tools and no shared state, so this is for parallel ANALYSIS / REASONING / DRAFTING, not for parallel file edits (those would conflict — make those edits yourself, sequentially). Give each subtask enough self-contained detail to stand alone; put common background in `context`. Up to 6 run at once.",
+            "description": "Run several INDEPENDENT subtasks IN PARALLEL and get their results back, then synthesize them yourself. Use when a task splits into pieces that don't depend on each other — e.g. investigate several modules/files at once, analyze multiple options, or draft separate sections concurrently. When a WORKSPACE is bound, each sub-agent gets its own READ-ONLY tools (grep, glob, ls, read_file) and investigates the real code itself, returning findings cited by file:line — so a broad 'where/how does this work' question costs you one short answer instead of every file in your own context. Sub-agents CANNOT edit files, run commands, or dispatch further sub-agents; with no workspace they fall back to tool-less reasoning over the text you supply. Never use this for parallel file EDITS (they would conflict — make those yourself, sequentially) or anything needing shared state. Give each subtask enough self-contained detail to stand alone; put common background in `context`. Up to 6 run at once.",
             "parameters": {
                 "type": "object",
                 "properties": {

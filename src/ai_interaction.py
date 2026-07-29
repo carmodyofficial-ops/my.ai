@@ -63,7 +63,15 @@ def set_rag_manager(rag_mgr, personal_docs_mgr=None):
 # Model resolution
 # ---------------------------------------------------------------------------
 
-from src.endpoint_resolver import build_chat_url, build_headers, build_models_url, resolve_endpoint_runtime
+from src.endpoint_resolver import (
+    build_chat_url, build_headers, build_models_url,
+    # resolve_endpoint was CALLED by do_dispatch_subagents but never imported, so
+    # every dispatch without an explicit `model` died with a NameError surfaced as
+    # "could not resolve a model for sub-agents". The tool was effectively dead on
+    # its default path.
+    resolve_endpoint,
+    resolve_endpoint_runtime,
+)
 
 
 def _resolve_model(spec: str, owner: Optional[str] = None) -> Tuple[str, str, Dict]:
@@ -209,6 +217,84 @@ _SUBAGENT_SYSTEM_PROMPT = (
 _SUBAGENT_MAX = 6          # cap concurrent sub-agents per dispatch (cost/fan-out guard)
 _SUBAGENT_TIMEOUT = 90     # per-subagent LLM timeout
 
+# --- Tool-equipped explorer sub-agents -------------------------------------
+# A sub-agent with no tools can only reason over text the caller pasted in, so
+# for a codebase question it is nearly useless: the main agent has to read every
+# file itself first, which is exactly the context cost the fan-out was meant to
+# avoid. When a workspace is bound, each sub-agent instead runs a real (but
+# READ-ONLY) agent loop with read_file/grep/glob/ls, investigates on its own, and
+# returns findings. That keeps the main context clean — the parent sees a short
+# answer, not the file contents that produced it.
+_EXPLORER_SYSTEM_PROMPT = (
+    "You are a read-only investigator working ONE piece of a larger task in "
+    "parallel with others. Use your tools (grep, glob, ls, read_file) to find the "
+    "answer in the actual code — never guess an API, signature, or file layout. "
+    "You CANNOT modify anything; do not try. Return only your findings, densely "
+    "and concretely, citing file:line for every claim. No preamble, no restating "
+    "the task. If the answer genuinely isn't in the code, say so in one line."
+)
+_EXPLORER_MAX_ROUNDS = 6   # bounded: an explorer that can't answer in 6 rounds should say so
+_EXPLORER_TIMEOUT = 240    # a tool-using loop needs longer than a single-shot call
+
+
+def _explorers_enabled() -> bool:
+    try:
+        from src.settings import get_setting
+        return bool(get_setting("subagent_tools_enabled", True))
+    except Exception:
+        return True
+
+
+async def _run_explorer(idx: int, task: str, *, url: str, model: str, headers,
+                        workspace: str, shared: str, owner) -> Dict:
+    """Run one sub-agent as a read-only agent loop and return its final text."""
+    import json as _json
+
+    from src.agent_loop import stream_agent_loop
+    from src.tool_security import plan_mode_disabled_tools
+
+    # Read-only by construction: plan-mode's inverted allowlist (fail-closed —
+    # an unknown/new tool is denied, not allowed), plus an explicit block on
+    # re-dispatching so an explorer cannot fan out recursively.
+    disabled = set(plan_mode_disabled_tools()) | {"dispatch_subagents", "request_sandbox_build"}
+    prompt = task if not shared else f"{task}\n\nShared context:\n{shared}"
+    messages = [
+        {"role": "system", "content": _EXPLORER_SYSTEM_PROMPT},
+        {"role": "user", "content": prompt},
+    ]
+    chunks, used_tools = [], []
+    try:
+        async for raw in stream_agent_loop(
+            url, model, messages,
+            headers=headers,
+            owner=owner,
+            workspace=workspace,
+            max_rounds=_EXPLORER_MAX_ROUNDS,
+            disabled_tools=disabled,
+            plan_mode=True,          # second, independent read-only gate
+            temperature=0.0,
+        ):
+            if not raw.startswith("data: ") or raw.startswith("data: [DONE]"):
+                continue
+            try:
+                d = _json.loads(raw[6:])
+            except Exception:
+                continue
+            if "delta" in d and not d.get("thinking"):
+                chunks.append(d["delta"])
+            elif d.get("type") == "tool_start" and d.get("tool"):
+                used_tools.append(d["tool"])
+    except Exception as e:
+        return {"index": idx, "task": task[:200], "error": f"explorer failed: {str(e)[:300]}"}
+
+    out = "".join(chunks).strip()
+    if len(out) > 6000:
+        out = out[:6000] + "\n... (truncated)"
+    if not out:
+        return {"index": idx, "task": task[:200],
+                "error": "explorer returned no findings"}
+    return {"index": idx, "task": task[:200], "result": out, "tools_used": used_tools}
+
 
 async def do_dispatch_subagents(content: str, session_id: Optional[str] = None,
                                 owner: Optional[str] = None) -> Dict:
@@ -282,10 +368,32 @@ async def do_dispatch_subagents(content: str, session_id: Optional[str] = None,
             return {"index": idx, "task": task[:200], "error": str(e)[:300]}
 
     import asyncio
-    results = await asyncio.gather(*[_run_one(i, t) for i, t in enumerate(tasks)])
+
+    # Prefer tool-equipped explorers when a workspace is bound: they can read the
+    # code themselves instead of reasoning over whatever the caller pasted in.
+    # Falls back to the single-shot path when there is no workspace (nothing to
+    # explore) or the operator turned it off.
+    workspace = ""
+    try:
+        from src.tool_execution import get_active_workspace
+        workspace = get_active_workspace() or ""
+    except Exception:
+        workspace = ""
+    explorer_mode = bool(workspace) and _explorers_enabled()
+
+    if explorer_mode:
+        results = await asyncio.gather(*[
+            _run_explorer(i, t, url=url, model=model, headers=headers,
+                          workspace=workspace, shared=shared, owner=owner)
+            for i, t in enumerate(tasks)
+        ])
+    else:
+        results = await asyncio.gather(*[_run_one(i, t) for i, t in enumerate(tasks)])
     ok = sum(1 for r in results if "result" in r)
     return {
         "model": model,
+        "mode": "explorer" if explorer_mode else "reasoning",
+        "workspace": workspace or None,
         "count": len(results),
         "succeeded": ok,
         "failed": len(results) - ok,

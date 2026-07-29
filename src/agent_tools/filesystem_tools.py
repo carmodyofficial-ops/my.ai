@@ -17,6 +17,9 @@ _CODENAV_MAX_HITS = 200
 _CODENAV_MAX_LINE = 400
 
 _LINE_NUM_RE = None  # compiled lazily in _strip_line_nums
+# A grep MATCH line is `path:NN:text`; a CONTEXT line is `path-NN-text` (ripgrep's
+# convention, mirrored by the pure-Python fallback). Used to count real matches.
+_MATCH_LINE_RE = __import__("re").compile(r"^.+?:\d+:")
 
 
 def _line_numbers_enabled() -> bool:
@@ -566,6 +569,18 @@ class GrepTool:
         except (TypeError, ValueError):
             max_hits = _CODENAV_MAX_HITS
         max_hits = max(1, min(max_hits, _CODENAV_MAX_HITS))
+        # Context lines around each match. Without these the model has to follow
+        # every hit with a read_file just to see the surrounding code, which on a
+        # 20-round budget is a real cost. Bounded so a broad pattern can't dump
+        # the file. `context` sets both sides; before/after override per side.
+        def _ctx(key, fallback=0):
+            try:
+                return max(0, min(int(args.get(key) if args.get(key) is not None else fallback), 20))
+            except (TypeError, ValueError):
+                return 0
+        ctx_both = _ctx("context")
+        before = _ctx("before", ctx_both)
+        after = _ctx("after", ctx_both)
         try:
             root = _resolve_search_root(str(args.get("path", "")))
         except ValueError as e:
@@ -578,6 +593,10 @@ class GrepTool:
             if rg:
                 cmd = [rg, "--line-number", "--no-heading", "--color=never",
                        "--max-count", str(max_hits)]
+                if before:
+                    cmd += ["--before-context", str(before)]
+                if after:
+                    cmd += ["--after-context", str(after)]
                 if ignore_case:
                     cmd.append("--ignore-case")
                 if glob_pat:
@@ -588,7 +607,10 @@ class GrepTool:
                 try:
                     import subprocess
                     p = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
-                    lines = [ln for ln in (p.stdout or "").splitlines() if ln][:max_hits]
+                    # With context, rg emits context + separator lines too, so the
+                    # cap must scale or the trailing matches lose their context.
+                    _cap = max_hits * (1 + before + after) + max_hits
+                    lines = [ln for ln in (p.stdout or "").splitlines() if ln][:_cap]
                     return lines, None
                 except subprocess.TimeoutExpired:
                     return None, "grep: timed out"
@@ -609,18 +631,32 @@ class GrepTool:
                         if glob_pat and not fnmatch.fnmatch(fn, glob_pat):
                             continue
                         file_iter.append(os.path.join(dp, fn))
+            matches = 0
             for fp in file_iter:
-                if len(hits) >= max_hits:
+                if matches >= max_hits:
                     break
                 try:
                     with open(fp, "r", encoding="utf-8", errors="strict") as f:
-                        for i, line in enumerate(f, 1):
-                            if rx.search(line):
-                                hits.append(f"{fp}:{i}:{line.rstrip()[:_CODENAV_MAX_LINE]}")
-                                if len(hits) >= max_hits:
-                                    break
+                        flines = f.readlines()
                 except (UnicodeDecodeError, OSError):
                     continue
+                emitted = set()
+                for i, line in enumerate(flines, 1):
+                    if not rx.search(line):
+                        continue
+                    # Mirror ripgrep's output shape: ':' on match lines, '-' on
+                    # context lines, so the model can tell them apart.
+                    lo = max(1, i - before)
+                    hi = min(len(flines), i + after)
+                    for j in range(lo, hi + 1):
+                        if j in emitted:
+                            continue
+                        emitted.add(j)
+                        sep = ":" if j == i else "-"
+                        hits.append(f"{fp}{sep}{j}{sep}{flines[j-1].rstrip()[:_CODENAV_MAX_LINE]}")
+                    matches += 1
+                    if matches >= max_hits:
+                        break
             return hits, None
 
         lines, err = await asyncio.to_thread(_grep)
@@ -629,8 +665,16 @@ class GrepTool:
         if not lines:
             return {"output": f"No matches for {pattern!r} under {root}", "exit_code": 0}
         out = "\n".join(ln[:_CODENAV_MAX_LINE] for ln in lines)
-        if len(lines) >= max_hits:
-            out += f"\n... [capped at {max_hits} matches]"
+        # Count MATCH lines only — with context enabled the raw line count is
+        # inflated, and reporting that as "capped" would falsely tell the model
+        # its search was truncated when it wasn't.
+        if before or after:
+            n_match = sum(1 for ln in lines if _MATCH_LINE_RE.match(ln))
+        else:
+            n_match = len(lines)
+        if n_match >= max_hits:
+            out += (f"\n... [capped at {max_hits} matches — narrow the pattern, "
+                    f"set `glob`, or raise `max_results` (hard max {_CODENAV_MAX_HITS})]")
         return {"output": _truncate(out), "exit_code": 0}
 
 class GetWorkspaceTool:

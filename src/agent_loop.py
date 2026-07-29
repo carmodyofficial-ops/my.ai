@@ -274,9 +274,9 @@ Find files by name pattern, newest first. A bare pattern on one line also works.
 
     "grep": """\
 ```grep
-{"pattern": "<regex>", "path": "<dir, optional>", "glob": "*.py", "ignore_case": false}
+{"pattern": "<regex>", "path": "<dir, optional>", "glob": "*.py", "ignore_case": false, "context": 3}
 ```
-Search file CONTENTS by regex; returns file:line:text matches. A bare pattern on one line also works. PREFER over `bash grep` — it skips build/vendor dirs and caps output.""",
+Search file CONTENTS by regex. Match lines are `file:line:text`; context lines are `file-line-text`. A bare pattern on one line also works. Set `context` (or `before`/`after`, 0-20) to see the surrounding code in the SAME call instead of a follow-up read_file. PREFER over `bash grep` — it skips build/vendor dirs. Capped at 200 matches and it SAYS SO when it truncates: treat that as "narrow the pattern", not as "that's everything".""",
 
     "multi_edit": """\
 ```multi_edit
@@ -298,6 +298,12 @@ Write files into an ISOLATED scratch dir and run a command there (auto-cleans; n
 {"path": "<test file/dir, optional>", "framework": "auto|pytest|npm|go|cargo"}
 ```
 Run the project's test suite (auto-detects the framework) and return a parsed pass/fail summary. `{}` runs everything. PREFER over raw `bash pytest`.""",
+
+    "dispatch_subagents": """\
+```dispatch_subagents
+{"tasks": ["find where X is validated", "list every caller of Y"], "context": "optional shared background"}
+```
+Run up to 6 INDEPENDENT investigations IN PARALLEL, then synthesize the results yourself. When a workspace is bound each sub-agent gets its own READ-ONLY tools (grep/glob/ls/read_file) and explores the code itself, returning findings with file:line — so you learn the answer without pulling every file into your own context. Sub-agents CANNOT edit, run commands, or dispatch further sub-agents. Use for "where/how does this work" spread over several files; NOT for parallel edits (they would conflict) or for anything needing shared state.""",
 
     "git": "- ```git``` — Local, non-destructive git. Args (JSON): {\"subcommand\": \"status|diff|log|show|branch|add|commit|stash|blame|...\", \"args\": [\"-5\", \"--oneline\"]}. No push/reset/rebase/merge/checkout/--force. PREFER over `bash git`.",
     "lint_format": "- ```lint_format``` — Run the project's linter/formatter (auto-detects ruff/black/eslint/prettier/gofmt). Args (JSON): {\"path\": \".\", \"fix\": false}. Use after edits to catch style/syntax issues.",
@@ -1976,9 +1982,17 @@ _APPROVAL_REQUIRED_TOOLS = {
 
 # Edit tools whose result carries a structured "path" we can statically check.
 _CODE_EDIT_TOOLS = {"edit_file", "write_file", "multi_edit"}
-# Extensions we can syntax-check SAFELY (no code execution). Deliberately omits
-# .ts/.tsx/.jsx — `node --check` can't parse those and would false-positive.
-_SYNTAX_CHECK_EXTS = (".py", ".js", ".mjs", ".cjs", ".json")
+# Extensions we can syntax-check SAFELY (parse only — nothing is executed).
+# Deliberately omits .ts/.tsx/.jsx: `node --check` cannot parse them, and
+# single-file `tsc` without the project's tsconfig reports spurious errors — a
+# false "your edit is broken" is worse than no check. Go is included but only
+# runs when gofmt exists (it is absent in this image), same opt-in shape as node.
+_SYNTAX_CHECK_EXTS = (
+    ".py", ".js", ".mjs", ".cjs", ".json",
+    ".sh", ".bash",          # bash -n: parse without executing
+    ".yaml", ".yml", ".toml",  # config breakage is a common silent edit failure
+    ".go",                   # gofmt -e parses without compiling
+)
 
 
 async def _static_syntax_check(paths, *, timeout: float = 12.0, max_files: int = 20) -> list:
@@ -2020,8 +2034,36 @@ async def _static_syntax_check(paths, *, timeout: float = 12.0, max_files: int =
                     errors.append(f"{rel}: invalid JSON — {je}")
                 checked += 1
                 continue
+            if ext in (".yaml", ".yml"):
+                try:
+                    import yaml as _yaml
+                except ImportError:
+                    continue
+                try:
+                    with open(p, "r", encoding="utf-8", errors="replace") as fh:
+                        _yaml.safe_load(fh)
+                except Exception as ye:
+                    errors.append(f"{rel}: invalid YAML — {str(ye)[:200]}")
+                checked += 1
+                continue
+            if ext == ".toml":
+                try:
+                    import tomllib as _toml
+                except ImportError:
+                    continue
+                try:
+                    with open(p, "rb") as fh:
+                        _toml.load(fh)
+                except Exception as te:
+                    errors.append(f"{rel}: invalid TOML — {str(te)[:200]}")
+                checked += 1
+                continue
             if ext == ".py":
                 cmd = [sys.executable, "-m", "py_compile", p]
+            elif ext in (".sh", ".bash"):
+                cmd = ["bash", "-n", p]          # parse only; does NOT run the script
+            elif ext == ".go":
+                cmd = ["gofmt", "-e", p]         # parses; skipped when gofmt is absent
             else:  # plain JS
                 cmd = ["node", "--check", p]
             try:

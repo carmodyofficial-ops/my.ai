@@ -28,6 +28,8 @@ SANDBOX_CODING_TOOLS = {
     "read_file", "write_file", "edit_file", "multi_edit", "delete_file", "move_file",
     "grep", "glob", "ls",
     "get_workspace", "bash", "python", "run_tests", "git", "lint_format", "apply_patch",
+    # Read-only parallel investigation of the sandbox mirror (see COWORK_TOOLS).
+    "dispatch_subagents",
 }
 
 # Per-process resource caps for the agent's bash/python during the sandbox run.
