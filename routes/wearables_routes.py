@@ -193,7 +193,7 @@ def require_wearables(request: Request) -> str:
             raise gw_error(403, gw.FORBIDDEN_SCOPE,
                            "This credential lacks the wearables scope")
     owner = effective_user(request)
-    if not owner and owner != "":
+    if not owner:
         raise gw_error(401, gw.AUTHENTICATION_REQUIRED, "Authentication required")
     return owner
 
@@ -600,7 +600,7 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
         # same session would clobber cancel_event (making the first uncancellable)
         # and interleave into session.messages. The session store's BUSY_MAX_SECONDS
         # backstop clears a stuck-busy flag from a crashed stream.
-        if session.busy:
+        if session.is_busy():
             raise gw_error(409, gw.RATE_LIMITED,
                            "A response is already in progress for this session")
 
@@ -632,13 +632,16 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
                     + list(session.messages)
                     + [{"role": "user", "content": text}])
 
+        busy_token = session.claim()
+        if busy_token is None:
+            raise gw_error(409, gw.RATE_LIMITED,
+                           "A response is already in progress for this session")
         cancel_event = asyncio.Event()
         session.cancel_event = cancel_event
-        session.busy = True
         logger.info(f"[wearables] respond start req={request_id} owner={owner} "
                     f"session={session.id} model={model} chars={len(text)}")
 
-        async def gen():
+        async def _respond_frames():
             yield "data: " + json.dumps({
                 "type": "wearables_meta",
                 "session_id": session.id,
@@ -751,9 +754,7 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
                     {"code": gw.LLM_UNAVAILABLE,
                      "message": "The model stream failed. Please try again."}) + "\n\n"
             finally:
-                session.busy = False
-                session.cancel_event = None
-                session.touch()
+                session.release(busy_token)
 
             full_text = "".join(full_parts)
             if cancelled:
@@ -791,6 +792,21 @@ def setup_wearables_routes(stt_service, tts_service) -> APIRouter:
                 {"type": "done", "request_id": request_id,
                  "session_id": session.id}) + "\n\n"
             yield "data: [DONE]\n\n"
+
+        async def gen():
+            # Outer guard: release the claim on EVERY exit, including a client
+            # that disconnects at the very first yield, before the inner try is
+            # entered. A generator that is never iterated at all is covered by
+            # the session's unstarted-grace staleness instead.
+            session.mark_started(busy_token)
+            inner = _respond_frames()
+            try:
+                async for frame in inner:
+                    yield frame
+            finally:
+                session.release(busy_token)
+                with contextlib.suppress(Exception):
+                    await inner.aclose()
 
         return StreamingResponse(gen(), media_type="text/event-stream")
 

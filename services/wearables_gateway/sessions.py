@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import itertools
 import threading
 import time
 import uuid
@@ -27,6 +28,13 @@ MAX_SESSIONS_PER_OWNER = 20
 # from idle-prune AND from the owner cap forever. Past this age a busy session
 # is reclaimed regardless.
 BUSY_MAX_SECONDS = 10 * 60
+# A claim whose stream never started iterating within this window is
+# abandoned: the handler claimed the session but Starlette never ran the
+# generator (client gone before the body streamed), so no finally will ever
+# release it. A started stream is trusted up to BUSY_MAX_SECONDS.
+BUSY_UNSTARTED_GRACE_SECONDS = 30
+
+_BUSY_TOKENS = itertools.count(1)
 
 _SESSION_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
@@ -41,6 +49,51 @@ class WearableSession:
     store_transcript: bool = True  # in-memory rolling context only
     cancel_event: asyncio.Event | None = None
     busy: bool = False
+    busy_since: float = 0.0       # monotonic time of the current claim
+    busy_token: int = 0           # identifies the claim that owns busy
+    stream_started: bool = False  # the claim's generator began iterating
+
+    # Busy is age-based, measured from the claim, NOT from last_active.
+    # Keying staleness on last_active was the original bug: every rejected
+    # request touch()ed the session, so a stuck one never aged out.
+    def _busy_stale(self, now: float) -> bool:
+        if not self.busy_since:  # busy set directly, not via claim()
+            return now - self.created_at > BUSY_MAX_SECONDS
+        age = now - self.busy_since
+        if not self.stream_started and age > BUSY_UNSTARTED_GRACE_SECONDS:
+            return True
+        return age > BUSY_MAX_SECONDS
+
+    def is_busy(self, now: float | None = None) -> bool:
+        if not self.busy:
+            return False
+        return not self._busy_stale(time.monotonic() if now is None else now)
+
+    def claim(self) -> int | None:
+        """Take the one-in-flight slot. Returns a token, or None if a live
+        stream holds it. A stale claim is overridden."""
+        if self.is_busy():
+            return None
+        self.busy = True
+        self.busy_since = time.monotonic()
+        self.stream_started = False
+        self.busy_token = next(_BUSY_TOKENS)
+        self.cancel_event = None
+        return self.busy_token
+
+    def mark_started(self, token: int) -> None:
+        if self.busy and self.busy_token == token:
+            self.stream_started = True
+
+    def release(self, token: int) -> None:
+        """Idempotent. A release from a superseded (stale) claim is ignored so
+        a late-finishing old stream can't clear a newer one's busy flag."""
+        if self.busy_token != token:
+            return
+        self.busy = False
+        self.stream_started = False
+        self.cancel_event = None
+        self.touch()
 
     def touch(self) -> None:
         self.last_active = time.monotonic()
@@ -121,7 +174,7 @@ class WearableSessionStore:
         """A busy session is normally protected from pruning, but not forever —
         a stuck-busy session (generator closed before it could clear the flag)
         must not become immortal."""
-        return (not s.busy) or (now - s.created_at > BUSY_MAX_SECONDS)
+        return not s.is_busy(now)
 
     def _prune(self) -> None:
         now = time.monotonic()
