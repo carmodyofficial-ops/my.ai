@@ -1125,6 +1125,18 @@ async def _startup_event():
                     logger.debug(f"Warmup ping failed for endpoint: {e}")
         except Exception as e:
             logger.debug(f"Warmup ping skipped: {e}")
+        # The /models ping above only proves the server is up — it never causes
+        # a model to load, so on its own it cannot "prevent cold starts". A cold
+        # ollama load reads the whole GGUF off disk (minutes, when the model
+        # store is a spinning disk) and is ABORTED whenever the requesting
+        # client disconnects; every chat timeout is shorter than that, so the
+        # load never completed and chat returned nothing. Pull the load off the
+        # request path and into the background, where it is allowed to finish.
+        try:
+            from src.model_preload import preload_active_models
+            await preload_active_models()
+        except Exception as e:
+            logger.debug(f"Model preload skipped: {e}")
 
     _startup_tasks.append(asyncio.create_task(_warmup_endpoints()))
 
