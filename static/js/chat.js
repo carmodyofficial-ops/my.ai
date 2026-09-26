@@ -126,6 +126,35 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
 
   // Model/image pricing, _buildImageBubble now in chatRenderer.js
   var _buildImageBubble = chatRenderer.buildImageBubble;
+
+  // A generate_video render runs as a detached bg job; the server posts the
+  // result as a follow-up message minutes later with no push to the client.
+  // Poll the job and reload the chat (if it's still open and idle) once the
+  // follow-up exists, so the video appears without a manual refresh.
+  var _watchedVideoJobs = new Set();
+  function _watchVideoJob(sessionId, jobId) {
+    if (!sessionId || !jobId || _watchedVideoJobs.has(jobId)) return;
+    _watchedVideoJobs.add(jobId);
+    var deadline = Date.now() + 2 * 60 * 60 * 1000;
+    var timer = setInterval(async function() {
+      if (Date.now() > deadline) { clearInterval(timer); _watchedVideoJobs.delete(jobId); return; }
+      try {
+        var res = await fetch(`${API_BASE}/api/chat/bg_job/${encodeURIComponent(sessionId)}/${encodeURIComponent(jobId)}`,
+                              { credentials: 'same-origin' });
+        if (res.status === 404) { clearInterval(timer); _watchedVideoJobs.delete(jobId); return; }
+        if (!res.ok) return;
+        var st = await res.json();
+        if (!st.followed_up) return;
+        if (isStreaming) return;  // don't yank the view mid-reply; next tick
+        clearInterval(timer);
+        _watchedVideoJobs.delete(jobId);
+        window.dispatchEvent(new CustomEvent('gallery-refresh'));
+        if (sessionModule.getCurrentSessionId() === sessionId) {
+          await sessionModule.selectSession(sessionId, { keepSidebar: true });
+        }
+      } catch (_) { /* transient; retry next tick */ }
+    }, 15000);
+  }
   var getModelCost = chatRenderer.getModelCost;
   var getImageCost = chatRenderer.getImageCost;
 
@@ -2343,6 +2372,10 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
                   // Reset so thinking spinner between tools says "Thinking" not the old tool's label
                   _lastToolName = '';
                   uiModule.scrollHistory();
+                }
+                // --- Background video render: reload the chat when the result is posted ---
+                if (json.tool === 'generate_video' && json.bg_job_id && json.exit_code === 0) {
+                  _watchVideoJob(sessionModule.getCurrentSessionId(), json.bg_job_id);
                 }
                 // --- Render generated images inline ---
                 if (json.image_url) {

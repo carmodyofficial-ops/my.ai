@@ -365,6 +365,14 @@ Suggest changes with explanations (for review/feedback requests).""",
 ```
 Generate an image. Line 1 = description, line 2 = model name, line 3 = WxH (e.g. 1024x1024), line 4 = quality.""",
 
+    "generate_video": """\
+```generate_video
+{"prompt": "<detailed scene + camera motion>", "quality": "fast", "aspect": "landscape", "seconds": 5}
+```
+Generate a video clip locally (720p, up to 5 s). Renders in the background (~5 min fast, ~25 min high) \
+and you are re-invoked with the link when done — do not wait or poll. Optional "image_url" \
+(an /api/generated-image/... link) animates that image. quality: fast|high; aspect: landscape|portrait|square.""",
+
     "chat_with_model": "- ```chat_with_model``` — Ask a DIFFERENT AI model and relay its answer. Line 1 = model name (or 'model@endpoint'), rest = your message. Use when the user says 'ask <model>', 'what does <model> think', or wants to compare/their answer from another model.",
     "ask_teacher": "- ```ask_teacher``` — Escalate a hard question to a more capable model. Line 1 = model name or 'auto', rest = the question. Use when stuck or need expert knowledge.",
     "list_models": "- ```list_models``` — Show all available AI models across all endpoints. Use when user asks what models are available.",
@@ -1641,6 +1649,8 @@ def _build_base_prompt(
     disabled = set(disabled_tools or [])
     if not get_setting("image_gen_enabled", False):
         disabled.add("generate_image")
+    if not get_setting("video_gen_enabled", False):
+        disabled.add("generate_video")
 
     if relevant_tools is not None:
         # RAG mode: trust the relevant_tools set as already-composed.
@@ -1660,7 +1670,7 @@ def _build_base_prompt(
         if not needs_admin:
             # At least strip the management section
             mgmt_tools = set(TOOL_SECTIONS.keys()) - set(ALWAYS_AVAILABLE) - {
-                "generate_image", "suggest_document",
+                "generate_image", "generate_video", "suggest_document",
                 "chat_with_model", "ask_teacher", "list_models",
             }
             agent_prompt = _assemble_prompt(
@@ -3099,6 +3109,16 @@ async def stream_agent_loop(
                     if s.get("function", {}).get("name") not in _ADMIN_SCHEMA_NAMES
                 ]
                 all_tool_schemas = base_schemas + mcp_schemas
+            # Media tools only exist when their local server is switched on;
+            # otherwise the model calls a tool that can only fail.
+            _media_off = {n for n, k in (("generate_image", "image_gen_enabled"),
+                                         ("generate_video", "video_gen_enabled"))
+                          if not get_setting(k, False)}
+            if _media_off:
+                all_tool_schemas = [
+                    t for t in all_tool_schemas
+                    if t.get("function", {}).get("name") not in _media_off
+                ]
             if disabled_tools:
                 all_tool_schemas = [
                     t for t in all_tool_schemas
@@ -3974,6 +3994,8 @@ async def stream_agent_loop(
             # Pre-edit checkpoint id → the UI renders a per-change Undo control.
             if result.get("checkpoint_id"):
                 tool_output_data["checkpoint_id"] = result["checkpoint_id"]
+            if result.get("bg_job_id"):
+                tool_output_data["bg_job_id"] = result["bg_job_id"]
             if "ui_event" in result:
                 tool_output_data["ui_event"] = result["ui_event"]
                 for k in (

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import re
 import time
 import logging
 from datetime import datetime
@@ -190,6 +191,29 @@ def _is_image_generation_session(sess, owner: str | None = None) -> bool:
     finally:
         db.close()
     return False
+
+
+_VIDEO_INTENT_RE = re.compile(r"\b(videos?|clips?|animat\w*|movies?|footage)\b", re.I)
+_NOT_VIDEO_RE = re.compile(r"\bvideo[\s-]*games?\b", re.I)
+_REFERS_BACK_RE = re.compile(r"\b(this|that|it|animate|the (?:last |same )?(?:image|picture|photo|one))\b", re.I)
+
+
+def _wants_video(message: str) -> bool:
+    """An image-model chat sends every message straight to the image model, so
+    'make a video of…' would silently come back as a still. Catch video intent
+    first. 'video game' is a picture subject, not a video request."""
+    text = _NOT_VIDEO_RE.sub(" ", message or "")
+    return bool(_VIDEO_INTENT_RE.search(text))
+
+
+def _last_session_image(sess) -> tuple[str, str]:
+    """(url, prompt) of the most recent generated still in this chat, or ('', '')."""
+    for msg in reversed(getattr(sess, "history", None) or []):
+        for ev in reversed(((getattr(msg, "metadata", None) or {}).get("tool_events")) or []):
+            url = (ev or {}).get("image_url") or ""
+            if re.search(r"/api/generated-image/[a-f0-9]{8,64}\.(?:png|jpe?g|webp)$", url):
+                return url, (ev.get("image_prompt") or "")
+    return "", ""
 
 
 def _recover_empty_session_model(sess, session_id: str, owner: str | None = None) -> bool:
@@ -870,7 +894,7 @@ def setup_chat_routes(
             if not _privs.get("can_use_documents", True):
                 disabled_tools.update({"create_document", "edit_document", "update_document", "suggest_document"})
             if not _privs.get("can_generate_images", True):
-                disabled_tools.add("generate_image")
+                disabled_tools.update({"generate_image", "generate_video"})
             if not _privs.get("can_manage_memory", True):
                 disabled_tools.update({"manage_memory", "manage_skills"})
             if not _privs.get("can_use_research", True):
@@ -905,7 +929,7 @@ def setup_chat_routes(
                 "chat_with_model", "create_session", "list_sessions",
                 "send_to_session",
                 "pipeline", "manage_session", "manage_memory", "list_models",
-                "generate_image", "ui_control",
+                "generate_image", "generate_video", "ui_control",
             }
             disabled_tools.update(_compare_strip)
             # In chat mode compare, disable ALL agent tools (no bash, python, file ops)
@@ -1123,6 +1147,45 @@ def setup_chat_routes(
                 _model_info["character_name"] = ctx.preset.character_name
             yield f'data: {json.dumps(_model_info)}\n\n'
 
+            if _is_image_generation_session(sess, owner=_user) and _wants_video(message or ""):
+                # Video request in an image-model chat: render with the video tool
+                # instead of turning the request into a still picture.
+                from src.settings import get_setting
+                from src.tool_execution import _launch_generate_video
+                _user_msg = message or ""
+                if tool_policy.blocks("generate_video"):
+                    _vid_result = {"error": tool_policy.reason_for("generate_video"), "exit_code": 1}
+                else:
+                    _vid_args = {"prompt": _user_msg}
+                    _prev_url, _prev_prompt = _last_session_image(sess)
+                    if _prev_url and _REFERS_BACK_RE.search(_user_msg):
+                        # "animate this" / "turn that into a video": animate the chat's last
+                        # still, and give the model its scene description to work from.
+                        _vid_args = {"prompt": f"{_prev_prompt}. {_user_msg}".strip(". "), "image_url": _prev_url}
+                    _vid_result = _launch_generate_video(json.dumps(_vid_args), session_id=session, owner=_user,
+                                                         direct_reply=True)
+                _ok = _vid_result.get("exit_code") == 0
+                _vid_output = _vid_result.get("output") or _vid_result.get("error", "")
+                yield f'data: {json.dumps({"type": "tool_start", "tool": "generate_video", "command": _user_msg[:100]})}\n\n'
+                _vid_tool_data = {"type": "tool_output", "tool": "generate_video", "command": _user_msg[:100],
+                                  "output": _vid_output, "exit_code": 0 if _ok else 1}
+                if _vid_result.get("bg_job_id"):
+                    _vid_tool_data["bg_job_id"] = _vid_result["bg_job_id"]
+                yield f'data: {json.dumps(_vid_tool_data)}\n\n'
+                full_response = (
+                    ("Rendering your video from the image above" if "image_url" in _vid_args else "Rendering your video")
+                    + " — about 5 minutes. It will appear here when it's ready."
+                ) if _ok else (_vid_result.get("error") or "Video generation failed.")
+                yield f'data: {json.dumps({"delta": full_response})}\n\n'
+                if not incognito:
+                    _ev = {"round": 1, "tool": "generate_video", "command": _user_msg[:100], "output": _vid_output,
+                           "exit_code": 0 if _ok else 1}
+                    sess.add_message(ChatMessage("assistant", full_response, metadata={"tool_events": [_ev], "model": sess.model}))
+                    session_manager.save_sessions()
+                yield f'data: {json.dumps({"type": "metrics", "data": {"total_time": 0}})}\n\n'
+                yield "data: [DONE]\n\n"
+                _active_streams.pop(session, None)
+                return
             if _is_image_generation_session(sess, owner=_user):
                 from src.settings import get_setting
                 if tool_policy.blocks("generate_image"):
@@ -1560,6 +1623,17 @@ def setup_chat_routes(
                 return {"status": "streaming", "detached": True}
             raise HTTPException(404, "No active stream for this session")
         return rec
+
+    @router.get("/api/chat/bg_job/{session_id}/{job_id}")
+    async def chat_bg_job_status(request: Request, session_id: str, job_id: str) -> Dict[str, Any]:
+        """Status of a detached job (e.g. a generate_video render) so an open
+        chat can reload once the bg monitor has posted the follow-up."""
+        _verify_session_owner(request, session_id)
+        from src import bg_jobs
+        rec = bg_jobs.get(job_id)
+        if not rec or rec.get("session_id") != session_id:
+            raise HTTPException(404, "Unknown job")
+        return {"status": rec.get("status"), "followed_up": bool(rec.get("followed_up"))}
 
     # ------------------------------------------------------------------ #
     # POST /api/inject_context
