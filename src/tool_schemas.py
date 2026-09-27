@@ -1215,6 +1215,39 @@ FUNCTION_TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "generate_image",
+            "description": "Generate an image from a text description with the local image model. Use for any request to draw, create, make, or picture an image, illustration, or photo.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "Detailed description of the image: subject, setting, style, lighting"},
+                    "size": {"type": "string", "description": "WxH, e.g. 1024x1024 (default), 1024x1792, 1792x1024"},
+                },
+                "required": ["prompt"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_video",
+            "description": "Generate a short video clip (720p, up to 5 seconds) from a text description, or animate an existing image. Renders in the background (about 5 minutes on fast quality); you will be re-invoked with the video link when it finishes, so do not wait or poll.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string", "description": "Detailed scene description including subject, action, setting, and camera motion"},
+                    "quality": {"type": "string", "enum": ["fast", "high"], "description": "fast (~5 min, default) or high (~25 min)"},
+                    "aspect": {"type": "string", "enum": ["landscape", "portrait", "square"], "description": "Frame shape (default landscape)"},
+                    "seconds": {"type": "number", "description": "Clip length in seconds, 1-5 (default 5)"},
+                    "image_url": {"type": "string", "description": "Optional /api/generated-image/... link of an image to animate"},
+                },
+                "required": ["prompt"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "edit_image",
             "description": "Edit a gallery image: upscale, remove background, inpaint, or harmonize.",
             "parameters": {
@@ -1627,6 +1660,14 @@ def function_call_to_tool_block(name: str, arguments: str) -> Optional[ToolBlock
                         "manage_endpoints", "manage_mcp", "manage_webhooks",
                         "manage_tokens", "manage_documents", "manage_settings"):
         content = json.dumps(args)
+    elif tool_type == "generate_image":
+        # The image_gen MCP parser reads line-based args: prompt, model, size, quality.
+        content = "\n".join([
+            str(args.get("prompt", "")).replace("\n", " "),
+            str(args.get("model", "") or ""),
+            str(args.get("size", "") or ""),
+            str(args.get("quality", "") or ""),
+        ]).rstrip("\n")
     elif tool_type == "ask_teacher":
         content = args.get("model", "auto") + "\n" + args.get("problem", "")
     else:

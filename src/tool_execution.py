@@ -479,6 +479,100 @@ def _promote_image_fields(result: Dict) -> None:
             result[field] = fm.group(1).strip()
 
 
+_VIDEO_IMAGE_RE = re.compile(r'/api/generated-image/([a-f0-9]{8,64}\.(?:png|jpe?g|webp))')
+
+
+def _launch_generate_video(content: str, session_id: Optional[str], owner: Optional[str],
+                           direct_reply: bool = False) -> Dict:
+    """Start a local video render as a detached bg job (src/video_client.py).
+
+    Renders take minutes, so this returns immediately; the bg monitor re-invokes
+    the agent with the client's output (which carries the video link) when the
+    job finishes."""
+    from src.settings import get_setting
+    if not get_setting("video_gen_enabled", False):
+        return {"error": "Video generation is disabled by the administrator.", "exit_code": 1}
+    if not session_id:
+        return {"error": "Video generation needs a chat session to deliver the result to.", "exit_code": 1}
+
+    raw = (content or "").strip()
+    try:
+        args = json.loads(raw) if raw.startswith("{") else {"prompt": raw}
+    except (json.JSONDecodeError, TypeError):
+        args = {"prompt": raw}
+    if not isinstance(args, dict):
+        args = {"prompt": raw}
+    prompt = str(args.get("prompt") or "").strip()
+    if not prompt:
+        return {"error": "A video prompt is required.", "exit_code": 1}
+
+    quality = str(args.get("quality") or get_setting("video_quality", "fast") or "fast").lower()
+    if quality not in ("fast", "high"):
+        quality = "fast"
+    aspect = str(args.get("aspect") or "landscape").lower()
+    if aspect not in ("landscape", "portrait", "square"):
+        aspect = "landscape"
+    try:
+        seconds = max(1.0, min(5.0, float(args.get("seconds") or 5)))
+    except (TypeError, ValueError):
+        seconds = 5.0
+
+    image_path = ""
+    image_url = str(args.get("image_url") or "").strip()
+    if image_url:
+        m = _VIDEO_IMAGE_RE.search(image_url)
+        if not m:
+            return {"error": "image_url must be an /api/generated-image/... link (png, jpg or webp).", "exit_code": 1}
+        from src.generated_images import resolve_generated_image_path
+        try:
+            image_path = str(resolve_generated_image_path(m.group(1)))
+        except Exception:
+            return {"error": f"Image {m.group(1)} was not found.", "exit_code": 1}
+        # Same ownership rule as the /api/generated-image route.
+        try:
+            from core.database import SessionLocal as _SL, GalleryImage as _GI
+            _db = _SL()
+            try:
+                _row = _db.query(_GI).filter(_GI.filename == m.group(1)).first()
+                if _row is not None and _row.owner and owner and _row.owner != owner:
+                    return {"error": f"Image {m.group(1)} was not found.", "exit_code": 1}
+            finally:
+                _db.close()
+        except Exception:
+            pass
+
+    from src import bg_jobs
+    import shlex
+    import uuid as _uuid
+    from src.constants import BG_JOBS_DIR
+    os.makedirs(BG_JOBS_DIR, exist_ok=True)
+    spec_path = os.path.join(BG_JOBS_DIR, f"video-{_uuid.uuid4().hex[:12]}.json")
+    with open(spec_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "prompt": prompt, "quality": quality, "aspect": aspect, "seconds": seconds,
+            "image_path": image_path, "owner": owner, "session_id": session_id,
+            "server_url": get_setting("video_server_url", "http://host.docker.internal:8102"),
+            "public_base": (get_setting("app_public_url", "") or "").rstrip("/"),
+        }, f)
+    script = pathlib.Path(__file__).resolve().parent / "video_client.py"
+    command = f"{shlex.quote(sys.executable)} {shlex.quote(str(script))} --spec {shlex.quote(spec_path)}"
+    # Budget: the render itself plus a queue of up to a couple of other jobs.
+    # direct_reply: the session's model can't chat (an image-model chat), so the
+    # bg monitor posts the result itself instead of re-invoking the agent.
+    rec = bg_jobs.launch(command, session_id=session_id, max_runtime_s=5400 if quality == "high" else 2400,
+                         extra={"direct_reply": True} if direct_reply else None)
+    eta = "about 25 minutes" if quality == "high" else "about 5 minutes"
+    return {
+        "output": (
+            f"Started video render (background job `{rec['id']}`, {quality} quality, {aspect}, {seconds:g}s) — "
+            f"{eta}. It is running detached: do NOT wait for it or poll it. Tell the user it is rendering "
+            f"and end your turn; you will be re-invoked with the video link when it finishes."
+        ),
+        "exit_code": 0,
+        "bg_job_id": rec["id"],
+    }
+
+
 _BG_MARKERS = {"#!bg", "#bg", "# bg", "#background", "# background", "@background", "# @background"}
 
 
@@ -829,6 +923,12 @@ async def _execute_tool_block_impl(
             }
             logger.info(f"Tool executed: {desc} -> bg job {rec['id']}")
             return desc, result
+
+    if tool == "generate_video":
+        desc = "generate_video"
+        result = _launch_generate_video(content, session_id=session_id, owner=owner)
+        logger.info("Tool executed: generate_video -> %s", result.get("bg_job_id") or result.get("error"))
+        return desc, result
 
     # Route MCP-extracted tools through the MCP manager. Forward
     # the progress callback so long-running subprocess tools

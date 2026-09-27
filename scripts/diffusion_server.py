@@ -25,6 +25,7 @@ import base64
 import io
 import json
 import logging
+import threading
 import time
 from pathlib import Path
 
@@ -33,6 +34,7 @@ from contextlib import asynccontextmanager
 import torch
 import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
@@ -46,9 +48,53 @@ DTYPE_MAP = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": to
 _args = None
 
 
+class _GpuLock:
+    """Optional cross-process lock (--gpu-lock) shared with video_server.py, so
+    image and video models are never resident at the same time on a
+    unified-memory box. No-op when --gpu-lock is unset."""
+
+    def __init__(self, timeout: float):
+        self.timeout = timeout
+        self.fd = None
+
+    def __enter__(self):
+        path = getattr(_args, "gpu_lock", None)
+        if not path:
+            return self
+        import fcntl
+        self.fd = open(path, "a+")
+        deadline = time.time() + self.timeout
+        while True:
+            try:
+                fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return self
+            except BlockingIOError:
+                if time.time() >= deadline:
+                    self.fd.close()
+                    self.fd = None
+                    raise TimeoutError("GPU busy")
+                time.sleep(0.5)
+
+    def __exit__(self, *exc):
+        if self.fd:
+            import fcntl
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+            self.fd.close()
+
+
+# Serializes load/unload/generate within this process (FastAPI runs sync
+# endpoints on a thread pool).
+_pipe_lock = threading.Lock()
+
+
 @asynccontextmanager
 async def lifespan(application):
-    load_model()
+    try:
+        with _GpuLock(timeout=0):
+            load_model()
+    except TimeoutError:
+        # A video render holds the GPU; load lazily on the first request instead.
+        logger.info("GPU busy at startup — deferring model load to first request")
     yield
 
 
@@ -475,8 +521,36 @@ def list_models():
     }
 
 
+@app.post("/v1/unload")
+def unload_model():
+    """Free the txt2img pipeline (called by video_server.py before a render).
+    The next generation request reloads it."""
+    global _pipe
+    with _pipe_lock:
+        was_loaded = _pipe is not None
+        _pipe = None
+        import gc; gc.collect()
+        try:
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
+    logger.info("Unloaded model (was_loaded=%s)", was_loaded)
+    return {"unloaded": was_loaded}
+
+
 @app.post("/v1/images/generations")
 def generate_image(req: ImageRequest):
+    try:
+        with _GpuLock(timeout=_args.gpu_lock_wait), _pipe_lock:
+            if _pipe is None:
+                load_model()
+            return _generate_image(req)
+    except TimeoutError:
+        return JSONResponse(status_code=503, content={"error": {
+            "message": "The GPU is busy rendering a video. Try the image again in a few minutes."}})
+
+
+def _generate_image(req: ImageRequest):
     if _pipe is None:
         return {"error": "Model not loaded"}
 
@@ -491,6 +565,10 @@ def generate_image(req: ImageRequest):
     default_steps = _args.steps or 8
     steps_map = {"low": 4, "medium": default_steps, "high": 20, "auto": 12}
     steps = steps_map.get(req.quality, default_steps)
+    # Distilled models (SDXL-Lightning, Turbo, schnell) are trained for a fixed
+    # step count; more steps degrade rather than improve them.
+    if _args.max_steps:
+        steps = min(steps, _args.max_steps)
 
     logger.info(f"Generating: {req.prompt[:80]}... ({width}x{height}, {steps} steps)")
     start = time.time()
@@ -512,7 +590,7 @@ def generate_image(req: ImageRequest):
                 width=width,
                 height=height,
                 num_inference_steps=steps,
-                guidance_scale=3.5,
+                guidance_scale=_args.guidance,
             )
         else:
             result = _pipe(
@@ -520,7 +598,7 @@ def generate_image(req: ImageRequest):
                 width=width,
                 height=height,
                 num_inference_steps=steps,
-                guidance_scale=3.5,
+                guidance_scale=_args.guidance,
             )
         img = result.images[0]
 
@@ -532,6 +610,12 @@ def generate_image(req: ImageRequest):
 
     elapsed = time.time() - start
     logger.info(f"Generated {req.n} image(s) in {elapsed:.1f}s")
+    # Return cached activation memory: on unified-memory boxes the allocator's
+    # cache is RAM the co-resident chat model can't use.
+    try:
+        torch.cuda.empty_cache()
+    except Exception:
+        pass
 
     return {
         "created": int(time.time()),
@@ -1140,6 +1224,10 @@ if __name__ == "__main__":
     parser.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float16", "float32"])
     parser.add_argument("--device-map", default=None, help="Device map strategy (unused, kept for compat)")
     parser.add_argument("--steps", type=int, default=0, help="Default inference steps (0=auto)")
+    parser.add_argument("--max-steps", type=int, default=0, help="Cap inference steps for distilled models (0=no cap)")
+    parser.add_argument("--guidance", type=float, default=3.5, help="Guidance scale for txt2img (0 for SDXL-Lightning/Turbo)")
+    parser.add_argument("--gpu-lock", default=None, help="Lock file shared with video_server.py (unset = no locking)")
+    parser.add_argument("--gpu-lock-wait", type=float, default=10.0, help="Seconds to wait for --gpu-lock before 503")
     parser.add_argument("--width", type=int, default=1024, help="Default output width")
     parser.add_argument("--height", type=int, default=1024, help="Default output height")
     parser.add_argument("--cpu-offload", action="store_true", help="Enable model CPU offload")

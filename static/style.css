@@ -6081,6 +6081,8 @@ body.bg-pattern-sparkles {
       margin: 0 auto;
     }
     .generated-image:hover { transform: scale(1.02); }
+    .generated-video { cursor: auto; }
+    .generated-video:hover { transform: none; }
     .generated-image-caption {
       font-size: 0.8rem;
       opacity: 0.5;

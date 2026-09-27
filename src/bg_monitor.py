@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 
 from src import bg_jobs
 
@@ -72,6 +73,31 @@ async def _drain_agent(sess, messages):
     return full, tool_events
 
 
+_VIDEO_LINK_RE = re.compile(r'(?:https?://[^\s)\]]+)?/api/generated-image/[a-f0-9]{8,64}\.mp4')
+
+
+def _video_event(rec: dict):
+    """A finished generate_video job (src/video_client.py) prints a
+    'Direct link:' to the saved mp4. Lift it into a tool event carrying
+    image_url so the chat renders a video player deterministically instead of
+    relying on the model to echo the link intact."""
+    out = bg_jobs.result_text(rec) or ""
+    if "Generated video for:" not in out:
+        return None
+    m = _VIDEO_LINK_RE.search(out)
+    if not m:
+        return None
+    ev = {"round": 1, "tool": "generate_video", "command": "", "output": "", "exit_code": 0,
+          "image_url": m.group(0)}
+    for field, pat in (("image_prompt", r'^Generated video for:\s*(.+)$'),
+                       ("image_model", r'^model:\s*(.+)$'),
+                       ("image_size", r'^size:\s*(.+)$')):
+        fm = re.search(pat, out, re.M)
+        if fm:
+            ev[field] = fm.group(1).strip()
+    return ev
+
+
 async def _run_followup(rec: dict) -> bool:
     """Re-invoke the agent in the job's session with the result. Returns True
     if the follow-up completed (or there's nothing to do) — i.e. it's safe to
@@ -82,7 +108,10 @@ async def _run_followup(rec: dict) -> bool:
     sm = get_session_manager()
     if not sm:
         return False  # not ready yet — retry
-    sess = sm.get_session(rec["session_id"])
+    try:
+        sess = sm.get_session(rec["session_id"])
+    except KeyError:
+        sess = None  # get_session raises for unknown ids; without this a deleted chat retries forever
     if not sess:
         # Session was deleted — nothing to continue. Consider it handled so we
         # don't retry forever.
@@ -101,6 +130,23 @@ async def _run_followup(rec: dict) -> bool:
     except Exception:
         pass
 
+    if rec.get("direct_reply"):
+        _video = _video_event(rec)
+        if _video:
+            text, events = "Your video is ready.", [_video]
+        else:
+            out = (bg_jobs.result_text(rec) or "").strip().splitlines()
+            reason = next((l for l in reversed(out) if l.startswith("Video generation failed")), None)
+            text, events = (reason or "The video render failed."), []
+        sm.add_message(sess.id, ChatMessage(
+            "assistant", text,
+            metadata={"tool_events": events, "model": sess.model, "bg_job_id": rec["id"],
+                      "bg_result": bg_jobs.result_text(rec)[:4000]},
+        ))
+        sm.save_sessions()
+        logger.info("bg-followup: posted direct reply to session %s for job %s", sess.id, rec["id"])
+        return True
+
     inject = (
         f"[Background job {rec['id']} finished]\n\n"
         f"{bg_jobs.result_text(rec)}\n\n"
@@ -111,6 +157,9 @@ async def _run_followup(rec: dict) -> bool:
     context.append({"role": "user", "content": inject})
 
     full, tool_events = await _drain_agent(sess, context)
+    _video = _video_event(rec)
+    if _video:
+        tool_events.append(_video)
 
     # Persist ONLY the assistant continuation so it renders as a normal agent
     # turn — a standard chat bubble plus `tool_events` that the frontend

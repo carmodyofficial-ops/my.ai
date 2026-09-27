@@ -1166,13 +1166,27 @@ export function buildImageBubble(imageUrl, prompt, model, size, quality, imageId
     return wrap;
   }
 
-  const img = document.createElement('img');
-  img.className = 'generated-image';
-  img.alt = prompt || 'Generated image';
-  img.title = prompt || 'Generated image';
-  img.src = safeImageUrl;
-  img.addEventListener('click', () => { window.open(safeImageUrl, '_blank', 'noopener,noreferrer'); });
-  body.appendChild(img);
+  // generate_video results share this bubble; the gallery store serves both.
+  const isVideo = /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(new URL(safeImageUrl).pathname);
+  if (isVideo) {
+    const video = document.createElement('video');
+    video.className = 'generated-image generated-video';
+    video.src = safeImageUrl;
+    video.controls = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    video.title = prompt || 'Generated video';
+    body.appendChild(video);
+  } else {
+    const img = document.createElement('img');
+    img.className = 'generated-image';
+    img.alt = prompt || 'Generated image';
+    img.title = prompt || 'Generated image';
+    img.src = safeImageUrl;
+    img.addEventListener('click', () => { window.open(safeImageUrl, '_blank', 'noopener,noreferrer'); });
+    body.appendChild(img);
+  }
 
   if (prompt) {
     const caption = document.createElement('div');

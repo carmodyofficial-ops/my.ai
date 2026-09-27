@@ -40,6 +40,10 @@ DEFAULT_SETTINGS = {
     "image_gen_enabled": False,
     "image_model": "",
     "image_quality": "medium",
+    # Local video generation (scripts/video_server.py job API). quality: fast|high.
+    "video_gen_enabled": False,
+    "video_server_url": "http://host.docker.internal:8102",
+    "video_quality": "fast",
     "vision_model": "",
     "vision_enabled": True,
     # Ordered fallback chain for the Vision model (image analysis, OCR, tagging).
