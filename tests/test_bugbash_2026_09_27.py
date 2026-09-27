@@ -245,3 +245,24 @@ def test_retrieve_min_score_drops_weak_matches():
     ti._lanes = [lane]
     assert ti.retrieve("q", k=8) == ["web_search", "manage_skills", "bash"]
     assert ti.retrieve("q", k=8, min_score=0.30) == ["web_search"]
+
+
+def test_chat_stream_generator_does_not_shadow_sess():
+    """stream_with_save rebinds `sess` (image chat answering a question). If that
+    ever becomes a plain local again, every read before the assignment raises
+    UnboundLocalError and EVERY chat fails — which shipped once."""
+    import pathlib
+    import symtable
+    src = (pathlib.Path(__file__).resolve().parent.parent / "routes" / "chat_routes.py").read_text()
+
+    def find(table, name):
+        for ch in table.get_children():
+            if ch.get_name() == name:
+                return ch
+            hit = find(ch, name)
+            if hit:
+                return hit
+
+    gen = find(symtable.symtable(src, "chat_routes.py", "exec"), "stream_with_save")
+    assert gen is not None
+    assert not gen.lookup("sess").is_local(), "sess must be nonlocal/free in stream_with_save"

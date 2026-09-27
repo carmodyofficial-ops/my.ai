@@ -1021,6 +1021,11 @@ def setup_chat_routes(
             set_session_mode(session, _effective_mode)
 
         async def stream_with_save() -> AsyncGenerator[str, None]:
+            # `sess` may be rebound below (image-model chat answering a question
+            # through _TextTurnSession); without nonlocal that assignment makes
+            # it local to this generator and every read before it raises
+            # UnboundLocalError — which broke every chat.
+            nonlocal sess
             # _effective_mode is read-only here; closure captures it from
             # the outer scope. (Was `nonlocal` but never reassigned.)
             research_sources = None
