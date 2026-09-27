@@ -131,12 +131,14 @@ def test_fetch_requests_identity_encoding(monkeypatch, no_cache):
     assert seen["headers"].get("Accept-Encoding") == "identity"
 
 
-def test_rejects_compressed_response_that_ignored_identity(monkeypatch, no_cache):
+def test_rejects_unbounded_compressed_response_that_ignored_identity(monkeypatch, no_cache):
     # We request Accept-Encoding: identity, but a server can ignore it and send
-    # gzip anyway. httpx would decode it, so a tiny compressed body could balloon
-    # past the cap in one decoded chunk. Refuse before reading the body.
+    # a compressed body anyway. gzip/deflate are decoded with a bounded
+    # decompressor (tests/test_bugbash_2026_09_27.py covers that, incl. a zip
+    # bomb); encodings with no bounded stdlib decoder must still be refused
+    # before any body is read.
     fake = _FakeStream(b"x" * 5000, content_length=40)
-    fake.headers["content-encoding"] = "gzip"
+    fake.headers["content-encoding"] = "br"
     _patch_stream(monkeypatch, fake)
     r = content_mod.fetch_webpage_content("https://example.com/a.txt")
     assert r["success"] is False

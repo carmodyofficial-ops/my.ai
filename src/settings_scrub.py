@@ -25,6 +25,9 @@ _SENSITIVE_KEY_EXACT = (
     # trigger outbound webhook sends; do not expose it to non-admin settings
     # callers even though it is not secret-shaped.
     "reminder_webhook_integration_id",
+    # An ntfy topic is its own access credential: anyone who knows it can
+    # subscribe to (read) or publish to the reminder feed.
+    "reminder_ntfy_topic",
 )
 
 

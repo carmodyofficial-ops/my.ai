@@ -8,6 +8,7 @@ import os
 import re
 import logging
 import socket
+import zlib
 from datetime import datetime, timedelta
 from typing import List
 from urllib.parse import urljoin, urlparse
@@ -172,18 +173,22 @@ def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 
                 continue
 
             # A server can ignore the identity request and still return a
-            # compressed body; httpx.iter_bytes would then decode it, and a tiny
-            # gzip can balloon into one decoded chunk far past the cap before we
-            # slice. Refuse a compressed Content-Encoding so the streamed cap
-            # stays a real memory bound (Content-Length is the compressed wire
-            # length here, so the preflight and size metadata are unreliable too).
+            # compressed body (python.org does); httpx.iter_bytes would then
+            # decode it, and a tiny gzip can balloon into one decoded chunk far
+            # past the cap before we slice. For gzip/deflate, read the raw wire
+            # bytes and decompress ourselves with max_length bounded by the
+            # remaining budget, so the cap stays a real memory bound. Encodings
+            # without a bounded stdlib decoder (br, zstd, ...) are still refused.
             enc = (response.headers.get("content-encoding") or "").strip().lower()
+            decomp = None
             if enc and enc != "identity":
-                raise httpx.RequestError(
-                    f"Refusing compressed response (Content-Encoding: {enc}) after "
-                    "requesting identity: cannot bound decoded body size",
-                    request=httpx.Request("GET", current),
-                )
+                if enc not in ("gzip", "x-gzip", "deflate"):
+                    raise httpx.RequestError(
+                        f"Refusing compressed response (Content-Encoding: {enc}) after "
+                        "requesting identity: cannot bound decoded body size",
+                        request=httpx.Request("GET", current),
+                    )
+                decomp = zlib.decompressobj(zlib.MAX_WBITS | 32)  # auto-detect gzip/zlib header
 
             declared = None
             raw_len = response.headers.get("content-length")
@@ -195,13 +200,18 @@ def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 
             if declared is not None and declared > WEB_FETCH_HARD_MAX_BYTES:
                 raise BodyTooLargeError(current, declared)
 
+            if decomp is not None:
+                declared = None  # Content-Length is the compressed wire size here
+
             chunks = []
             read = 0
             truncated = False
-            # We requested identity above, so iter_bytes yields the raw body in
-            # network-read-sized chunks (no decompression expansion); the cap
-            # therefore bounds what we actually buffer.
-            for chunk in response.iter_bytes():
+            # Identity: iter_bytes yields the raw body in network-read-sized
+            # chunks (no decompression expansion), so the cap bounds what we
+            # buffer. Compressed: each decompress call may emit at most one byte
+            # more than the remaining budget, which is enough to detect overflow.
+            for raw in (response.iter_raw() if decomp is not None else response.iter_bytes()):
+                chunk = decomp.decompress(raw, cap - read + 1) if decomp is not None else raw
                 read += len(chunk)
                 if read > cap:
                     keep = cap - (read - len(chunk))
@@ -210,6 +220,11 @@ def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 
                     truncated = True
                     break
                 chunks.append(chunk)
+            if decomp is not None and not truncated:
+                tail = decomp.flush()
+                if read + len(tail) > cap:
+                    tail, truncated = tail[:max(cap - read, 0)], True
+                chunks.append(tail)
             return _CappedFetch(response.status_code, response.headers,
                                 b"".join(chunks), truncated, declared,
                                 response.encoding, str(response.url))

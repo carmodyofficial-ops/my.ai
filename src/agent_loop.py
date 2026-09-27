@@ -3947,6 +3947,13 @@ async def stream_agent_loop(
                     except Exception:
                         pass
 
+            # Many do_* tools report failure as {"error": ...} with no exit_code, and
+            # the UI treats a missing exit_code as success — so a failed tool showed
+            # a green check. Derive a failing code when only an error is present.
+            _exit_code = result.get("exit_code")
+            if _exit_code is None and result.get("error"):
+                _exit_code = 1
+
             # Build output for frontend tool bubble.
             # Document tools get a short summary — content goes to the editor panel.
             output_text = ""
@@ -3990,7 +3997,7 @@ async def stream_agent_loop(
                 output_text = _truncate(result["error"])
 
             # Emit tool_output (include ui_event data if present)
-            tool_output_data = {"type": "tool_output", "tool": block.tool_type, "command": cmd_display, "output": output_text, "exit_code": result.get("exit_code")}
+            tool_output_data = {"type": "tool_output", "tool": block.tool_type, "command": cmd_display, "output": output_text, "exit_code": _exit_code}
             # Pre-edit checkpoint id → the UI renders a per-change Undo control.
             if result.get("checkpoint_id"):
                 tool_output_data["checkpoint_id"] = result["checkpoint_id"]
@@ -4070,7 +4077,7 @@ async def stream_agent_loop(
                 "tool": block.tool_type,
                 "command": cmd_display,
                 "output": output_text,
-                "exit_code": result.get("exit_code"),
+                "exit_code": _exit_code,
             }
             if result.get("image_url"):
                 for ik in ("image_url", "image_prompt", "image_model", "image_size", "image_quality"):
