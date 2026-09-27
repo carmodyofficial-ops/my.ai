@@ -6,11 +6,14 @@ Updated: 2026-06-22T01:00:24.487450+00:00
 
 The built-in Guest account is intentionally fixed and low privilege.
 
-Guest credentials:
+Guest account:
 
 - Display username: Guest
 - Canonical username: guest
-- Password: Guest123
+- Disabled by default; the operator enables it with MYAI_GUEST_ENABLED=true.
+- Password: set by the operator (MYAI_GUEST_PASSWORD) or generated at random
+  when the account is created. There is no default password; never state or
+  guess one.
 
 Guest is for trusted local convenience, not administration.
 

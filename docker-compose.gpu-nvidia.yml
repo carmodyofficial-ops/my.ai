@@ -45,6 +45,8 @@ services:
       - DATABASE_URL=${DATABASE_URL:-sqlite:///./data/app.db}
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
       - LOCALHOST_BYPASS=${LOCALHOST_BYPASS:-false}
+      - MYAI_GUEST_ENABLED=${MYAI_GUEST_ENABLED:-false}
+      - MYAI_GUEST_PASSWORD=${MYAI_GUEST_PASSWORD:-}
       # Open self-registration kill-switch. Default closed: on a LAN-reachable
       # instance, leave this false and create accounts as an admin. Set to true
       # only if you intentionally want anyone who can reach the UI to sign up.

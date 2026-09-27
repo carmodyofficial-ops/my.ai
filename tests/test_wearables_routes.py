@@ -862,7 +862,7 @@ def _reset_enroll():
 async def test_discover_beacon_has_no_secrets():
     _reset_enroll()
     ep = _endpoints()[("GET", "/discover")]
-    body = await ep(_req(ip="192.168.4.117"))
+    body = await ep(_req(ip="192.168.1.23"))
     assert body["service"] == "myai-wearables"
     assert body["api_version"] == 1
     assert body["enroll"] == "discover"
@@ -880,7 +880,7 @@ async def test_enroll_request_then_admin_approve_delivers_token_once(monkeypatch
 
     # 1. App requests enrollment (unauthenticated).
     req = await eps[("POST", "/enroll/request")](
-        _req(ip="192.168.4.117", body={"device_name": "SM-F966U1"}))
+        _req(ip="192.168.1.23", body={"device_name": "Pixel 8"}))
     request_id, code = req["request_id"], req["verify_code"]
     assert len(code) == 4 and request_id
 
@@ -891,7 +891,7 @@ async def test_enroll_request_then_admin_approve_delivers_token_once(monkeypatch
     # 3. Admin sees it with the SAME verify code, approves by approval_id.
     pend = await eps[("GET", "/enroll/pending")](_req(user="carmody", is_admin=True))
     entry = pend["pending"][0]
-    assert entry["verify_code"] == code and entry["device_name"] == "SM-F966U1"
+    assert entry["verify_code"] == code and entry["device_name"] == "Pixel 8"
     assert "request_id" not in entry  # admin never sees the app's secret
     res = await eps[("POST", "/enroll/{approval_id}/approve")](
         _req(user="carmody", is_admin=True), approval_id=entry["approval_id"])

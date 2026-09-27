@@ -9,7 +9,8 @@ Admin:
 
 Guest:
 - User-facing username: `Guest`
-- Password: `Guest123`
+- Disabled by default; enabled only when the operator sets `MYAI_GUEST_ENABLED=true`.
+- Password: operator-set via `MYAI_GUEST_PASSWORD`, or randomly generated at creation. No default.
 - Normalized username: `guest`
 - Role: low-privilege shared LAN guest.
 - is_admin: false

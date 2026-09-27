@@ -21,7 +21,11 @@ import pytest
 from src.tool_implementations import do_manage_research
 from src.agent_loop import TOOL_SECTIONS
 
-_DATA_DIR = Path("data/deep_research")
+from src.constants import DATA_DIR
+
+# Under the configured data dir (the test session's temp dir, see conftest),
+# never a cwd-relative ./data — that is the live store inside the container.
+_DATA_DIR = Path(DATA_DIR) / "deep_research"
 
 
 @pytest.fixture

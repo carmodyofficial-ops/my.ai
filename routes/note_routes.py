@@ -591,8 +591,8 @@ def setup_note_routes(task_scheduler=None):
             # modes. There is no separate non-admin account boundary there.
             return True
         try:
-            from core.auth import AuthManager
-            auth_mgr = getattr(request.app.state, "auth_manager", None) or AuthManager()
+            from core.auth import get_auth_manager
+            auth_mgr = getattr(request.app.state, "auth_manager", None) or get_auth_manager()
             if not getattr(auth_mgr, "is_configured", True):
                 return True
             return bool(auth_mgr.is_admin(user))
@@ -879,8 +879,8 @@ def setup_note_routes(task_scheduler=None):
         # because there's no second user to attack; we keep that branch
         # explicit and gated on AuthManager.is_configured.
         try:
-            from core.auth import AuthManager
-            _allow_null = not AuthManager().is_configured
+            from core.auth import get_auth_manager
+            _allow_null = not get_auth_manager().is_configured
         except Exception:
             _allow_null = False
         db = SessionLocal()

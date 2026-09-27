@@ -50,7 +50,30 @@ ADMIN_PRIVILEGES["block_all_models"] = False
 
 BUILTIN_GUEST_USERNAME = "guest"
 BUILTIN_GUEST_DISPLAY_USERNAME = "Guest"
-BUILTIN_GUEST_PASSWORD = "Guest123"
+# The shared Guest account is OFF unless MYAI_GUEST_ENABLED=true. When on, its
+# password comes from MYAI_GUEST_PASSWORD (min 8 chars) or is generated at
+# random on creation and logged once. There is no built-in default password:
+# a fixed one ("Guest123") was printed on every install's login page, so any
+# reachable instance advertised a working login.
+GUEST_ENABLED_ENV = "MYAI_GUEST_ENABLED"
+GUEST_PASSWORD_ENV = "MYAI_GUEST_PASSWORD"
+_GUEST_MIN_PASSWORD_LEN = 8
+
+
+def _is_usable_password_hash(stored: str) -> bool:
+    return isinstance(stored, str) and stored.startswith(("$2a$", "$2b$", "$2y$")) and len(stored) == 60
+
+
+def guest_enabled() -> bool:
+    return os.environ.get(GUEST_ENABLED_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _configured_guest_password() -> str:
+    pw = os.environ.get(GUEST_PASSWORD_ENV, "")
+    if pw and len(pw) < _GUEST_MIN_PASSWORD_LEN:
+        logger.warning("%s is shorter than %d characters; ignoring it", GUEST_PASSWORD_ENV, _GUEST_MIN_PASSWORD_LEN)
+        return ""
+    return pw
 BUILTIN_GUEST_ROLE = "guest"
 BUILTIN_GUEST_PRIVILEGES = dict(DEFAULT_PRIVILEGES)
 BUILTIN_GUEST_PRIVILEGES.update({
@@ -364,33 +387,39 @@ class AuthManager:
         return str(username or "").strip().lower() == BUILTIN_GUEST_USERNAME
 
     def ensure_builtin_guest(self) -> bool:
-        """Create or repair the built-in shared Guest account.
+        """Create, repair, or remove the built-in shared Guest account.
 
-        Guest is only seeded after the instance already has a real admin/config.
-        This preserves first-run setup: Guest must not make the app look
-        configured before Admin exists.
+        Disabled (the default): any existing built-in Guest record is removed
+        and its sessions revoked. Enabled: Guest is seeded only after a real
+        admin exists (first-run setup must not look configured), kept
+        non-admin with exactly BUILTIN_GUEST_PRIVILEGES, and given the
+        operator's MYAI_GUEST_PASSWORD or, failing that, a random password.
+        Returns True when anything changed.
         """
         users = self._config.get("users")
         if not isinstance(users, dict) or not users:
             return False
+        if not guest_enabled():
+            return self._remove_builtin_guest()
         has_admin = any(bool((u or {}).get("is_admin")) for u in users.values() if isinstance(u, dict))
         if not has_admin:
             return False
 
+        configured = _configured_guest_password()
         with self._config_lock:
             users = self._config.setdefault("users", {})
             guest = users.get(BUILTIN_GUEST_USERNAME)
-            desired = {
-                "password_hash": _hash_password(BUILTIN_GUEST_PASSWORD),
-                "created": time.time(),
-                "is_admin": False,
-                "role": BUILTIN_GUEST_ROLE,
-                "display_name": BUILTIN_GUEST_DISPLAY_USERNAME,
-                "privileges": dict(BUILTIN_GUEST_PRIVILEGES),
-                "builtin": True,
-            }
             if not isinstance(guest, dict):
-                users[BUILTIN_GUEST_USERNAME] = desired
+                password = configured or self._new_guest_password()
+                users[BUILTIN_GUEST_USERNAME] = {
+                    "password_hash": _hash_password(password),
+                    "created": time.time(),
+                    "is_admin": False,
+                    "role": BUILTIN_GUEST_ROLE,
+                    "display_name": BUILTIN_GUEST_DISPLAY_USERNAME,
+                    "privileges": dict(BUILTIN_GUEST_PRIVILEGES),
+                    "builtin": True,
+                }
                 self._save()
                 logger.info("Created built-in shared Guest account")
                 return True
@@ -411,17 +440,55 @@ class AuthManager:
             if guest.get("privileges") != BUILTIN_GUEST_PRIVILEGES:
                 guest["privileges"] = dict(BUILTIN_GUEST_PRIVILEGES)
                 changed = True
-            try:
-                guest_password_ok = _verify_password(BUILTIN_GUEST_PASSWORD, guest.get("password_hash", ""))
-            except Exception:
-                guest_password_ok = False
-            if not guest_password_ok:
-                guest["password_hash"] = _hash_password(BUILTIN_GUEST_PASSWORD)
+            # Password: follow the operator's MYAI_GUEST_PASSWORD when set;
+            # otherwise keep whatever is stored, replacing it only if the hash
+            # is unusable. Never reset to a well-known default.
+            stored = guest.get("password_hash", "")
+            if configured:
+                try:
+                    matches = _verify_password(configured, stored)
+                except Exception:
+                    matches = False
+                if not matches:
+                    guest["password_hash"] = _hash_password(configured)
+                    changed = True
+            elif not _is_usable_password_hash(stored):
+                guest["password_hash"] = _hash_password(self._new_guest_password())
                 changed = True
             if changed:
                 self._save()
                 logger.info("Repaired built-in shared Guest account")
             return changed
+
+    @staticmethod
+    def _new_guest_password() -> str:
+        password = secrets.token_urlsafe(12)
+        logger.warning(
+            "Guest account enabled with a generated password: %s  "
+            "(set %s to choose one)", password, GUEST_PASSWORD_ENV)
+        return password
+
+    def _remove_builtin_guest(self) -> bool:
+        """Delete the built-in Guest record and revoke its sessions (session
+        validation does not cross-check the user table, so a leftover cookie
+        would otherwise keep working)."""
+        with self._config_lock:
+            users = self._config.get("users") or {}
+            guest = users.get(BUILTIN_GUEST_USERNAME)
+            if not (isinstance(guest, dict) and guest.get("builtin")):
+                return False
+            del users[BUILTIN_GUEST_USERNAME]
+            self._save()
+        with self._sessions_lock:
+            drop = [t for t, sess in self._sessions.items()
+                    if (sess or {}).get("username") == BUILTIN_GUEST_USERNAME]
+            for t in drop:
+                self._sessions.pop(t, None)
+        if drop:
+            self._save_sessions()
+        logger.info("Guest account disabled (%s not set): removed it and revoked %d session(s)",
+                    GUEST_ENABLED_ENV, len(drop))
+        return True
 
     # ------------------------------------------------------------------
     # Account management
@@ -867,3 +934,24 @@ class AuthManager:
         if authenticated:
             result["privileges"] = self.get_privileges(username)
         return result
+
+
+# One AuthManager per process. Constructing a fresh AuthManager() loads
+# auth.json, runs the startup repairs and can SAVE the file — call sites that
+# did that per request (tool/admin checks on every chat turn) rewrote auth.json
+# on each message and raced the app's own instance, so a password change or new
+# user saved by one could be overwritten by the other's stale copy.
+_shared_auth_manager: "Optional[AuthManager]" = None
+
+
+def set_shared_auth_manager(manager: "AuthManager") -> None:
+    global _shared_auth_manager
+    _shared_auth_manager = manager
+
+
+def get_auth_manager() -> "AuthManager":
+    """The process-wide AuthManager (the app's), creating one if none was set."""
+    global _shared_auth_manager
+    if _shared_auth_manager is None:
+        _shared_auth_manager = AuthManager()
+    return _shared_auth_manager

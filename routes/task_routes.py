@@ -431,8 +431,8 @@ def setup_task_routes(task_scheduler) -> APIRouter:
         if user == INTERNAL_TOOL_USER:
             return True
         try:
-            from core.auth import AuthManager
-            auth = AuthManager()
+            from core.auth import get_auth_manager
+            auth = get_auth_manager()
             if not auth.is_configured:
                 # Unconfigured single-user deploy: trust the local owner.
                 return True

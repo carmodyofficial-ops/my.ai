@@ -17,6 +17,22 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # file-backed DB across processes - tests needing that must set DATABASE_URL.
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
+# Same for the JSON data store. Without this every module that resolves the
+# default data dir (auth.json, settings.json, memory.json, ...) reads and WRITES
+# the checkout's real ./data — which is the live instance's data when the suite
+# runs inside the app container (a test run once removed the live built-in
+# Guest account). Knowledge packs are reference material some tests read, so a
+# private copy goes into the temp dir too (a copy, so nothing writes through).
+if "ODYSSEUS_DATA_DIR" not in os.environ:
+    import shutil
+    import tempfile
+    _test_data_dir = tempfile.mkdtemp(prefix="myai-test-data-")
+    _real_packs = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "data", "knowledge_packs")
+    if os.path.isdir(_real_packs):
+        shutil.copytree(_real_packs, os.path.join(_test_data_dir, "knowledge_packs"))
+    os.environ["ODYSSEUS_DATA_DIR"] = _test_data_dir
+
 # Pre-import real heavy modules BEFORE any test file's module-level stubs can
 # replace them with MagicMock. Some test files (e.g. test_llm_core_sanitize_*)
 # stub sqlalchemy/core.database at module scope with `if mod not in sys.modules`,
