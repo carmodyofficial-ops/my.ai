@@ -74,3 +74,134 @@ def test_unbounded_encodings_are_still_refused():
             _fetch(url, 100_000)
     finally:
         srv.shutdown()
+
+
+# --- image-model chats: questions get a text answer -------------------------
+
+@pytest.mark.parametrize("msg,expected", [
+    ("What is the next role for a senior product manager?", True),
+    ("how do I reset my router", True),
+    ("Should I take the job", True),
+    ("explain quantum tunneling", True),
+    ("a red barn in a snowy field at dusk", False),
+    ("draw a cat wearing a hat?", False),          # explicit picture word wins
+    ("can you make a picture of a lighthouse", False),
+    ("", False),
+])
+def test_wants_text_answer(msg, expected):
+    from routes.chat_routes import _wants_text_answer
+    assert _wants_text_answer(msg) is expected
+
+
+def test_text_turn_session_overrides_only_model_fields():
+    from types import SimpleNamespace
+    from routes.chat_routes import _TextTurnSession
+    inner = SimpleNamespace(id="s1", model="sdxl-lightning-8step", endpoint_url="http://img/v1", headers={}, name="x")
+    view = _TextTurnSession(inner, "http://llm/v1/chat/completions", "qwen", {"a": "b"})
+    assert (view.model, view.endpoint_url, view.headers, view.id) == ("qwen", "http://llm/v1/chat/completions", {"a": "b"}, "s1")
+    view.name = "renamed"                     # non-model writes reach the real session
+    assert inner.name == "renamed"
+    assert inner.model == "sdxl-lightning-8step"  # the chat keeps its image model
+
+
+# --- lan_proxy redirect mode ------------------------------------------------
+
+import asyncio
+import importlib.util
+import pathlib
+import socket
+
+_spec = importlib.util.spec_from_file_location(
+    "lan_proxy", pathlib.Path(__file__).resolve().parent.parent / "scripts" / "lan_proxy.py")
+lan_proxy = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(lan_proxy)
+BASE = "https://host.example.ts.net"
+
+
+def _exchange(raw: bytes, read_timeout=5.0) -> bytes:
+    async def run():
+        srv = await asyncio.start_server(lambda r, w: lan_proxy._redirect(r, w, BASE), "127.0.0.1", 0,
+                                         limit=lan_proxy._MAX_REQUEST_HEAD)
+        port = srv.sockets[0].getsockname()[1]
+        try:
+            reader, writer = await asyncio.open_connection("127.0.0.1", port)
+            writer.write(raw)
+            await writer.drain()
+            data = await asyncio.wait_for(reader.read(), timeout=read_timeout)
+            writer.close()
+            return data
+        finally:
+            srv.close()
+    return asyncio.run(run())
+
+
+def test_redirect_get_keeps_path():
+    out = _exchange(b"GET /chat?x=1 HTTP/1.1\r\nHost: h\r\n\r\n")
+    assert out.startswith(b"HTTP/1.1 308") and b"Location: " + BASE.encode() + b"/chat?x=1\r\n" in out
+
+
+def test_redirect_accepts_bare_lf_heads():
+    out = _exchange(b"GET /x HTTP/1.1\nHost: h\n\n")
+    assert out.startswith(b"HTTP/1.1 308")
+
+
+def test_redirect_head_has_no_body():
+    out = _exchange(b"HEAD /x HTTP/1.1\r\nHost: h\r\n\r\n")
+    head, _, body = out.partition(b"\r\n\r\n")
+    assert head.startswith(b"HTTP/1.1 308") and body == b""
+
+
+def test_redirect_drains_large_post_body_before_replying():
+    body = b"x" * 300_000
+    out = _exchange(b"POST /login HTTP/1.1\r\nHost: h\r\nContent-Length: %d\r\n\r\n" % len(body) + body)
+    assert out.startswith(b"HTTP/1.1 308")
+
+
+def test_api_paths_get_403_not_redirect():
+    out = _exchange(b"POST /api/chat HTTP/1.1\r\nHost: h\r\nContent-Length: 2\r\n\r\n{}")
+    assert out.startswith(b"HTTP/1.1 403") and b"Location:" not in out and BASE.encode() in out
+
+
+@pytest.mark.parametrize("value", ["host.ts.net", "http://host.ts.net", "/", "https://host/path", "https://u:p@host"])
+def test_redirect_target_must_be_https_origin(value):
+    with pytest.raises(SystemExit):
+        lan_proxy._normalize_redirect_base(value)
+
+
+def test_redirect_target_normalized():
+    assert lan_proxy._normalize_redirect_base("https://host.ts.net/") == "https://host.ts.net"
+
+
+# --- web_fetch decoding edge cases ------------------------------------------
+
+import zlib
+
+
+def test_raw_deflate_is_decoded():
+    page = b"<html>raw deflate body</html>"
+    comp = zlib.compressobj(wbits=-zlib.MAX_WBITS)
+    srv, url = _serve(comp.compress(page) + comp.flush(), "deflate")
+    try:
+        body, truncated = _fetch(url, 1_000_000)
+    finally:
+        srv.shutdown()
+    assert body == page and truncated is False
+
+
+def test_multi_member_gzip_is_fully_decoded():
+    srv, url = _serve(gzip.compress(b"part one, ") + gzip.compress(b"part two"), "gzip")
+    try:
+        body, truncated = _fetch(url, 1_000_000)
+    finally:
+        srv.shutdown()
+    assert body == b"part one, part two" and truncated is False
+
+
+def test_corrupt_gzip_is_a_clean_fetch_error():
+    import httpx
+    srv, url = _serve(b"\x1f\x8b\x08\x00this is not gzip data at all", "gzip")
+    try:
+        with pytest.raises(httpx.RequestError):
+            _fetch(url, 1_000_000)
+    finally:
+        srv.shutdown()

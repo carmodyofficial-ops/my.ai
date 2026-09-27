@@ -6,6 +6,9 @@
 # host-proxy posture, but survives reboot/DHCP because it binds 0.0.0.0).
 # To switch to TLS: set MYAI_TLS_CERT + MYAI_TLS_KEY (and usually
 # MYAI_LISTEN_PORT=7443) in the env file, then restart the service.
+# To retire the plain port: set MYAI_REDIRECT_TO=https://<host> (an https
+# origin) and it answers every request with a 308 there (403 for /api/*)
+# instead of proxying. It cannot be combined with the TLS settings.
 set -euo pipefail
 REPO="${MYAI_REPO:-/home/youruser/odysseus}"
 
@@ -19,6 +22,10 @@ args=(
   --target-host "${MYAI_TARGET_HOST:-127.0.0.1}"
   --target-port "${MYAI_TARGET_PORT:-7000}"
 )
+if [[ -n "${MYAI_REDIRECT_TO:-}" && ( -n "${MYAI_TLS_CERT:-}" || -n "${MYAI_TLS_KEY:-}" ) ]]; then
+  echo "lan_proxy_service: MYAI_REDIRECT_TO cannot be combined with MYAI_TLS_CERT/KEY" >&2
+  exit 2
+fi
 if [[ -n "${MYAI_TLS_CERT:-}" && -n "${MYAI_TLS_KEY:-}" ]]; then
   args+=(--listen-port "${MYAI_LISTEN_PORT:-7443}" --tls-cert "$MYAI_TLS_CERT" --tls-key "$MYAI_TLS_KEY")
 else

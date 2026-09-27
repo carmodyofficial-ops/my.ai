@@ -206,6 +206,64 @@ def _wants_video(message: str) -> bool:
     return bool(_VIDEO_INTENT_RE.search(text))
 
 
+_IMAGE_WORDS_RE = re.compile(
+    r"\b(draw|drawing|image|images|picture|pictures|photo|photos|photograph|illustrat\w*|render|"
+    r"paint|painting|sketch|portrait|wallpaper|logo|icon|poster|artwork|pic|selfie)\b", re.I)
+_QUESTION_START_RE = re.compile(
+    r"^\s*(what|what's|whats|who|whom|whose|when|where|why|how|which|is|are|am|was|were|do|does|did|"
+    r"can|could|should|would|will|shall|may|might|must|explain|tell me|help me|summari[sz]e|compare|"
+    r"list|give me|recommend|suggest|advise|translate)\b", re.I)
+
+
+def _wants_text_answer(message: str) -> bool:
+    """An image-model chat sends every message to the image model, so a
+    question typed into it ('What is the next role for a senior PM?') came
+    back as a picture — or, while the model loaded, as apparent silence.
+    Question-shaped text with no picture words gets a text answer instead;
+    descriptions ('a red barn in the snow') still go to the image model."""
+    text = (message or "").strip()
+    if not text or _IMAGE_WORDS_RE.search(text):
+        return False
+    return text.endswith("?") or bool(_QUESTION_START_RE.match(text))
+
+
+def _default_text_target(owner: str | None):
+    """(chat_url, model, headers) for the default chat model, or None."""
+    from src.settings import get_setting
+    from src.endpoint_resolver import resolve_endpoint_for_model
+    model = (get_setting("default_model", "") or "").strip()
+    if not model:
+        return None
+    try:
+        return resolve_endpoint_for_model(model, owner=owner)
+    except Exception:
+        return None
+
+
+class _TextTurnSession:
+    """Per-request view of a chat session that answers with a different model.
+    Only endpoint_url / model / headers are overridden; everything else (id,
+    history, add_message, ...) is the real session, so the chat keeps its
+    chosen image model and messages save normally."""
+
+    _OVERRIDES = ("endpoint_url", "model", "headers")
+
+    def __init__(self, inner, endpoint_url: str, model: str, headers):
+        object.__setattr__(self, "_inner", inner)
+        object.__setattr__(self, "endpoint_url", endpoint_url)
+        object.__setattr__(self, "model", model)
+        object.__setattr__(self, "headers", headers or {})
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, "_inner"), name)
+
+    def __setattr__(self, name, value):
+        if name in self._OVERRIDES:
+            object.__setattr__(self, name, value)
+        else:
+            setattr(object.__getattribute__(self, "_inner"), name, value)
+
+
 def _last_session_image(sess) -> tuple[str, str]:
     """(url, prompt) of the most recent generated still in this chat, or ('', '')."""
     for msg in reversed(getattr(sess, "history", None) or []):
@@ -1146,6 +1204,14 @@ def setup_chat_routes(
             if ctx.preset.character_name:
                 _model_info["character_name"] = ctx.preset.character_name
             yield f'data: {json.dumps(_model_info)}\n\n'
+
+            if (_is_image_generation_session(sess, owner=_user)
+                    and not _wants_video(message or "") and _wants_text_answer(message or "")):
+                _text_target = _default_text_target(_user)
+                if _text_target:
+                    sess = _TextTurnSession(sess, *_text_target)
+                    logger.info("Image-model chat %s: answering question with %s", session, sess.model)
+                    yield f'data: {json.dumps({"type": "model_info", "model": sess.model})}\n\n'
 
             if _is_image_generation_session(sess, owner=_user) and _wants_video(message or ""):
                 # Video request in an image-model chat: render with the video tool
