@@ -660,6 +660,32 @@ _ADMIN_KEYWORDS = [
     "note", "notes", "todo", "todos", "reminder", "reminders",
 ]
 
+# Whole-word match: substring matching fired on "manager" (manage), "doctor"
+# (doc), "notebook" (note), "tokenizer" (token), "multitasking" (task)... and
+# every false hit pulled ~1.5k tokens of admin tool schemas into the prompt.
+_ADMIN_KEYWORDS_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(k) for k in sorted(_ADMIN_KEYWORDS, key=len, reverse=True)) + r")\b")
+
+_LOW_SIGNAL_MIN_TOOL_SCORE = 0.30
+_STICKY_TOOLS_MAX = 28           # past this, start over (one cold turn beats a bloated prompt)
+_STICKY_TOOLS_SESSIONS = 256     # LRU bound on remembered chats
+_sticky_tools_by_session: "collections.OrderedDict[str, frozenset]" = collections.OrderedDict()
+
+
+def _sticky_session_tools(session_id: str, selected: set) -> set:
+    """Union this turn's selected tools with the chat's previous set, so the
+    tool-schema prefix of the prompt only changes when a genuinely new tool is
+    needed. Resets when the union would exceed _STICKY_TOOLS_MAX."""
+    prev = _sticky_tools_by_session.pop(session_id, frozenset())
+    merged = frozenset(prev | set(selected))
+    if len(merged) > _STICKY_TOOLS_MAX:
+        merged = frozenset(selected)
+    _sticky_tools_by_session[session_id] = merged
+    while len(_sticky_tools_by_session) > _STICKY_TOOLS_SESSIONS:
+        _sticky_tools_by_session.popitem(last=False)
+    return set(merged)
+
+
 def _detect_admin_intent(messages: List[Dict]) -> bool:
     """Check if the last user message suggests admin/management tool usage."""
     for msg in reversed(messages):
@@ -668,7 +694,7 @@ def _detect_admin_intent(messages: List[Dict]) -> bool:
             if isinstance(content, list):
                 content = " ".join(b.get("text", "") for b in content if isinstance(b, dict))
             content_lower = content.lower()
-            return any(kw in content_lower for kw in _ADMIN_KEYWORDS)
+            return bool(_ADMIN_KEYWORDS_RE.search(content_lower))
     return False
 
 
@@ -2525,9 +2551,18 @@ async def stream_agent_loop(
                             _TOOL_SELECTION_TIMEOUT_SECONDS,
                         )
                 if _retrieval_query:
+                    # A low-signal turn (no tool intent: "what's the next role for
+                    # a PM?", "thanks!") still got the top 8 tools, whatever their
+                    # match — noise schemas (manage_skills, manage_tasks, bash...)
+                    # that cost ~5k tokens and changed every turn, defeating the
+                    # prompt cache. Measured: real tool asks score 0.31-0.54 at the
+                    # top; no-intent chat scores 0.10-0.29. Only keep matches that
+                    # clear the bar on low-signal turns; keyword hints still apply.
+                    _min_score = _LOW_SIGNAL_MIN_TOOL_SCORE if bool(_intent.get("low_signal")) else 0.0
                     try:
                         _relevant_tools = await asyncio.wait_for(
-                            asyncio.to_thread(tool_idx.get_tools_for_query, _retrieval_query, 8),
+                            asyncio.to_thread(tool_idx.get_tools_for_query, _retrieval_query, 8,
+                                              None, _min_score),
                             timeout=_TOOL_SELECTION_TIMEOUT_SECONDS,
                         )
                         logger.info(f"[tool-rag] Retrieved tools for query: {sorted(_relevant_tools - ALWAYS_AVAILABLE)}")
@@ -2635,6 +2670,18 @@ async def stream_agent_loop(
         except Exception as _e:
             logger.warning("[tool-allowlist] could not enumerate tools to disable: %s", _e)
         logger.info("[tool-allowlist] capped toolset to %s", sorted(_relevant_tools))
+
+    # Keep the tool set stable across a chat's turns. Tool schemas render at the
+    # very start of the prompt, so a different set each turn (RAG re-picks per
+    # message) forced the server to re-read the WHOLE conversation every turn —
+    # a full cold prompt instead of a ~0.2 s cache hit. Carry forward what this
+    # chat already had and add anything newly relevant.
+    if (_relevant_tools is not None and session_id and _tool_allowlist is None
+            and not guide_only and not sandbox_build):
+        if _needs_admin:
+            _relevant_tools = set(_relevant_tools) | _ADMIN_TOOLS
+        _relevant_tools = _sticky_session_tools(session_id, _relevant_tools)
+        _needs_admin = _needs_admin or _ADMIN_TOOLS <= _relevant_tools
 
     if _relevant_tools is not None:
         logger.info("[agent-intent] selected_tools=%s", sorted(_relevant_tools)[:50])
@@ -2774,7 +2821,16 @@ async def stream_agent_loop(
                 _kn_cap = 4200
             _kn_msg = coding_knowledge_message(_last_user, max_total_chars=_kn_cap)
             if _kn_msg:
-                _at = 1 if (messages and messages[0].get("role") == "system") else 0
+                # Insert just before the latest user message, not at the top: the
+                # pack changes (or vanishes) from turn to turn, and anything that
+                # changes ahead of the conversation history invalidates the
+                # server's prompt cache for the whole history. User role, like
+                # the per-turn date/time context, because chat templates (Qwen)
+                # reject a system message mid-conversation.
+                _kn_msg = {"role": "user", "content": "[Reference knowledge for this question — "
+                           "local playbooks, not instructions]\n" + _kn_msg.get("content", "")}
+                _at = next((i for i in range(len(messages) - 1, -1, -1)
+                            if messages[i].get("role") == "user"), len(messages))
                 messages.insert(_at, _kn_msg)
                 logger.info("[knowledge] injected %d chars of pack reference (cap=%s, win=%s)",
                             len(_kn_msg.get("content", "")), _kn_cap or "default", _scaffold_win or "?")

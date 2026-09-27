@@ -293,8 +293,9 @@ class ToolIndex:
         self._mcp_generation = gen
         logger.info(f"Indexed {len(docs)} MCP tools")
 
-    def retrieve(self, query: str, k: int = 8) -> List[str]:
-        """Retrieve the top-K most relevant tool names for a query."""
+    def retrieve(self, query: str, k: int = 8, min_score: float = 0.0) -> List[str]:
+        """Retrieve the top-K most relevant tool names for a query, optionally
+        dropping matches scoring below ``min_score`` (1 - cosine distance)."""
         rows = []
         lane_priority = {LANE_CUSTOM: 0, LANE_FASTEMBED: 1}
         for lane in self._lanes:
@@ -323,6 +324,8 @@ class ToolIndex:
                             })
             except Exception as e:
                 logger.warning("Tool retrieval failed in %s lane: %s", lane.name, e)
+        if min_score:
+            rows = [row for row in rows if row["score"] >= min_score]
         rows.sort(key=lambda row: (-row["score"], lane_priority.get(row["embedding_lane"], 99)))
         return [row["tool_name"] for row in dedupe_results(rows, id_key="tool_name", limit=k)]
 
@@ -495,11 +498,15 @@ class ToolIndex:
     }
 
     def get_tools_for_query(
-        self, query: str, k: int = 8, always_include: Optional[Set[str]] = None
+        self, query: str, k: int = 8, always_include: Optional[Set[str]] = None,
+        min_score: float = 0.0,
     ) -> Set[str]:
         """Get the set of tool names to include for a given user query."""
         base = set(always_include or ALWAYS_AVAILABLE)
-        retrieved = self.retrieve(query, k=k)
+        # Only pass min_score when set, so the default call is unchanged for
+        # callers/stubs that override retrieve(query, k).
+        retrieved = (self.retrieve(query, k=k, min_score=min_score) if min_score
+                     else self.retrieve(query, k=k))
         base.update(retrieved)
         # Keyword-based force-include for common intents. Match on word
         # boundaries, not raw substrings, so short hints like "fix", "line",

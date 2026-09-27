@@ -205,3 +205,43 @@ def test_corrupt_gzip_is_a_clean_fetch_error():
             _fetch(url, 1_000_000)
     finally:
         srv.shutdown()
+
+
+# --- prompt cache: stable, smaller agent prompts ----------------------------
+
+@pytest.mark.parametrize("text,expected", [
+    ("What is the next role for a senior product manager?", False),  # 'manage' inside 'manager'
+    ("my doctor said to rest", False),                                # 'doc' inside 'doctor'
+    ("open my notebook", False),                                      # 'note' inside 'notebook'
+    ("rename this chat", True),
+    ("show my notes", True),
+    ("add an api key for openrouter", True),
+])
+def test_admin_intent_matches_whole_words(text, expected):
+    import src.agent_loop as al
+    assert al._detect_admin_intent([{"role": "user", "content": text}]) is expected
+
+
+def test_sticky_session_tools_carry_forward_and_reset():
+    import src.agent_loop as al
+    al._sticky_tools_by_session.clear()
+    assert al._sticky_session_tools("s", {"a", "b"}) == {"a", "b"}
+    assert al._sticky_session_tools("s", {"c"}) == {"a", "b", "c"}     # carried forward
+    assert al._sticky_session_tools("other", {"z"}) == {"z"}           # per chat
+    big = {f"t{i}" for i in range(al._STICKY_TOOLS_MAX + 1)}
+    assert al._sticky_session_tools("s", big) == big                   # over the cap -> start over
+    al._sticky_tools_by_session.clear()
+
+
+def test_retrieve_min_score_drops_weak_matches():
+    from types import SimpleNamespace
+    from src.tool_index import ToolIndex
+    lane = SimpleNamespace(
+        name="fastembed", count=lambda: 3, encode=lambda q: [[0.0]],
+        collection=SimpleNamespace(query=lambda **kw: {
+            "metadatas": [[{"tool_name": "web_search"}, {"tool_name": "manage_skills"}, {"tool_name": "bash"}]],
+            "distances": [[0.45, 0.72, 0.80]]}))            # scores 0.55, 0.28, 0.20
+    ti = ToolIndex.__new__(ToolIndex)
+    ti._lanes = [lane]
+    assert ti.retrieve("q", k=8) == ["web_search", "manage_skills", "bash"]
+    assert ti.retrieve("q", k=8, min_score=0.30) == ["web_search"]
