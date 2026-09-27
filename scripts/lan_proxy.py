@@ -9,6 +9,9 @@ It runs in two modes:
   * TLS: pass --tls-cert/--tls-key and it terminates HTTPS on the LAN side and
     forwards the decrypted stream to the loopback app, so session cookies and
     credentials never cross the network in clear text.
+  * Redirect: pass --redirect-to https://host and every plain-HTTP request is
+    answered with a 308 to the same path on that HTTPS origin. Nothing is
+    proxied, so no credentials are ever accepted over clear text.
 
 Examples:
     # plain
@@ -66,6 +69,38 @@ async def _handle(client_reader, client_writer, target_host, target_port) -> Non
     )
 
 
+_MAX_REQUEST_HEAD = 16384
+
+
+async def _redirect(client_reader, client_writer, base: str) -> None:
+    """Answer one plain-HTTP request with a 308 to `base` + the request path.
+    308 (not 301) keeps the method and body, so API POSTs follow it too."""
+    try:
+        head = await asyncio.wait_for(client_reader.readuntil(b"\r\n\r\n"), timeout=10)
+    except (asyncio.TimeoutError, asyncio.IncompleteReadError, asyncio.LimitOverrunError, ConnectionError):
+        client_writer.close()
+        return
+    parts = head.split(b"\r\n", 1)[0].split(b" ")
+    path = parts[1].decode("latin-1") if len(parts) >= 2 else "/"
+    # Only redirect origin-form paths; anything else (absolute-form, CR/LF
+    # smuggling, oversized) goes to the root.
+    if not path.startswith("/") or any(c in path for c in "\r\n") or len(path) > 4096:
+        path = "/"
+    body = b"Moved to HTTPS\n"
+    client_writer.write(
+        b"HTTP/1.1 308 Permanent Redirect\r\n"
+        + f"Location: {base}{path}\r\n".encode("latin-1")
+        + b"Content-Type: text/plain\r\nContent-Length: " + str(len(body)).encode()
+        + b"\r\nConnection: close\r\n\r\n" + body
+    )
+    try:
+        await client_writer.drain()
+    except ConnectionError:
+        pass
+    finally:
+        client_writer.close()
+
+
 def _tls_context(cert: str, key: str) -> ssl.SSLContext:
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(certfile=cert, keyfile=key)
@@ -77,21 +112,32 @@ async def _run(args) -> None:
     if bool(args.tls_cert) ^ bool(args.tls_key):
         raise SystemExit("--tls-cert and --tls-key must be provided together")
     ctx = _tls_context(args.tls_cert, args.tls_key) if args.tls_cert else None
+    if args.redirect_to and ctx:
+        raise SystemExit("--redirect-to is for the plain listener; don't combine it with TLS")
+    base = args.redirect_to.rstrip("/")
 
+    if base:
+        handler = lambda r, w: _redirect(r, w, base)  # noqa: E731
+    else:
+        handler = lambda r, w: _handle(r, w, args.target_host, args.target_port)  # noqa: E731
     server = await asyncio.start_server(
-        lambda r, w: _handle(r, w, args.target_host, args.target_port),
+        handler,
         host=args.listen_host,
         port=args.listen_port,
         ssl=ctx,
+        limit=_MAX_REQUEST_HEAD,
     )
     addrs = ", ".join(str(s.getsockname()) for s in server.sockets)
-    log.info(
-        "%s proxy listening on %s -> %s:%s",
-        "TLS" if ctx else "plain",
-        addrs,
-        args.target_host,
-        args.target_port,
-    )
+    if base:
+        log.info("redirect listener on %s -> 308 %s", addrs, base)
+    else:
+        log.info(
+            "%s proxy listening on %s -> %s:%s",
+            "TLS" if ctx else "plain",
+            addrs,
+            args.target_host,
+            args.target_port,
+        )
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -113,6 +159,8 @@ def main() -> None:
     p.add_argument("--target-port", type=int, default=7000)
     p.add_argument("--tls-cert", default="", help="PEM certificate (chain) file; enables TLS")
     p.add_argument("--tls-key", default="", help="PEM private key file; enables TLS")
+    p.add_argument("--redirect-to", default="",
+                   help="HTTPS origin (e.g. https://host.tailnet.ts.net); plain requests get a 308 there")
     asyncio.run(_run(p.parse_args()))
 
 

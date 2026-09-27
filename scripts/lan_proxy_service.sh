@@ -23,6 +23,9 @@ if [[ -n "${MYAI_TLS_CERT:-}" && -n "${MYAI_TLS_KEY:-}" ]]; then
   args+=(--listen-port "${MYAI_LISTEN_PORT:-7443}" --tls-cert "$MYAI_TLS_CERT" --tls-key "$MYAI_TLS_KEY")
 else
   args+=(--listen-port "${MYAI_LISTEN_PORT:-7000}")
+  if [[ -n "${MYAI_REDIRECT_TO:-}" ]]; then
+    args+=(--redirect-to "$MYAI_REDIRECT_TO")
+  fi
 fi
 
 
