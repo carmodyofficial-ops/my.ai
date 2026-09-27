@@ -87,6 +87,14 @@ Odysseus is a self-hosted workspace with powerful local tools. Keep auth enabled
  </picture>
 </a>
 
-## License
+## Origin and License
 
-AGPL-3.0-or-later -- see [LICENSE](LICENSE) and [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md).
+my.ai is a modified version of **[Odysseus](https://github.com/pewdiepie-archdaemon/odysseus)**
+by pewdiepie-archdaemon and the Odysseus contributors, which is licensed under the
+GNU AGPL v3.0 or later. It has been modified by Carmody since 2026-06-28; the git
+history records every change and its date. See [NOTICE](NOTICE) for details.
+
+my.ai is distributed under the same license, **AGPL-3.0-or-later** -- see
+[LICENSE](LICENSE) and [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md). If you run a
+modified version as a network service, the AGPL requires you to offer its source
+code to that service's users.

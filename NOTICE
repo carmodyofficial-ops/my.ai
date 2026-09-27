@@ -1,0 +1,23 @@
+my.ai
+Copyright (C) 2026 Carmody and my.ai contributors
+
+my.ai is a modified version of Odysseus
+  https://github.com/pewdiepie-archdaemon/odysseus
+  Copyright (C) 2026 pewdiepie-archdaemon and the Odysseus contributors
+  Licensed under the GNU Affero General Public License v3.0 or later.
+
+This repository contains that work as modified by Carmody from 2026-06-28
+onward. The complete record of modifications, with dates, is this
+repository's git history. Notable changes include the my.ai branding and
+defaults, local image and video generation, the smart-glasses companion,
+prompt/latency work for local models, and security hardening.
+
+The combined work is distributed under the same license, the GNU Affero
+General Public License, version 3 or (at your option) any later version.
+See LICENSE for the full text and ACKNOWLEDGMENTS.md for third-party
+components and their licenses.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+details.
