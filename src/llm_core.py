@@ -908,6 +908,13 @@ def _anthropic_rejects_temperature(model: str) -> bool:
 # Models that support structured thinking — may output </think> without opening tag
 _THINKING_MODEL_PATTERNS = ("qwen3", "qwq", "deepseek-r1", "deepseek-reasoner", "minimax", "m2-reap", "gemma")
 
+# "think": false alone only damps reasoning on Ollama 0.34 /v1 for qwen3.8:
+# measured 379 reasoning chars (and 1,621 reasoning tokens / 74 s on a real
+# chat turn) vs 0 with reasoning_effort "none" — same answer, 11 s -> 2.6 s.
+# Send both: older servers honor "think", newer ones "reasoning_effort".
+_OLLAMA_NO_THINK = {"think": False, "reasoning_effort": "none"}
+
+
 def _supports_thinking(model: str) -> bool:
     """Check if model supports structured thinking output."""
     if not model:
@@ -1639,7 +1646,7 @@ async def llm_call_async(
             payload[tok_key] = max_tokens
         # Suppress thinking for qwen3/gemma4 on Ollama /v1 — same as stream_llm.
         if _is_ollama_openai_compat_url(url) and _supports_thinking(model):
-            payload["think"] = False
+            payload.update(_OLLAMA_NO_THINK)
         if extra_payload:
             payload.update(extra_payload)
         _apply_local_cache_affinity(payload, url, session_id)
@@ -1763,9 +1770,9 @@ async def stream_llm(url: str, model: str, messages: List[Dict], temperature: fl
             payload["tools"] = tools
         # For Ollama's OpenAI-compat /v1 endpoint with thinking models (qwen3,
         # gemma4, etc.), suppress thinking so tool calls aren't swallowed inside
-        # <think> blocks. Ollama /v1 accepts "think": false as a top-level param.
+        # <think> blocks (see _OLLAMA_NO_THINK for why both keys are sent).
         if _is_ollama_openai_compat_url(url) and _supports_thinking(model):
-            payload["think"] = False
+            payload.update(_OLLAMA_NO_THINK)
         if extra_payload:
             payload.update(extra_payload)
         _apply_local_cache_affinity(payload, url, session_id)
