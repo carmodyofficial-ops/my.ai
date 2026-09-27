@@ -8,6 +8,7 @@ These are agent tools — the LLM writes fenced code blocks and they execute
 through the standard agent_tools.py pipeline.
 """
 
+import asyncio
 import json
 import logging
 import uuid
@@ -163,6 +164,13 @@ def _resolve_model(spec: str, owner: Optional[str] = None) -> Tuple[str, str, Di
         db.close()
 
 
+async def _resolve_model_async(spec: str, owner: Optional[str] = None) -> Tuple[str, str, Dict]:
+    """_resolve_model off the event loop. It probes each endpoint's model list
+    with a blocking HTTP call (up to 5 s per endpoint), which froze every other
+    request — including live chat streams — whenever an endpoint was slow."""
+    return await asyncio.to_thread(_resolve_model, spec, owner)
+
+
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
@@ -186,7 +194,7 @@ async def do_chat_with_model(content: str, session_id: Optional[str] = None, own
         return {"error": "No message provided (line 2+ is the message)"}
 
     try:
-        url, model, headers = _resolve_model(model_spec, owner=owner)
+        url, model, headers = await _resolve_model_async(model_spec, owner=owner)
     except ValueError as e:
         return {"error": str(e)}
 
@@ -341,7 +349,7 @@ async def do_dispatch_subagents(content: str, session_id: Optional[str] = None,
     # Resolve a capable model: an explicit spec, else the owner's default endpoint.
     try:
         if model_spec:
-            url, model, headers = _resolve_model(model_spec, owner=owner)
+            url, model, headers = await _resolve_model_async(model_spec, owner=owner)
         else:
             url, model, headers = resolve_endpoint("default", owner=owner)
             headers = headers or {}
@@ -434,7 +442,7 @@ async def do_ask_teacher(content: str, session_id: Optional[str] = None, owner: 
             return {"error": "No teacher model configured. Specify a model name or set teacher_model in settings."}
 
     try:
-        url, model, headers = _resolve_model(model_spec, owner=owner)
+        url, model, headers = await _resolve_model_async(model_spec, owner=owner)
     except ValueError as e:
         return {"error": str(e)}
 
@@ -480,7 +488,7 @@ async def do_second_opinion(content: str, session_id: Optional[str] = None, owne
     focus = lines[1].strip() if len(lines) > 1 else ""
 
     try:
-        reviewer_url, reviewer_model, reviewer_headers = _resolve_model(model_spec, owner=owner)
+        reviewer_url, reviewer_model, reviewer_headers = await _resolve_model_async(model_spec, owner=owner)
     except ValueError as e:
         return {"error": str(e)}
 
@@ -621,7 +629,7 @@ async def do_create_session(content: str, session_id: Optional[str] = None, owne
         return {"error": "Session name cannot be empty"}
 
     try:
-        url, model, headers = _resolve_model(model_spec, owner=owner)
+        url, model, headers = await _resolve_model_async(model_spec, owner=owner)
     except ValueError as e:
         return {"error": str(e)}
 
@@ -859,7 +867,7 @@ async def do_pipeline(content: str, session_id: Optional[str] = None, owner: Opt
         if not model_spec or not instruction:
             return {"error": f"Step {i + 1}: both 'model' and 'instruction' are required"}
         try:
-            url, model, headers = _resolve_model(model_spec, owner=owner)
+            url, model, headers = await _resolve_model_async(model_spec, owner=owner)
             resolved.append((url, model, headers, instruction))
         except ValueError as e:
             return {"error": f"Step {i + 1}: {e}"}
@@ -1350,7 +1358,7 @@ async def do_list_models(content: str, session_id: Optional[str] = None, owner: 
                 try:
                     models_url = build_models_url(base)
                     if models_url:
-                        r = httpx.get(models_url, headers=headers, timeout=5)
+                        r = await asyncio.to_thread(httpx.get, models_url, headers=headers, timeout=5)
                         r.raise_for_status()
                         data = r.json()
                         model_ids = [m.get("id") for m in (data.get("data") or []) if m.get("id")]
@@ -1556,7 +1564,7 @@ async def do_ui_control(content: str, session_id: Optional[str] = None, owner: O
 
         # Resolve the model to validate it exists
         try:
-            url, model_id, headers = _resolve_model(model_spec, owner=owner)
+            url, model_id, headers = await _resolve_model_async(model_spec, owner=owner)
         except ValueError as e:
             return {"error": str(e)}
 
@@ -1846,7 +1854,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
     if not model_spec:
         for candidate in ("gpt-image-1.5", "gpt-image-1", "dall-e-3"):
             try:
-                _resolve_model(candidate, owner=owner)
+                await _resolve_model_async(candidate, owner=owner)
                 model_spec = candidate
                 break
             except ValueError:
@@ -1871,7 +1879,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
                         if not _ibase.endswith("/v1"):
                             _ibase += "/v1"
                         try:
-                            _r = _req.get(_ibase + "/models", timeout=3)
+                            _r = await asyncio.to_thread(_req.get, _ibase + "/models", timeout=3)
                             _r.raise_for_status()
                             _mids = [m.get("id") for m in (_r.json().get("data") or []) if m.get("id")]
                             if _mids:
@@ -1888,7 +1896,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
 
     # Resolve the model to find the right endpoint
     try:
-        url, model_id, headers = _resolve_model(model_spec, owner=owner)
+        url, model_id, headers = await _resolve_model_async(model_spec, owner=owner)
     except ValueError:
         return {"error": f"No endpoint found with image model '{model_spec}'. "
                 "Configure an OpenAI-compatible endpoint with image generation support."}
@@ -1992,7 +2000,7 @@ async def do_generate_image(content: str, session_id: Optional[str] = None, owne
                 if not ok:
                     return {"error": f"Image API returned unsafe image URL: {reason}"}
                 try:
-                    dl_resp = httpx.get(result_url, timeout=60)
+                    dl_resp = await asyncio.to_thread(httpx.get, result_url, timeout=60)
                     if dl_resp.status_code == 200:
                         img_dir = Path(GENERATED_IMAGES_DIR)
                         img_dir.mkdir(parents=True, exist_ok=True)

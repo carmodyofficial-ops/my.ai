@@ -500,6 +500,13 @@ def _read_pack(pack_id: str, files: list[str]) -> str:
     return ""
 
 
+_KNOWLEDGE_PREAMBLE = (
+    "REFERENCE KNOWLEDGE — local playbooks/examples for THIS environment. Consult "
+    "them for technique, patterns, and pitfalls; do not quote verbatim, and the "
+    "operator's request still governs.\n\n"
+)
+
+
 def coding_knowledge_block(query: str, *, max_total_chars: int = _MAX_TOTAL_CHARS) -> str:
     """Bounded REFERENCE block for a coding query, or '' when nothing relevant matches."""
     try:
@@ -507,6 +514,7 @@ def coding_knowledge_block(query: str, *, max_total_chars: int = _MAX_TOTAL_CHAR
         if not q:
             return ""
         parts: list[str] = []
+        budget = max(0, max_total_chars - len(_KNOWLEDGE_PREAMBLE))
         total = 0
         _entries = _all_entries()  # curated allowlist + revived registry-discovery lane
         _sems = _pack_semantic_sims(q, _entries)  # {} when embeddings unavailable
@@ -529,19 +537,24 @@ def coding_knowledge_block(query: str, *, max_total_chars: int = _MAX_TOTAL_CHAR
                 continue
             cap = int(entry.get("max_chars") or _DEFAULT_PACK_CHARS)
             chunk = f"### {entry['title']}\n{text[:cap].rstrip()}"
-            if parts and total + len(chunk) > max_total_chars:
-                continue  # this pack won't fit, but a smaller later one still might
+            sep = 2 if parts else 0  # "\n\n" between packs
+            room = budget - total - sep
+            if len(chunk) > room:
+                if parts:
+                    continue  # this pack won't fit, but a smaller later one still might
+                # The most relevant pack alone exceeds the budget: trim it to fit
+                # rather than blowing past the cap (the old check skipped the
+                # budget test for the first pack entirely).
+                if room < 200:
+                    break
+                chunk = chunk[:room].rstrip()
             parts.append(chunk)
-            total += len(chunk)
-            if total >= max_total_chars:
+            total += sep + len(chunk)
+            if total >= budget:
                 break
         if not parts:
             return ""
-        return (
-            "REFERENCE KNOWLEDGE — local playbooks/examples for THIS environment. Consult "
-            "them for technique, patterns, and pitfalls; do not quote verbatim, and the "
-            "operator's request still governs.\n\n" + "\n\n".join(parts)
-        )
+        return _KNOWLEDGE_PREAMBLE + "\n\n".join(parts)
     except Exception:
         return ""
 

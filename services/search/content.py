@@ -140,6 +140,55 @@ class _CappedFetch:
             )
 
 
+class _BoundedDecoder:
+    """Streaming gzip/deflate decoder whose output per call is capped.
+
+    * every gzip member is decoded (concatenated members are legal and common
+      from streaming/concatenating proxies), not just the first;
+    * 'deflate' falls back to raw DEFLATE when the body has no zlib header
+      (IIS and others send it that way);
+    * trailing bytes after a complete member that aren't another member are
+      ignored rather than failing the whole fetch.
+    Raises zlib.error only for a stream that is corrupt from the start."""
+
+    def __init__(self, encoding: str):
+        self._d = zlib.decompressobj(zlib.MAX_WBITS | 32)  # auto-detect gzip/zlib header
+        self._raw_fallback = encoding == "deflate"
+        self._started = False
+        self._members = 0
+        self._done = False
+
+    def decompress(self, data: bytes, limit: int) -> bytes:
+        out = b""
+        while data and not self._done and len(out) < limit:
+            try:
+                piece = self._d.decompress(data, limit - len(out))
+            except zlib.error:
+                if self._raw_fallback and not self._started:
+                    self._d = zlib.decompressobj(-zlib.MAX_WBITS)
+                    self._raw_fallback = False
+                    continue
+                if self._members:  # junk after a complete member
+                    self._done = True
+                    break
+                raise
+            self._started = True
+            out += piece
+            if self._d.eof:
+                self._members += 1
+                data = self._d.unused_data
+                if data:
+                    self._d = zlib.decompressobj(zlib.MAX_WBITS | 32)
+            else:
+                data = self._d.unconsumed_tail  # non-empty only when the limit was hit
+        return out
+
+    def flush(self) -> bytes:
+        if self._done or self._d.eof:
+            return b""
+        return self._d.flush()
+
+
 def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 5,
                     max_bytes: int = None) -> "_CappedFetch":
     """Capped streaming GET with SSRF-guarded manual redirects.
@@ -188,7 +237,7 @@ def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 
                         "requesting identity: cannot bound decoded body size",
                         request=httpx.Request("GET", current),
                     )
-                decomp = zlib.decompressobj(zlib.MAX_WBITS | 32)  # auto-detect gzip/zlib header
+                decomp = _BoundedDecoder(enc)
 
             declared = None
             raw_len = response.headers.get("content-length")
@@ -210,21 +259,26 @@ def _get_public_url(url: str, headers: dict, timeout: int, max_redirects: int = 
             # chunks (no decompression expansion), so the cap bounds what we
             # buffer. Compressed: each decompress call may emit at most one byte
             # more than the remaining budget, which is enough to detect overflow.
-            for raw in (response.iter_raw() if decomp is not None else response.iter_bytes()):
-                chunk = decomp.decompress(raw, cap - read + 1) if decomp is not None else raw
-                read += len(chunk)
-                if read > cap:
-                    keep = cap - (read - len(chunk))
-                    if keep > 0:
-                        chunks.append(chunk[:keep])
-                    truncated = True
-                    break
-                chunks.append(chunk)
-            if decomp is not None and not truncated:
-                tail = decomp.flush()
-                if read + len(tail) > cap:
-                    tail, truncated = tail[:max(cap - read, 0)], True
-                chunks.append(tail)
+            try:
+                for raw in (response.iter_raw() if decomp is not None else response.iter_bytes()):
+                    chunk = decomp.decompress(raw, cap - read + 1) if decomp is not None else raw
+                    read += len(chunk)
+                    if read > cap:
+                        keep = cap - (read - len(chunk))
+                        if keep > 0:
+                            chunks.append(chunk[:keep])
+                        truncated = True
+                        break
+                    chunks.append(chunk)
+                if decomp is not None and not truncated:
+                    tail = decomp.flush()
+                    if read + len(tail) > cap:
+                        tail, truncated = tail[:max(cap - read, 0)], True
+                    chunks.append(tail)
+            except zlib.error as exc:
+                raise httpx.RequestError(
+                    f"Could not decode {enc} response: {exc}", request=httpx.Request("GET", current)
+                ) from exc
             return _CappedFetch(response.status_code, response.headers,
                                 b"".join(chunks), truncated, declared,
                                 response.encoding, str(response.url))

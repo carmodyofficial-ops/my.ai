@@ -76,7 +76,7 @@ def setup_preset_routes(preset_manager) -> APIRouter:
         Admin-gated like the other preset write endpoints: it spends owner-attributed
         LLM tokens, so it must not be reachable by an arbitrary authed user/scoped token.
         """
-        from src.ai_interaction import _resolve_model
+        from src.ai_interaction import _resolve_model_async
         from src.llm_core import llm_call_async
 
         try:
@@ -111,7 +111,7 @@ def setup_preset_routes(preset_manager) -> APIRouter:
         try:
             model_spec = data.get("model") or ""
             user = effective_user(request)
-            url, model, headers = _resolve_model(model_spec, owner=user)
+            url, model, headers = await _resolve_model_async(model_spec, owner=user)
             result = await llm_call_async(url, model, messages, temperature=0.8, max_tokens=500, headers=headers)
             return {"success": True, "prompt": result.strip()}
         except Exception as e:

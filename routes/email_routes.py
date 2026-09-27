@@ -3473,7 +3473,7 @@ def setup_email_routes():
         )
         import httpx as _httpx
         try:
-            resp = _httpx.post("https://oauth2.googleapis.com/token", data={
+            resp = await asyncio.to_thread(_httpx.post, "https://oauth2.googleapis.com/token", data={
                 "code": code,
                 "client_id": client_id,
                 "client_secret": client_secret,
@@ -3492,7 +3492,7 @@ def setup_email_routes():
         email_addr = ""
         display_name = ""
         try:
-            ui = _httpx.get("https://www.googleapis.com/oauth2/v1/userinfo",
+            ui = await asyncio.to_thread(_httpx.get, "https://www.googleapis.com/oauth2/v1/userinfo",
                             headers={"Authorization": f"Bearer {access_token}"}, timeout=10)
             if ui.is_success:
                 ui_data = ui.json()

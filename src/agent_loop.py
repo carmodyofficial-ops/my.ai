@@ -601,6 +601,9 @@ _ADMIN_SCHEMA_NAMES = frozenset([
     "ask_teacher", "list_models", "search_chats",
 ])
 _TOOL_SELECTION_TIMEOUT_SECONDS = 1.5
+# A tool result carrying any of these is a (possibly partial) success even if it
+# also reports an "error" note; see the exit-code derivation in stream_agent_loop.
+_RESULT_PAYLOAD_KEYS = ("results", "output", "stdout", "content", "data", "items", "matches")
 
 
 def _is_ollama_openai_compat_url(endpoint_url: str) -> bool:
@@ -3947,12 +3950,18 @@ async def stream_agent_loop(
                     except Exception:
                         pass
 
-            # Many do_* tools report failure as {"error": ...} with no exit_code, and
-            # the UI treats a missing exit_code as success — so a failed tool showed
-            # a green check. Derive a failing code when only an error is present.
+            # Many do_* tools report failure as {"error": ...} or {"success": False}
+            # with no exit_code, and the UI treats a missing exit_code as success —
+            # so a failed tool showed a green check. Derive a failing code, but not
+            # for a result that carries real output next to a non-fatal error note
+            # (e.g. {"results": [...], "error": "1 of 5 sources failed"}).
             _exit_code = result.get("exit_code")
-            if _exit_code is None and result.get("error"):
-                _exit_code = 1
+            if _exit_code is None:
+                if result.get("success") is False:
+                    _exit_code = 1
+                elif (result.get("error") and result.get("success") is not True
+                        and not any(result.get(k) for k in _RESULT_PAYLOAD_KEYS)):
+                    _exit_code = 1
 
             # Build output for frontend tool bubble.
             # Document tools get a short summary — content goes to the editor panel.

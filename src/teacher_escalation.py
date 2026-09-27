@@ -233,9 +233,9 @@ async def _call_teacher(teacher_model_spec: str, prompt: str,
                         owner: Optional[str] = None) -> Optional[str]:
     """Call the configured teacher endpoint with the escalation prompt."""
     from src.llm_core import llm_call_async
-    from src.ai_interaction import _resolve_model, _TEACHER_SYSTEM_PROMPT
+    from src.ai_interaction import _resolve_model_async, _TEACHER_SYSTEM_PROMPT
     try:
-        url, model, headers = _resolve_model(teacher_model_spec, owner=owner)
+        url, model, headers = await _resolve_model_async(teacher_model_spec, owner=owner)
     except Exception as e:
         logger.warning(f"teacher endpoint not resolvable ({teacher_model_spec!r}): {e}")
         return None
@@ -523,8 +523,8 @@ async def run_teacher_inline(
 
     # Resolve teacher endpoint
     try:
-        from src.ai_interaction import _resolve_model
-        teacher_url, teacher_model, teacher_headers = _resolve_model(teacher_spec, owner=owner)
+        from src.ai_interaction import _resolve_model_async
+        teacher_url, teacher_model, teacher_headers = await _resolve_model_async(teacher_spec, owner=owner)
     except Exception as e:
         logger.warning(f"teacher endpoint not resolvable ({teacher_spec!r}): {e}")
         yield (
