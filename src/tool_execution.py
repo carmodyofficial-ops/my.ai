@@ -282,13 +282,23 @@ def vet_workspace(raw: str) -> Optional[str]:
     # also covers C:\ and \\server\share without platform-specific lists.
     if os.path.dirname(resolved) == resolved:
         return None
+    # sandbox_protected_roots (e.g. a live-trading repo) can never be a workspace,
+    # nor can a parent of one — that would expose the protected tree too.
+    from src import sandbox_jail
+    if sandbox_jail.is_protected_path(resolved):
+        return None
     return resolved
 
 
 def agent_cwd() -> str:
     """Working directory for agent subprocesses (bash/python/background jobs):
     the active workspace when set, else the persistent data dir."""
-    return get_active_workspace() or _AGENT_WORKDIR
+    ws = get_active_workspace()
+    if ws:
+        return ws
+    # Inside the jail the data dir is unreadable by design; use its scratch home.
+    from src import sandbox_jail
+    return sandbox_jail.default_cwd() if sandbox_jail.enabled() else _AGENT_WORKDIR
 
 
 def get_mcp_manager():
@@ -908,7 +918,12 @@ async def _execute_tool_block_impl(
         _is_bg, _bg_cmd = _split_bg_marker(content)
         if _is_bg and _bg_cmd:
             from src import bg_jobs
-            rec = bg_jobs.launch(_bg_cmd, session_id=session_id, cwd=agent_cwd())
+            from src import sandbox_jail
+            try:
+                rec = bg_jobs.launch(_bg_cmd, session_id=session_id, cwd=agent_cwd(), jail=True)
+            except sandbox_jail.JailUnavailable as e:
+                return "bash (background): blocked", {
+                    "error": f"bash: sandbox unavailable — {e}", "exit_code": 126}
             short = _bg_cmd.strip().split(chr(10))[0][:80]
             desc = f"bash (background): {short}"
             result = {

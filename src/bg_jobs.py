@@ -80,12 +80,17 @@ def _pid_alive(pid: Optional[int]) -> bool:
 
 def launch(command: str, session_id: str, cwd: Optional[str] = None,
            max_runtime_s: int = DEFAULT_MAX_RUNTIME_S,
-           extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+           extra: Optional[Dict[str, Any]] = None,
+           jail: bool = False) -> Dict[str, Any]:
     """Launch `command` detached. Returns the job record (status='running').
 
     Output + the final exit code are written to files so status survives a
     server restart. The process is put in its own session (setsid) so it
     outlives the request/stream that started it.
+
+    jail=True (agent-authored commands) runs it in the Landlock workspace jail
+    (src/sandbox_jail.py) with access to only this job's own files in the jobs
+    dir; raises sandbox_jail.JailUnavailable if the jail can't be enforced.
     """
     _JOBS_DIR.mkdir(parents=True, exist_ok=True)
     job_id = uuid.uuid4().hex[:12]
@@ -131,14 +136,33 @@ def launch(command: str, session_id: str, cwd: Optional[str] = None,
         )
         argv = [os.environ.get("ComSpec", "cmd.exe"), "/c", str(script_path)]
 
-    proc = subprocess.Popen(
-        argv,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        stdin=subprocess.DEVNULL,
-        cwd=cwd or None,
-        **detached_popen_kwargs(),  # detach from the request lifecycle (setsid / DETACHED_PROCESS)
-    )
+    if jail and os.name == "posix":
+        from src import sandbox_jail
+        from src.agent_tools.subprocess_tools import scrub_secret_env
+        for p in (log_path, exit_path):
+            p.touch()
+        own_scripts = [str(p) for p in _JOBS_DIR.glob(f"{job_id}.*sh")]
+        with sandbox_jail.guard(workspace=cwd or None, extra_rw_files=[str(log_path), str(exit_path)],
+                                extra_ro_files=own_scripts) as jailed_preexec:
+            proc = subprocess.Popen(
+                argv,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+                cwd=cwd or None,
+                env=sandbox_jail.jail_env(scrub_secret_env(None)),
+                preexec_fn=jailed_preexec,
+                **detached_popen_kwargs(),
+            )
+    else:
+        proc = subprocess.Popen(
+            argv,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            cwd=cwd or None,
+            **detached_popen_kwargs(),  # detach from the request lifecycle (setsid / DETACHED_PROCESS)
+        )
 
     rec = {
         "id": job_id,

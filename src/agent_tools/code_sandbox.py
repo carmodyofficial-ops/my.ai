@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.constants import MAX_OUTPUT_CHARS
+from src import sandbox_jail
 from .subprocess_tools import scrub_secret_env, scan_for_sensitive_access, _sandbox_preexec
 
 # Per-run resource caps (CPU/mem/file-size/fds/wall-clock) so AI-generated code
@@ -108,9 +109,13 @@ class CodeSandboxTool:
         results = []
         for cmd in cmds:
             try:
-                proc = await asyncio.create_subprocess_shell(
-                    cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                    cwd=str(sbx), env=env, preexec_fn=preexec)
+                # The scratch dir is the only writable place; the bound
+                # workspace is not exposed to throwaway snippets.
+                with sandbox_jail.guard(preexec, use_active_workspace=False,
+                                        extra_rw=[str(sbx)]) as jailed_preexec:
+                    proc = await asyncio.create_subprocess_shell(
+                        cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                        cwd=str(sbx), env=sandbox_jail.jail_env(env), preexec_fn=jailed_preexec)
                 try:
                     out, err = await asyncio.wait_for(proc.communicate(), timeout=_LIMITS["timeout"])
                     results.append({"cmd": cmd, "exit_code": proc.returncode,

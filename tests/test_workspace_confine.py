@@ -86,9 +86,16 @@ def test_active_binding_confines_shared_resolvers(ws):
         _active_workspace.reset(token)
 
 
-def test_no_binding_uses_default_roots():
+def test_no_binding_uses_default_roots(monkeypatch):
+    from src import sandbox_jail
     assert get_active_workspace() is None
+    # Jail off: the persistent data dir, as before.
+    monkeypatch.setattr(sandbox_jail, "enabled", lambda: False)
     assert agent_cwd() == _AGENT_WORKDIR
+    # Jail on: the data dir is unreadable inside the jail, so start in its
+    # scratch home instead.
+    monkeypatch.setattr(sandbox_jail, "enabled", lambda: True)
+    assert agent_cwd() == sandbox_jail.scratch_home()
     with pytest.raises(ValueError):
         _resolve_tool_path("/etc/hosts")
 

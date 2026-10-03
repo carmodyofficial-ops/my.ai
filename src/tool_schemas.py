@@ -25,7 +25,7 @@ FUNCTION_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "bash",
-            "description": "Run a shell command (full access). Prefer a dedicated tool whenever one fits the job (reading, writing, editing, searching, or listing files); use bash only for what no dedicated tool covers (installs, git, builds, running programs, system info). Do NOT create or edit files via bash redirects/heredocs/sed -- use the dedicated file tools. Use bash to BUILD and TEST your changes (e.g. python3 -m compileall -q <file>, pytest -q, npm test, git status/diff) and READ the output -- if a command fails, read the actual error and fix the cause before retrying. LONG-RUNNING WORK: make the FIRST line of the command `#!bg` to run it in the BACKGROUND and get an id back immediately, then poll instead of blocking -- a build or test suite that outlives the turn's timeout is killed otherwise (the timeout is 1h in chat but only 600s under cowork and 300s in the sandbox). Commands run in the workspace directory with NO TTY: never use interactive prompts, `input()`, editors, pagers, or `python -c` with multi-line code -- add `-y`/`--yes` and pipe pagers to `cat`.",
+            "description": "Run a shell command in a sandbox: it can write only the active workspace, $HOME (scratch) and /tmp, cannot see the rest of the host or any secrets, and has web-only network (EACCES/'Permission denied' outside those is the sandbox, not a bug -- do not retry around it). Prefer a dedicated tool whenever one fits the job (reading, writing, editing, searching, or listing files); use bash only for what no dedicated tool covers (installs, git, builds, running programs, system info). Do NOT create or edit files via bash redirects/heredocs/sed -- use the dedicated file tools. Use bash to BUILD and TEST your changes (e.g. python3 -m compileall -q <file>, pytest -q, npm test, git status/diff) and READ the output -- if a command fails, read the actual error and fix the cause before retrying. LONG-RUNNING WORK: make the FIRST line of the command `#!bg` to run it in the BACKGROUND and get an id back immediately, then poll instead of blocking -- a build or test suite that outlives the turn's timeout is killed otherwise (the timeout is 1h in chat but only 600s under cowork and 300s in the sandbox). Commands run in the workspace directory with NO TTY: never use interactive prompts, `input()`, editors, pagers, or `python -c` with multi-line code -- add `-y`/`--yes` and pipe pagers to `cat`.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -39,7 +39,7 @@ FUNCTION_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "python",
-            "description": "Execute Python code to compute a result or test something. Prefer a dedicated tool whenever one fits the job (reading, writing, or searching files); use python only for computation, data processing, or scripting no dedicated tool covers.",
+            "description": "Execute Python code to compute a result or test something (same sandbox as bash: workspace/$HOME//tmp only, web-only network). Prefer a dedicated tool whenever one fits the job (reading, writing, or searching files); use python only for computation, data processing, or scripting no dedicated tool covers.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -298,7 +298,7 @@ FUNCTION_TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "get_workspace",
-            "description": "Return the absolute path of the active workspace folder the user is working in. File tools are confined to it; the shell starts there but is not sandboxed. Call this first when the user refers to 'the project'/'the code'/'this folder' without a path, instead of asking them. Takes no arguments.",
+            "description": "Return the absolute path of the active workspace folder the user is working in. File tools are confined to it; the shell runs there in a sandbox that can only write inside it. Call this first when the user refers to 'the project'/'the code'/'this folder' without a path, instead of asking them. Takes no arguments.",
             "parameters": {"type": "object", "properties": {}, "required": []}
         }
     },

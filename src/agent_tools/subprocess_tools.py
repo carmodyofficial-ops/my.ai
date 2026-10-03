@@ -6,6 +6,7 @@ import time
 import collections
 from typing import Optional, Callable, Awaitable, Tuple, Dict
 from src.constants import MAX_OUTPUT_CHARS
+from src import sandbox_jail
 
 DEFAULT_BASH_TIMEOUT = 60 * 60     # 1 hour
 DEFAULT_PYTHON_TIMEOUT = 60 * 60
@@ -188,16 +189,20 @@ class BashTool:
                              "Reading secrets / .env / .ssh / credential files is not permitted.",
                     "exit_code": 126}
         progress_cb = ctx.get("progress_cb")
-        _subproc_env = scrub_secret_env(ctx.get("subproc_env"))
+        _subproc_env = sandbox_jail.jail_env(scrub_secret_env(ctx.get("subproc_env")))
         _timeout, _preexec = _sandbox_subproc_kwargs(DEFAULT_BASH_TIMEOUT)
-        proc = await asyncio.create_subprocess_shell(
-            content,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=_subproc_env,
-            cwd=agent_cwd(),
-            preexec_fn=_preexec,
-        )
+        try:
+            with sandbox_jail.guard(_preexec) as _jailed_preexec:
+                proc = await asyncio.create_subprocess_shell(
+                    content,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=_subproc_env,
+                    cwd=agent_cwd(),
+                    preexec_fn=_jailed_preexec,
+                )
+        except sandbox_jail.JailUnavailable as e:
+            return {"error": f"bash: sandbox unavailable — {e}", "exit_code": 126}
         stdout, stderr, rc, timed_out = await _run_subprocess_streaming(
             proc,
             timeout=_timeout,
@@ -221,16 +226,20 @@ class PythonTool:
                              "Reading secrets / .env / .ssh / credential files is not permitted.",
                     "exit_code": 126}
         progress_cb = ctx.get("progress_cb")
-        _subproc_env = scrub_secret_env(ctx.get("subproc_env"))
+        _subproc_env = sandbox_jail.jail_env(scrub_secret_env(ctx.get("subproc_env")))
         _timeout, _preexec = _sandbox_subproc_kwargs(DEFAULT_PYTHON_TIMEOUT)
-        proc = await asyncio.create_subprocess_exec(
-            (sys.executable or "python"), "-I", "-c", content,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=_subproc_env,
-            cwd=agent_cwd(),
-            preexec_fn=_preexec,
-        )
+        try:
+            with sandbox_jail.guard(_preexec) as _jailed_preexec:
+                proc = await asyncio.create_subprocess_exec(
+                    (sys.executable or "python"), "-I", "-c", content,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=_subproc_env,
+                    cwd=agent_cwd(),
+                    preexec_fn=_jailed_preexec,
+                )
+        except sandbox_jail.JailUnavailable as e:
+            return {"error": f"python: sandbox unavailable — {e}", "exit_code": 126}
         stdout, stderr, rc, timed_out = await _run_subprocess_streaming(
             proc,
             timeout=_timeout,

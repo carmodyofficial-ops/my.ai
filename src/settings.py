@@ -190,6 +190,17 @@ DEFAULT_SETTINGS = {
     # render the prompt; scheduled/wearable/API runs are never paused.
     # See src/tool_approvals.py.
     "agent_approval_mode": "off",
+    # Kernel-enforced (Landlock) jail for agent bash/python/tests/background
+    # jobs: writes only to the bound workspace + scratch HOME + /tmp; the rest
+    # of the host, the app's data and secrets are unreadable. "jail" | "off".
+    # Network for jailed commands: "web" (TCP 80/443/53 + sandbox_net_ports),
+    # "none", or "any". See src/sandbox_jail.py.
+    "agent_sandbox": "jail",
+    "sandbox_network": "web",
+    "sandbox_net_ports": [],
+    "sandbox_read_roots": [],
+    # Folders that can never be bound as a workspace or exposed to the jail.
+    "sandbox_protected_roots": [],
     # Snapshot each file before the agent modifies it so a change can be undone
     # (per file, or a whole turn). Stored under data/checkpoints, size- and
     # count-capped. See src/file_checkpoints.py.

@@ -21,6 +21,7 @@ import shutil
 import tempfile
 import urllib.parse
 
+from src import sandbox_jail
 from .subprocess_tools import (
     _run_subprocess_streaming,
     _sandbox_subproc_kwargs,
@@ -48,14 +49,18 @@ def _parse_args(content) -> dict:
 
 async def _run(cmd: list[str], cwd: str, ctx: dict, default_timeout: int) -> tuple[str, str, int | None, bool, int]:
     _timeout, _preexec = _sandbox_subproc_kwargs(default_timeout)
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=scrub_secret_env(ctx.get("subproc_env")),
-        cwd=cwd,
-        preexec_fn=_preexec,
-    )
+    try:
+        with sandbox_jail.guard(_preexec) as _jailed_preexec:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=sandbox_jail.jail_env(scrub_secret_env(ctx.get("subproc_env"))),
+                cwd=cwd,
+                preexec_fn=_jailed_preexec,
+            )
+    except sandbox_jail.JailUnavailable as e:
+        return "", f"sandbox unavailable — {e}", 126, False, _timeout
     stdout, stderr, rc, timed_out = await _run_subprocess_streaming(
         proc, timeout=_timeout, progress_cb=ctx.get("progress_cb")
     )
