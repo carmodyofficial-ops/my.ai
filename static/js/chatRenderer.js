@@ -1436,7 +1436,8 @@ export function createMsgFooter(msgElement) {
 
   // Determine which 3 to show: use recent order, fallback to defaults
   const recent = _getRecentActions();
-  const defaults = ['copy', 'delete', 'fork'];
+  // Retry and branch up front; delete lives in the ··· menu (see below).
+  const defaults = ['copy', 'regen', 'fork'];
   const order = recent.length > 0 ? recent : defaults;
   const sorted = [...availableActions].sort((a, b) => {
     const ai = order.indexOf(a.id), bi = order.indexOf(b.id);
@@ -1445,8 +1446,9 @@ export function createMsgFooter(msgElement) {
     if (bi >= 0) return 1;
     return 0;
   });
-  const visible = sorted.slice(0, _MAX_VISIBLE);
-  const overflow = sorted.slice(_MAX_VISIBLE);
+  // Delete never takes a one-click slot next to Copy, even if used recently.
+  const visible = sorted.filter(a => a.id !== 'delete').slice(0, _MAX_VISIBLE);
+  const overflow = sorted.filter(a => !visible.includes(a));
 
   // Render visible buttons
   function _addBtn(action, container) {
@@ -1631,7 +1633,7 @@ export function createUserMsgFooter(msgElement) {
   ];
 
   const recent = _getUserRecentActions();
-  const defaults = ['edit', 'delete', 'copy'];
+  const defaults = ['edit', 'copy', 'resend'];
   const order = recent.length > 0 ? recent : defaults;
   const sorted = [...allActions].sort((a, b) => {
     const ai = order.indexOf(a.id), bi = order.indexOf(b.id);
@@ -1640,8 +1642,8 @@ export function createUserMsgFooter(msgElement) {
     if (bi >= 0) return 1;
     return 0;
   });
-  const visible = sorted.slice(0, _MAX_VISIBLE);
-  const overflow = sorted.slice(_MAX_VISIBLE);
+  const visible = sorted.filter(a => a.id !== 'delete').slice(0, _MAX_VISIBLE);
+  const overflow = sorted.filter(a => !visible.includes(a));
 
   visible.forEach(a => {
     const btn = _makeActionBtn(a.cls, a.title, a.html ? '' : a.icon, (ev) => {

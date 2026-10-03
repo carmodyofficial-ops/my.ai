@@ -585,6 +585,10 @@ def setup_chat_routes(
         # decision nobody can give — it would stall and then fail-closed deny.
         # Only the browser sends supports_approval, so only the browser can pause.
         _supports_approval = str(form_data.get("supports_approval", "")).lower() in ("1", "true", "yes")
+        # Per-chat "Ask first" switch: the client may request a STRICTER approval
+        # level than the operator setting for this turn (never a looser one —
+        # see tool_approvals.stricter_mode).
+        _client_approval_mode = str(form_data.get("approval_mode", "") or "").strip().lower()
         # Plan mode is a modifier on agent mode — it only makes sense with tools.
         if plan_mode:
             chat_mode = "agent"
@@ -1456,9 +1460,12 @@ def setup_chat_routes(
                         from src.tool_approvals import (
                             approval_enabled, make_approval_cb, tools_for_mode,
                         )
-                        _appr_mode = str(get_setting("agent_approval_mode", "off") or "off")
+                        from src.tool_approvals import stricter_mode
+                        _appr_mode = stricter_mode(
+                            str(get_setting("agent_approval_mode", "off") or "off"),
+                            _client_approval_mode)
                         if _supports_approval and approval_enabled(_appr_mode):
-                            _approval_cb = make_approval_cb(_user)
+                            _approval_cb = make_approval_cb(_user, session)
                             _approval_tools = tools_for_mode(_appr_mode)
                             logger.info("[approval] gate active (mode=%s) for owner=%s",
                                         _appr_mode, _user)
@@ -1488,6 +1495,7 @@ def setup_chat_routes(
                         workspace=workspace or None,
                         approval_cb=_approval_cb,
                         approval_tools=_approval_tools,
+                        ask_first=(_approval_cb is not None and _client_approval_mode == "all"),
                     ):
                         if chunk.startswith("data: ") and not chunk.startswith("data: [DONE]"):
                             try:
@@ -1510,6 +1518,11 @@ def setup_chat_routes(
                                     "rounds_exhausted",
                                     "ask_user",
                                     "plan_update",
+                                    # Per-tool-call approval. These were missing,
+                                    # so the browser never saw the prompt and every
+                                    # gated turn froze until the TTL auto-denied.
+                                    "approval_required",
+                                    "approval_resolved",
                                 ):
                                     if data.get("type") == "agent_step":
                                         _agent_rounds = max(_agent_rounds, data.get("round", 1))
@@ -1669,9 +1682,11 @@ def setup_chat_routes(
             raise HTTPException(400, "JSON object required")
         approval_id = str(body.get("id") or "").strip()
         approved = bool(body.get("approved", False))
+        # "Allow for this chat": auto-approve this tool for the rest of the chat.
+        remember = str(body.get("remember") or "").strip().lower() == "session"
         if not approval_id:
             raise HTTPException(400, "id is required")
-        if not _approval_resolve(approval_id, approved, owner):
+        if not _approval_resolve(approval_id, approved, owner, remember=remember):
             raise HTTPException(
                 404, "no such pending approval (expired, already resolved, or not yours)")
         logger.info("[approval] %s -> %s", approval_id, "approved" if approved else "denied")

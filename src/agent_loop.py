@@ -2019,6 +2019,16 @@ def _model_is_strong(endpoint_url: str, model: str) -> bool:
 # Mutating / effectful tools that an optional per-command approval gate (cowork)
 # pauses on before executing. Read-only tools (read_file/ls/glob/grep/get_workspace/
 # web_*) run without prompting so approval fatigue stays low.
+ASK_FIRST_DIRECTIVE = (
+    "## ASK-FIRST MODE\n"
+    "The user has chosen to stay in the loop on this chat. Before the first action on a "
+    "task that needs more than one step or changes anything (runs code, edits/deletes files, "
+    "git, sends something), state your plan in 1-5 short steps and call `ask_user` with "
+    "options such as \"Go ahead\", \"Change the plan\" and \"Just explain, don't do it\". "
+    "Skip this for a single read-only lookup or a plain question. Each action will also ask "
+    "the user for approval; if one is denied, do not retry it — adapt the plan or ask."
+)
+
 _APPROVAL_REQUIRED_TOOLS = {
     "bash", "python", "write_file", "edit_file", "multi_edit", "delete_file",
     "move_file", "apply_patch", "git", "run_tests", "lint_format", "code_sandbox",
@@ -2362,6 +2372,8 @@ async def stream_agent_loop(
     # Narrow the set of tools that require approval (e.g. only the destructive
     # tier). None → the full _APPROVAL_REQUIRED_TOOLS default.
     approval_tools: Optional[Set[str]] = None,
+    # Per-chat "Ask first" mode: propose a plan with ask_user before acting.
+    ask_first: bool = False,
     _is_teacher_run: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Streaming agent loop generator.
@@ -2879,6 +2891,11 @@ async def stream_agent_loop(
         else:
             messages.insert(0, {"role": "system", "content": _plan_note})
         logger.info("[plan] pinned approved plan (%d chars) for execution turn", len(approved_plan))
+    if ask_first and not guide_only and not plan_mode:
+        if messages and messages[0].get("role") == "system":
+            messages[0]["content"] = ASK_FIRST_DIRECTIVE + "\n\n" + (messages[0].get("content") or "")
+        else:
+            messages.insert(0, {"role": "system", "content": ASK_FIRST_DIRECTIVE})
     if guide_only:
         if messages and messages[0].get("role") == "system":
             messages[0]["content"] = GUIDE_ONLY_DIRECTIVE + "\n\n" + (messages[0].get("content") or "")
@@ -3801,10 +3818,16 @@ async def stream_agent_loop(
                 except Exception as _ae:
                     logger.warning("[agent] approval_cb register failed: %s", _ae)
                     _waiter = None
-                yield (
-                    f'data: {json.dumps({"type": "approval_required", "id": _aid, "tool": block.tool_type, "command": cmd_display, "round": round_num})}\n\n'
-                )
+                _pre_approved = (isinstance(_waiter, asyncio.Future) and _waiter.done()
+                                 and not _waiter.cancelled() and _waiter.result() is True)
+                if not _pre_approved:
+                    yield (
+                        f'data: {json.dumps({"type": "approval_required", "id": _aid, "tool": block.tool_type, "command": cmd_display, "round": round_num})}\n\n'
+                    )
                 _approved = False
+                if _pre_approved:
+                    _approved = True
+                    _waiter = None
                 if _waiter is not None:
                     try:
                         _approved = bool(await _waiter)
@@ -3812,9 +3835,10 @@ async def stream_agent_loop(
                         logger.warning("[agent] approval wait failed: %s", _we)
                         _approved = False
                 _approval_denied = not _approved
-                yield (
-                    f'data: {json.dumps({"type": "approval_resolved", "id": _aid, "approved": (not _approval_denied)})}\n\n'
-                )
+                if not _pre_approved:
+                    yield (
+                        f'data: {json.dumps({"type": "approval_resolved", "id": _aid, "approved": (not _approval_denied)})}\n\n'
+                    )
 
             if _approval_denied:
                 desc = f"{block.tool_type}: not approved"

@@ -39,6 +39,32 @@ DESTRUCTIVE_TOOLS: Set[str] = {
 
 VALID_MODES = ("off", "destructive", "all")
 
+# "Allow for this chat": (owner, session_id) -> tool names auto-approved for the
+# rest of that chat. In memory on purpose — a restart (or a new chat) asks again.
+_SESSION_ALLOW: Dict[tuple, Set[str]] = {}
+
+
+def stricter_mode(operator_mode: str, client_mode: str) -> str:
+    """The stricter of the operator's setting and a per-chat request.
+
+    A client (the "Ask first" switch) may only ADD approvals; it can never
+    loosen the operator's setting.
+    """
+    order = {m: i for i, m in enumerate(VALID_MODES)}
+    a = (operator_mode or "off").strip().lower()
+    b = (client_mode or "off").strip().lower()
+    a = a if a in order else "off"
+    b = b if b in order else "off"
+    return a if order[a] >= order[b] else b
+
+
+def session_allowed(owner: str, session_id: Optional[str]) -> Set[str]:
+    return set(_SESSION_ALLOW.get((owner, session_id or ""), ()))
+
+
+def clear_session_allow(owner: str, session_id: Optional[str]) -> None:
+    _SESSION_ALLOW.pop((owner, session_id or ""), None)
+
 
 def tools_for_mode(mode: str) -> Optional[Set[str]]:
     """Tool set requiring approval for *mode*, or None when approval is off.
@@ -57,18 +83,26 @@ def approval_enabled(mode: str) -> bool:
     return (mode or "off").strip().lower() in ("destructive", "all")
 
 
-def make_approval_cb(owner: str) -> Callable[[dict], object]:
+def make_approval_cb(owner: str, session_id: Optional[str] = None) -> Callable[[dict], object]:
     """Callback the agent loop calls SYNCHRONOUSLY to register a pending
     decision, returning an awaitable that resolves to the user's answer.
 
     Registering synchronously — before the loop emits `approval_required` —
     closes the race where a fast client resolves before the future exists.
+
+    A tool the user chose "Allow for this chat" for returns an already-resolved
+    future (``fut.done()`` is True), which the loop takes as "don't prompt".
     """
     def _cb(meta: dict):
         approval_id = str(meta.get("id") or "")
         loop = asyncio.get_running_loop()
         fut: asyncio.Future = loop.create_future()
-        _PENDING[approval_id] = {"future": fut, "owner": owner}
+        tool = str(meta.get("tool") or "")
+        if session_id and tool and tool in _SESSION_ALLOW.get((owner, session_id), ()):
+            fut.set_result(True)
+            return fut
+        _PENDING[approval_id] = {"future": fut, "owner": owner,
+                                 "session_id": session_id, "tool": tool}
 
         async def _wait() -> bool:
             try:
@@ -84,15 +118,18 @@ def make_approval_cb(owner: str) -> Callable[[dict], object]:
     return _cb
 
 
-def resolve(approval_id: str, approved: bool, owner: str) -> bool:
+def resolve(approval_id: str, approved: bool, owner: str, remember: bool = False) -> bool:
     """Resolve a pending approval.
 
     Returns False when unknown/expired, or owned by someone else — an approval
     may only be answered by the owner of the stream that raised it.
+    ``remember`` (with approved) auto-approves this tool for the rest of the chat.
     """
     entry = _PENDING.get(approval_id)
     if not entry or entry.get("owner") != owner:
         return False
+    if approved and remember and entry.get("session_id") and entry.get("tool"):
+        _SESSION_ALLOW.setdefault((owner, entry["session_id"]), set()).add(entry["tool"])
     fut = entry.get("future")
     if fut is not None and not fut.done():
         fut.set_result(bool(approved))

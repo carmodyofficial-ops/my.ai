@@ -2324,7 +2324,8 @@ body.bg-pattern-sparkles {
        can be in a split pane). */
     .chat-input-bar { container-type: inline-size; container-name: chatbar; }
     @container chatbar (max-width: 340px) {
-      .chat-input-right .mode-toggle { display: none !important; }
+      .chat-input-right .mode-toggle,
+      .chat-input-right .ask-first-btn { display: none !important; }
     }
     @container chatbar (max-width: 260px) {
       #model-picker-wrap { display: none !important; }
@@ -2504,6 +2505,9 @@ body.bg-pattern-sparkles {
       padding: 4px 14px; cursor: pointer; font-size: 0.83rem;
     }
     .approval-allow:hover:not(:disabled) {
+      border-color: var(--color-save-green, #4caf50); color: var(--color-save-green, #4caf50);
+    }
+    .approval-allow-session:hover:not(:disabled) {
       border-color: var(--color-save-green, #4caf50); color: var(--color-save-green, #4caf50);
     }
     .approval-deny:hover:not(:disabled) {
@@ -2796,6 +2800,26 @@ body.bg-pattern-sparkles {
     @keyframes pulse-recording {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.7; }
+    }
+    .agent-thinking-dots .thinking-elapsed {
+      margin-left: 8px; font-size: 0.78rem; font-variant-numeric: tabular-nums;
+      color: color-mix(in srgb, var(--fg) 45%, transparent);
+    }
+    /* "Ask first" switch (js/chatModes.js) — Agent mode only. */
+    .ask-first-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      height: 28px; padding: 0 9px; margin-right: 6px;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: none; cursor: pointer; flex-shrink: 0;
+      font-size: 11px; font-weight: 500; font-family: inherit; white-space: nowrap;
+      color: color-mix(in srgb, var(--fg) 40%, transparent);
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .ask-first-btn:hover { color: color-mix(in srgb, var(--fg) 65%, transparent); }
+    .ask-first-btn.active {
+      color: var(--fg);
+      border-color: var(--accent-primary, var(--fg));
+      background: color-mix(in srgb, var(--accent-primary, var(--fg)) 12%, transparent);
     }
     /* Mode toggle — Agent / Chat */
     .mode-toggle {

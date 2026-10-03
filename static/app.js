@@ -19,6 +19,7 @@ import { makeWindowDraggable } from './js/windowDrag.js';
 import markdownModule from './js/markdown.js';
 import chatRenderer from './js/chatRenderer.js';
 import sessionModule from './js/sessions.js';
+import chatModes from './js/chatModes.js';
 import memoryModule from './js/memory.js';
 import voiceRecorderModule from './js/voiceRecorder.js';
 import censorModule from './js/censor.js';
@@ -1713,6 +1714,8 @@ function initializeEventListeners() {
     });
     chatBtn.addEventListener('click', () => setMode('chat'));
     setMode(currentMode);
+    // "Ask first" switch + per-chat mode memory (js/chatModes.js).
+    try { chatModes.init(); } catch (e) { console.warn('chatModes init failed', e); }
   })();
 
   // ── Tool splash explainer messages (shown first 2 times per tool) ──

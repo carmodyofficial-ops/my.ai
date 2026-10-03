@@ -1505,6 +1505,8 @@ export async function selectSession(id, { keepSidebar = false } = {}) {
       try { window.documentModule.clearSelection(); } catch {}
     }
     currentSessionId = id;
+    // Restore this chat's Chat/Agent mode and "Ask first" switch.
+    try { window.chatModes?.restoreForSession(id); } catch (e) {}
     // Identify Assistant / task-output sessions so we don't "trap" the user
     // there on return. Skipped from both `lastSessionId` persistence and the
     // URL hash — the user complained that coming back to Odysseus kept

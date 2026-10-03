@@ -615,6 +615,10 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
     // Reset tracking variables at start
     currentAccumulated = '';
     currentHolder = null;
+    // Declared before the try so the catch below can stop TTS on error/abort
+    // (it used to be declared inside, so the catch threw a ReferenceError and
+    // skipped the rest of the error handling).
+    let streamingTTS = false;
     
     try {
       // Re-enable auto-scroll when user sends a message
@@ -871,6 +875,13 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       // runs / wearables / API clients are never blocked on a decision that
       // nobody is there to give (which would stall, then fail-closed deny).
       fd.append('supports_approval', '1');
+      // "Ask first" (js/chatModes.js): request approval for every action tool on
+      // this turn. The server only ever makes this stricter, never looser.
+      try {
+        const _am = window.chatModes?.getApprovalMode?.();
+        if (_am && isAgentMode && fd.get('mode') === 'agent') fd.append('approval_mode', _am);
+        window.chatModes?.noteSent?.(streamSessionId);
+      } catch (_e) { /* non-fatal */ }
       if (presetsModule.getSelectedPreset()) {
         fd.append('preset_id', presetsModule.getSelectedPreset());
       }
@@ -1093,7 +1104,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       let isThinking = false;
       let thinkingStartTime = null;
       // Streaming TTS: synthesize sentence-by-sentence during streaming
-      const streamingTTS = !!(window.aiTTSManager && window.aiTTSManager.autoPlay && window.aiTTSManager.available);
+      streamingTTS = !!(window.aiTTSManager && window.aiTTSManager.autoPlay && window.aiTTSManager.available);
       if (streamingTTS) window.aiTTSManager.streamingStart();
       // Multi-bubble agent tracking
       let roundHolder = holder;       // Current AI text bubble (changes per round)
@@ -1126,6 +1137,7 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         const el = document.querySelector('.agent-thinking-dots');
         if (el) {
           if (el._spinner) el._spinner.destroy();
+          if (el._tick) clearInterval(el._tick);
           el.remove();
         }
       };
@@ -1219,15 +1231,15 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
       // gate that previously only the `myai` terminal script could answer.
       const _approvalCards = new Map();   // approval id -> element
 
-      async function _sendApprovalDecision(id, approved, card) {
+      async function _sendApprovalDecision(id, approved, card, remember) {
         card.querySelectorAll('button').forEach((b) => { b.disabled = true; });
         const status = card.querySelector('.approval-status');
-        if (status) status.textContent = approved ? 'Allowing…' : 'Denying…';
+        if (status) status.textContent = approved ? (remember ? 'Allowing for this chat…' : 'Allowing…') : 'Denying…';
         try {
           const r = await fetch('/api/chat/approve', {
             method: 'POST', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, approved }),
+            body: JSON.stringify(remember ? { id, approved, remember: 'session' } : { id, approved }),
           });
           if (!r.ok) {
             const t = await r.text().catch(() => '');
@@ -1258,11 +1270,14 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
           (cmd ? `<pre class="approval-cmd">${esc(cmd)}</pre>` : '') +
           '<div class="approval-actions">' +
             '<button type="button" class="approval-allow">Allow</button>' +
+            `<button type="button" class="approval-allow-session" title="Don't ask again for ${esc(json.tool || 'this tool')} in this chat">Allow for this chat</button>` +
             '<button type="button" class="approval-deny">Deny</button>' +
             '<span class="approval-status">Waiting for your decision…</span>' +
           '</div>';
         card.querySelector('.approval-allow')
           .addEventListener('click', () => _sendApprovalDecision(id, true, card));
+        card.querySelector('.approval-allow-session')
+          .addEventListener('click', () => _sendApprovalDecision(id, true, card, true));
         card.querySelector('.approval-deny')
           .addEventListener('click', () => _sendApprovalDecision(id, false, card));
         chatBox.appendChild(card);
@@ -1296,6 +1311,17 @@ import { wireArrowUpRecall, getLastUserMessageFromChatHistory } from './composer
         _thinkBody.appendChild(_ts.createElement());
         _ts.start(120);
         _thinkMsg._spinner = _ts;
+        // Elapsed counter after 3s: the model reading a long prompt can take
+        // 10-25s before the first token, which otherwise looks like a hang.
+        const _elapsed = document.createElement('span');
+        _elapsed.className = 'thinking-elapsed';
+        _thinkBody.appendChild(_elapsed);
+        const _t0 = Date.now();
+        _thinkMsg._tick = setInterval(() => {
+          if (!_thinkMsg.isConnected) { clearInterval(_thinkMsg._tick); return; }
+          const sec = Math.floor((Date.now() - _t0) / 1000);
+          if (sec >= 3) _elapsed.textContent = `${sec}s`;
+        }, 1000);
         _thinkMsg.appendChild(_thinkBody);
         document.getElementById('chat-history').appendChild(_thinkMsg);
         uiModule.scrollHistory();

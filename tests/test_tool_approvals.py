@@ -71,3 +71,65 @@ def test_mode_gating():
     assert not tool_approvals.approval_enabled("")
     # "all" defers to the agent loop's own full default set.
     assert tool_approvals.tools_for_mode("all") is None
+
+
+# ── Per-chat "Ask first" + "Allow for this chat" ────────────────────────────
+
+def test_client_can_only_make_approval_stricter():
+    sm = tool_approvals.stricter_mode
+    assert sm("off", "all") == "all"            # Ask first escalates
+    assert sm("destructive", "all") == "all"
+    assert sm("all", "off") == "all"            # a client can't loosen the operator
+    assert sm("destructive", "") == "destructive"
+    assert sm("off", "bogus") == "off"
+
+
+@pytest.mark.asyncio
+async def test_allow_for_this_chat_auto_approves_same_tool_only():
+    tool_approvals.clear_session_allow("alice", "chat1")
+    cb = tool_approvals.make_approval_cb("alice", "chat1")
+    w = cb({"id": "s1", "tool": "bash", "command": "ls"})
+    assert tool_approvals.resolve("s1", True, "alice", remember=True) is True
+    assert await w is True
+    # Same tool, same chat: pre-approved (a done future, so the loop won't prompt).
+    w2 = cb({"id": "s2", "tool": "bash", "command": "pytest"})
+    assert isinstance(w2, asyncio.Future) and w2.done() and w2.result() is True
+    # A different tool still asks.
+    w3 = cb({"id": "s3", "tool": "delete_file", "command": "x"})
+    assert not (isinstance(w3, asyncio.Future) and w3.done())
+    tool_approvals.resolve("s3", False, "alice")
+    assert await w3 is False
+    # Another chat, or another user on the same chat id, still asks.
+    other = tool_approvals.make_approval_cb("alice", "chat2")({"id": "s4", "tool": "bash"})
+    assert not (isinstance(other, asyncio.Future) and other.done())
+    tool_approvals.resolve("s4", False, "alice")
+    await other
+    bob = tool_approvals.make_approval_cb("bob", "chat1")({"id": "s5", "tool": "bash"})
+    assert not (isinstance(bob, asyncio.Future) and bob.done())
+    tool_approvals.resolve("s5", False, "bob")
+    await bob
+    tool_approvals.clear_session_allow("alice", "chat1")
+
+
+@pytest.mark.asyncio
+async def test_deny_with_remember_does_not_allowlist():
+    tool_approvals.clear_session_allow("alice", "chat3")
+    cb = tool_approvals.make_approval_cb("alice", "chat3")
+    w = cb({"id": "d1", "tool": "bash"})
+    tool_approvals.resolve("d1", False, "alice", remember=True)
+    assert await w is False
+    assert tool_approvals.session_allowed("alice", "chat3") == set()
+
+
+def test_chat_route_forwards_approval_events_to_browser():
+    """The chat route forwards only an allowlist of agent SSE event types. The
+    approval events were missing from it, so the browser never rendered the
+    prompt and every gated turn froze until the TTL auto-denied (2026-10-03)."""
+    import pathlib
+    import re
+    src = pathlib.Path(__file__).resolve().parents[1].joinpath("routes", "chat_routes.py").read_text()
+    m = re.search(r'elif data\.get\("type"\) in \((.*?)\):', src, re.S)
+    assert m, "forwarded event-type tuple not found in chat_routes"
+    forwarded = m.group(1)
+    for ev in ("approval_required", "approval_resolved", "ask_user", "tool_start"):
+        assert f'"{ev}"' in forwarded, ev
