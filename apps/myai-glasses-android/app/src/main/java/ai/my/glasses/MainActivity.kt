@@ -24,8 +24,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -99,6 +99,11 @@ import ai.my.glasses.ui.MyAiBrand
 import ai.my.glasses.ui.MyAiConnected
 import ai.my.glasses.ui.MyAiTheme
 import ai.my.glasses.wearables.GlassesHostFactory
+import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 
 /**
  * v1 UI: Home (status + ask + Look-and-Ask), inline pairing, privacy state,
@@ -115,6 +120,16 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.CAMERA,
             Manifest.permission.RECORD_AUDIO,
         )
+
+        /**
+         * The subset the glasses SDK actually needs. Everything above used to
+         * gate SDK startup as an all-or-nothing set, so denying the PHONE
+         * camera — which this app only ever used for the since-removed QR
+         * scanner — silently stopped the glasses from ever initializing, with
+         * no button anywhere to undo it. The mic is for voice turns and the
+         * camera for nothing; neither belongs in the glasses' critical path.
+         */
+        private val GLASSES_PERMISSIONS = arrayOf(Manifest.permission.BLUETOOTH_CONNECT)
     }
 
     // Field initializer: the SDK's permission launcher must be registered
@@ -127,9 +142,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private val permissionLauncher =
-        registerForActivityResult(RequestMultiplePermissions()) { result ->
-            // The SDK may only be initialized AFTER the runtime grants.
-            if (result.values.all { it }) onGlassesPermissionsReady()
+        registerForActivityResult(RequestMultiplePermissions()) { _ ->
+            // The SDK may only be initialized AFTER the runtime grants — but only
+            // GLASSES_PERMISSIONS are its grants. Re-read them rather than trusting
+            // the result map, which omits permissions that were already held.
+            onGlassesPermissionsReady()
         }
 
     /** Notifications are for the listening indicator only — requested apart from
@@ -142,7 +159,7 @@ class MainActivity : ComponentActivity() {
         // The retained ViewModel keeps the process-wide adapter AND the mic
         // session, but the DAT permission launcher dies with its Activity — so
         // re-point the ViewModel at THIS Activity's host on every recreation.
-        vm.attachHost(glassesHost)
+        vm.attachHost(glassesHost, this)
 
         // Only launch when something is actually missing. RequestMultiplePermissions
         // invokes its callback immediately (no UI) when everything is already
@@ -161,6 +178,16 @@ class MainActivity : ComponentActivity() {
 
     /** Idempotent: initialize() and the bootstrap both no-op when already done. */
     private fun onGlassesPermissionsReady() {
+        val granted = GLASSES_PERMISSIONS.all {
+            checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED
+        }
+        if (!granted) {
+            // Surfaced rather than swallowed: without BLUETOOTH_CONNECT the SDK
+            // can never reach the glasses, and the user needs to be told that
+            // instead of watching "not connected" forever.
+            vm.onGlassesPermissionDenied()
+            return
+        }
         glassesHost.adapter.initialize(this)
         vm.onAndroidPermissionsGranted(this)
     }
@@ -222,33 +249,70 @@ fun HomeScreen(vm: MainViewModel) {
         },
     ) {
         if (showDiag) DiagnosticsScreen(vm, ui) { showDiag = false }
-        // Pull down anywhere to re-probe host health/capabilities and re-poke
-        // the glasses connection — the "why is Talk greyed out" recovery gesture.
-        else PullToRefreshBox(
-            isRefreshing = ui.refreshing,
-            onRefresh = vm::refresh,
-            // statusBarsPadding on the BOX (not just the inner column) so the app
-            // draws edge-to-edge but the header AND the pull-to-refresh spinner both
-            // clear the system clock/notifications.
-            modifier = Modifier.fillMaxSize().statusBarsPadding(),
-        ) {
-            Column(
-                // Extra top padding ON TOP of the status-bar inset (applied to the
-                // box) so the brand header + hamburger sit well clear of the phone
-                // clock/notifications, not just below them.
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                    .padding(start = 20.dp, end = 20.dp, bottom = 28.dp, top = 40.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                BrandHeader(
-                    connected = ui.paired,
-                    onMenu = if (ui.paired) {
-                        { vm.refreshHistory(); scope.launch { drawer.open() } }
-                    } else null,
-                )
-                // Setup gates the app: connect glasses + host first, then the
-                // main experience (assistant + productivity) takes over.
-                if (!ui.paired) SetupScreen(vm, ui) else MainScreen(vm, ui)
+        else {
+            // One UI header: a large title that collapses into a compact bar as
+            // the content scrolls, keeping controls in thumb reach. The scroll
+            // behavior is wired to the SCAFFOLD's nestedScroll, and the inner
+            // column keeps its own verticalScroll — PullToRefreshBox sits between
+            // them and still owns the overscroll-down gesture.
+            val appBarState = rememberTopAppBarState()
+            val scrollBehavior =
+                TopAppBarDefaults.exitUntilCollapsedScrollBehavior(appBarState)
+            Scaffold(
+                modifier = Modifier.fillMaxSize()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+                containerColor = MaterialTheme.colorScheme.background,
+                topBar = {
+                    LargeTopAppBar(
+                        title = {
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                Text("my.ai", color = MyAiBrand)
+                                Spacer(Modifier.width(8.dp))
+                                Text("GLASSES",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 6.dp))
+                            }
+                        },
+                        navigationIcon = {
+                            if (ui.paired) {
+                                IconButton(onClick = {
+                                    vm.refreshHistory(); scope.launch { drawer.open() }
+                                }) {
+                                    Icon(Icons.Rounded.Menu, contentDescription = "History",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        },
+                        actions = {
+                            StatusPill(ui.paired)
+                            Spacer(Modifier.width(12.dp))
+                        },
+                        colors = TopAppBarDefaults.largeTopAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.background,
+                            scrolledContainerColor = MaterialTheme.colorScheme.background,
+                        ),
+                        scrollBehavior = scrollBehavior,
+                    )
+                },
+            ) { inner ->
+                // Pull down anywhere to re-probe host health/capabilities and re-poke
+                // the glasses connection — the "why is Talk greyed out" recovery gesture.
+                PullToRefreshBox(
+                    isRefreshing = ui.refreshing,
+                    onRefresh = vm::refresh,
+                    modifier = Modifier.fillMaxSize().padding(inner),
+                ) {
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                            .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        // Setup gates the app: connect glasses + host first, then the
+                        // main experience (assistant + productivity) takes over.
+                        if (!ui.paired) SetupScreen(vm, ui) else MainScreen(vm, ui)
+                    }
+                }
             }
         }
     }
@@ -460,7 +524,8 @@ private fun DrawerRow(title: String, subtitle: String, onClick: (() -> Unit)? = 
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.small)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(vertical = 7.dp, horizontal = 4.dp),
+            .heightIn(min = 56.dp)
+            .padding(vertical = 10.dp, horizontal = 8.dp),
     ) {
         Text(title, style = MaterialTheme.typography.bodyLarge,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -580,15 +645,18 @@ private fun SectionCard(
     spacing: Dp = 12.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    // One UI cards sit FLAT on the ground and separate by tone + radius, not by
+    // shadow. Elevation 0 and the roomier 20dp inset are what make a stack of
+    // these read as One UI rather than Material.
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
-            Modifier.padding(18.dp),
+            Modifier.padding(horizontal = 20.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(spacing),
             content = content,
         )
@@ -638,6 +706,33 @@ private fun BrandHeader(connected: Boolean, onMenu: (() -> Unit)? = null) {
     }
 }
 
+/**
+ * The one control that drives the glasses connection: register with the Meta AI
+ * app, take the glasses camera permission, open a session. There was previously
+ * no such control at all — the sequence ran once at process start and a failure
+ * was unrecoverable without force-stopping the app.
+ */
+@Composable
+private fun ConnectGlassesButton(vm: MainViewModel, ui: UiState) {
+    Button(
+        onClick = vm::connectGlasses,
+        enabled = !ui.glassesBusy,
+        modifier = Modifier.fillMaxWidth().height(50.dp),
+    ) {
+        Text(when {
+            ui.glassesBusy && !ui.glassesRegistered -> "Registering…"
+            ui.glassesBusy -> "Connecting…"
+            ui.glassesRegistered -> "Reconnect glasses"
+            else -> "Connect glasses"
+        })
+    }
+    if (ui.glassesBusy && !ui.glassesRegistered) {
+        Text("Finish in the Meta AI app if it opens, then come back.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
 /** A numbered step badge + title, for the setup flow. */
 @Composable
 private fun StepHeader(number: Int, title: String) {
@@ -669,11 +764,11 @@ private fun SetupScreen(vm: MainViewModel, ui: UiState) {
             Text("Glasses report: $it", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error)
         }
-        Text("Pair the glasses in the Meta AI app (Bluetooth), then pull " +
-            "down here to refresh. Voice also works with just the phone — " +
-            "glasses can join later.",
+        Text("Pair the glasses in the Meta AI app (Bluetooth), then connect " +
+            "here. Voice also works with just the phone — glasses can join later.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ConnectGlassesButton(vm, ui)
     }
 
     // Host pairing: find the my.ai host on Wi-Fi and approve on the host. No
@@ -767,7 +862,8 @@ private fun PairingConfirmDialog(prompt: PairingPrompt, vm: MainViewModel) {
 @Composable
 private fun ToggleRow(title: String, subtitle: String,
                       checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             Text(subtitle, style = MaterialTheme.typography.bodySmall,
@@ -804,6 +900,9 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
             Text("Glasses report: $it", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error)
         }
+        // Once paired with the host, the glasses can still be absent — keep the
+        // connect action reachable here rather than only on the setup screen.
+        if (!ui.glassesConnected) ConnectGlassesButton(vm, ui)
     }
 
     // Glasses touchpad control needs Notification Access to drive the user's
@@ -987,7 +1086,9 @@ private fun MainScreen(vm: MainViewModel, ui: UiState) {
 
 @Composable
 private fun StatusRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    // One UI list rows have a floor height rather than hugging their text.
+    Row(Modifier.fillMaxWidth().heightIn(min = 40.dp),
+        verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.width(12.dp))
@@ -1024,6 +1125,14 @@ private fun recoveryHint(f: Failure): String = when (f) {
     Failure.GLASSES_PERMISSION_DENIED -> "Grant the camera permission in the Meta AI app."
     Failure.META_DEVELOPER_MODE_REQUIRED -> "Enable Developer Mode in the Meta AI app (Settings → App Info → tap version 5×), then register this app."
     Failure.BLUETOOTH_AUDIO_UNAVAILABLE -> "Glasses audio unavailable — check the Bluetooth connection."
+    Failure.META_AI_NOT_INSTALLED ->
+        "The Meta AI app isn't installed. my.ai reaches the glasses through it — install it, pair the glasses, then tap Connect glasses."
+    Failure.GLASSES_UPDATE_REQUIRED ->
+        "Your glasses' firmware is too old for this SDK — update them in the Meta AI app, then tap Connect glasses."
+    Failure.REGISTRATION_FAILED ->
+        "The Meta AI app refused to register my.ai. Check Developer Mode is on and this app is registered in the Wearables Developer Center, then tap Connect glasses."
+    Failure.BLUETOOTH_PERMISSION_DENIED ->
+        "my.ai needs the Nearby devices (Bluetooth) permission to reach the glasses — grant it in Settings → Apps → my.ai Glasses → Permissions."
     Failure.MYAI_HOST_UNREACHABLE -> "Can't reach your my.ai host — same Wi-Fi? Host running?"
     Failure.TLS_UNTRUSTED -> "Host TLS certificate mismatch — find the host again and re-approve."
     Failure.AUTHENTICATION_REQUIRED, Failure.DEVICE_CREDENTIAL_REVOKED ->

@@ -81,19 +81,28 @@ val MyAiBrand = MyAi.Brand
 val MyAiAccent = MyAi.Cyan
 val MyAiConnected = MyAi.Green
 
+// One UI runs markedly rounder than Material's baseline: cards and sheets read
+// as soft rectangles, and the radius grows with the container. These are the
+// proportions Samsung uses on phone-size surfaces.
 private val MyAiShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(22.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    extraSmall = RoundedCornerShape(12.dp),
+    small = RoundedCornerShape(16.dp),
+    medium = RoundedCornerShape(22.dp),
+    large = RoundedCornerShape(26.dp),
+    extraLarge = RoundedCornerShape(32.dp),
 )
 
 private val MyAiTypography = Typography().let { b ->
     b.copy(
         displaySmall = b.displaySmall.copy(
             fontWeight = FontWeight.Bold, letterSpacing = 6.sp),
+        // One UI screen titles are large and heavy — the expanded header is the
+        // anchor of each screen, and it shrinks to headlineSmall when collapsed.
+        headlineMedium = b.headlineMedium.copy(
+            fontSize = 32.sp, lineHeight = 40.sp,
+            fontWeight = FontWeight.Bold, letterSpacing = (-0.6).sp),
         headlineSmall = b.headlineSmall.copy(
+            fontSize = 22.sp, lineHeight = 28.sp,
             fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp),
         titleLarge = b.titleLarge.copy(
             fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),

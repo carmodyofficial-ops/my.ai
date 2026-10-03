@@ -40,6 +40,15 @@ interface WearablesAdapter {
     /** Connect a device session to the paired glasses. */
     suspend fun connect(): Boolean
 
+    /**
+     * Everything the SDK knows about why the glasses are (not) usable, as text
+     * for the Diagnostics screen: which adapter is live, whether the Meta AI app
+     * is installed, registration state, what devices the SDK can see and their
+     * link/compatibility. A connect failure is otherwise indistinguishable from
+     * a missing companion app or an unregistered build.
+     */
+    fun diagnosticSnapshot(): String = "adapter: ${javaClass.simpleName} (no SDK)"
+
     suspend fun disconnect()
 
     /**
@@ -70,9 +79,20 @@ data class GlassesState(
     /** Raw SDK error text (e.g. DeviceSessionError.description) — shown in
      *  the UI so device-side session drops aren't a blind "not connected". */
     val lastErrorDetail: String? = null,
+    /** App-to-MetaAI registration, which gates EVERYTHING else: with no
+     *  registration there is no device list and createSession always fails.
+     *  Tracked separately from [connection] because "not registered" and
+     *  "registered but the glasses are asleep" need opposite user actions. */
+    val registration: GlassesRegistration = GlassesRegistration.UNKNOWN,
+    /** The SDK's initialize() succeeded. False means no SDK call will ever
+     *  work — usually a missing/bad MetaAppID + ClientToken in the manifest. */
+    val sdkReady: Boolean = false,
 )
 
 enum class GlassesConnection { NOT_CONNECTED, REGISTERING, CONNECTING, CONNECTED, STREAMING }
+
+/** Mirrors the SDK's RegistrationState, plus UNKNOWN for "SDK not up yet". */
+enum class GlassesRegistration { UNKNOWN, UNAVAILABLE, AVAILABLE, REGISTERING, REGISTERED }
 
 enum class GlassesError {
     GLASSES_NOT_CONNECTED,
@@ -80,4 +100,13 @@ enum class GlassesError {
     META_DEVELOPER_MODE_REQUIRED,
     BLUETOOTH_AUDIO_UNAVAILABLE,
     CAPTURE_FAILED,
+    /** The Meta AI companion app isn't installed — the SDK talks to the glasses
+     *  only through it, so nothing works until it is. */
+    META_AI_NOT_INSTALLED,
+    /** The SDK can see the glasses but their firmware is too old for DAT. */
+    GLASSES_UPDATE_REQUIRED,
+    /** Registration was attempted and refused (not merely unavailable). */
+    REGISTRATION_FAILED,
+    /** The app never got BLUETOOTH_CONNECT, so the SDK was never initialized. */
+    BLUETOOTH_PERMISSION_DENIED,
 }

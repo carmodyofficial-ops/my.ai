@@ -34,6 +34,10 @@ enum class Failure {
     GLASSES_PERMISSION_DENIED,
     META_DEVELOPER_MODE_REQUIRED,
     BLUETOOTH_AUDIO_UNAVAILABLE,
+    META_AI_NOT_INSTALLED,
+    GLASSES_UPDATE_REQUIRED,
+    REGISTRATION_FAILED,
+    BLUETOOTH_PERMISSION_DENIED,
     MYAI_HOST_UNREACHABLE,
     TLS_UNTRUSTED,
     AUTHENTICATION_REQUIRED,
@@ -156,6 +160,24 @@ object ConnectionReducer {
         else -> false
     }
 
+    /**
+     * Failures raised by the glasses/registration path. Nothing else retracts
+     * one: [Event.GlassesConnected] clears only GLASSES_NOT_CONNECTED, so a
+     * banner like "enable Developer Mode" stayed on screen after the retry that
+     * fixed it. The ViewModel clears these when the adapter's error goes away.
+     */
+    fun isGlassesFailure(f: Failure): Boolean = when (f) {
+        Failure.GLASSES_NOT_CONNECTED,
+        Failure.GLASSES_PERMISSION_DENIED,
+        Failure.META_DEVELOPER_MODE_REQUIRED,
+        Failure.BLUETOOTH_AUDIO_UNAVAILABLE,
+        Failure.META_AI_NOT_INSTALLED,
+        Failure.GLASSES_UPDATE_REQUIRED,
+        Failure.REGISTRATION_FAILED,
+        Failure.BLUETOOTH_PERMISSION_DENIED -> true
+        else -> false
+    }
+
     /** Gateway error codes map 1:1 onto UI failure states; unknown codes
      *  degrade to MYAI_HOST_UNREACHABLE rather than crashing or hiding. */
     fun failureFromCode(code: String): Failure = when (code) {
@@ -179,6 +201,13 @@ object ConnectionReducer {
         "GLASSES_PERMISSION_DENIED" -> Failure.GLASSES_PERMISSION_DENIED
         "META_DEVELOPER_MODE_REQUIRED" -> Failure.META_DEVELOPER_MODE_REQUIRED
         "BLUETOOTH_AUDIO_UNAVAILABLE" -> Failure.BLUETOOTH_AUDIO_UNAVAILABLE
+        // The registration-side codes. Each one names a DIFFERENT user action,
+        // which is the whole point: "not connected" was being shown for a
+        // missing companion app, an unregistered build, and stale firmware alike.
+        "META_AI_NOT_INSTALLED" -> Failure.META_AI_NOT_INSTALLED
+        "GLASSES_UPDATE_REQUIRED" -> Failure.GLASSES_UPDATE_REQUIRED
+        "REGISTRATION_FAILED" -> Failure.REGISTRATION_FAILED
+        "BLUETOOTH_PERMISSION_DENIED" -> Failure.BLUETOOTH_PERMISSION_DENIED
         // These had no case and degraded to MYAI_HOST_UNREACHABLE — which is in
         // stopsCapture, so a rate-limit or a rejected image size wrongly told the
         // user the host was down AND killed the utterance in progress.

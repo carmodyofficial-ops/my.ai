@@ -128,3 +128,8 @@ _scratch/
 /pvf.sh
 /pvw.sh
 
+# Sideload APKs staged for the phone. The metaSdk build bakes the Meta AppID +
+# ClientToken into its manifest, and this repo's origin is public — these
+# artifacts are built on demand (docs/wearables/INSTALL_ANDROID.md), never
+# committed.
+/static/downloads/

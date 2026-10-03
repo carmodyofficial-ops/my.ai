@@ -105,3 +105,32 @@ It compiles against mwdat 0.8.0 but has **not run on physical glasses**.
 `MODIFY_AUDIO_SETTINGS` (voice turns), `CAMERA` (QR scan only — glasses
 imagery comes via the Meta SDK, not the phone camera), foreground-service
 mic type (long voice sessions with the screen off).
+
+**Only `BLUETOOTH_CONNECT` gates the glasses.** The app requests the whole set
+at launch, but just that one decides whether the DAT SDK is initialized —
+matching Meta's own samples, which ask for Bluetooth/Bluetooth-Connect/Internet
+and nothing else. Denying the phone camera or the mic costs you QR scanning and
+voice, never the glasses.
+
+## Connecting the glasses
+
+Registration with the Meta AI app is a **user action**, on a button
+("Connect glasses", setup step 1 and the home status card) — not something that
+only happens once at process start. Tap it again after fixing anything below;
+pull-to-refresh runs the same sequence when the app isn't registered yet.
+
+    register (bounce through Meta AI) → glasses CAMERA permission → device session
+
+When it doesn't work, the status line names the stage it stopped at
+(`SDK not started` / `Meta AI app unavailable` / `not registered` /
+`not connected`), and the red hint under it names the fix. For anything less
+obvious, **Diagnostics** (nav drawer → Diagnostics → Refresh) prints the SDK's
+own account: companion-app version, Developer Mode, registration state, how many
+devices the SDK can see, the active device's link state and firmware
+compatibility, and the last registration/session error. Start there.
+
+Prerequisites that produce a *specific* message when missing: Meta AI app
+installed (`META_AI_NOT_INSTALLED`), Developer Mode on + app registered in the
+Wearables Developer Center (`META_DEVELOPER_MODE_REQUIRED` /
+`REGISTRATION_FAILED`), glasses firmware new enough (`GLASSES_UPDATE_REQUIRED`),
+Nearby-devices permission (`BLUETOOTH_PERMISSION_DENIED`).

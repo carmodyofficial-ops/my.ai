@@ -1,6 +1,7 @@
 package ai.my.glasses.wearables
 
 import android.app.Activity
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
@@ -15,9 +16,14 @@ import com.meta.wearable.dat.core.selectors.AutoDeviceSelector
 import com.meta.wearable.dat.core.selectors.DeviceSelector
 import com.meta.wearable.dat.core.session.DeviceSession
 import com.meta.wearable.dat.core.session.DeviceSessionState
+import com.meta.wearable.dat.core.types.Device
+import com.meta.wearable.dat.core.types.DeviceCompatibility
+import com.meta.wearable.dat.core.types.DeviceIdentifier
 import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.core.types.PermissionStatus
+import com.meta.wearable.dat.core.types.RegistrationError
 import com.meta.wearable.dat.core.types.RegistrationState
+import com.meta.wearable.dat.core.types.WearablesError
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +33,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
@@ -62,6 +69,13 @@ class MetaDatAdapter : WearablesAdapter {
         const val CAPTURE_TIMEOUT_MS = 20_000L
         const val SESSION_START_TIMEOUT_MS = 20_000L
         const val ERROR_SUBSCRIBE_TIMEOUT_MS = 2_000L
+        /** Ceiling on the round trip through the Meta AI app. */
+        const val REGISTRATION_TIMEOUT_MS = 120_000L
+        /** How long to let registrationState leave its initial UNAVAILABLE
+         *  before concluding registration really is unavailable. */
+        const val REGISTRATION_SETTLE_TIMEOUT_MS = 8_000L
+        /** The companion app the DAT SDK talks through (release, then debug). */
+        val META_AI_PACKAGES = listOf("com.facebook.stella", "com.facebook.stella_debug")
     }
 
     private val _state = MutableStateFlow(GlassesState())
@@ -87,6 +101,31 @@ class MetaDatAdapter : WearablesAdapter {
     private var initialized = false
     private var monitoring = false
 
+    /** For the PackageManager lookups in [diagnosticSnapshot] — the adapter is
+     *  process-scoped, so it holds the APPLICATION context, never the Activity. */
+    @Volatile private var appContext: Context? = null
+
+    /** Last device the selector reported on, as text. Kept apart from
+     *  [GlassesState.lastErrorDetail] so a device note can't overwrite a real
+     *  session error (and vice versa). */
+    @Volatile private var deviceSummary: String? = null
+
+    /**
+     * The most recent registration failure — the single most useful fact when
+     * the glasses "just don't connect" (see [register]).
+     *
+     * A StateFlow rather than a plain field because [register] waits on it: the
+     * SDK reports failures on a stream SEPARATE from registrationState, and a
+     * refusal does not always move that state. Waiting on the state alone would
+     * sit out the full two-minute timeout with the reason already in hand.
+     */
+    private val registrationErrors = MutableStateFlow<RegistrationError?>(null)
+
+    /** Per-device metadata collectors, keyed so a device leaving the set takes
+     *  its collector with it rather than leaking one per emission. */
+    private val seenDeviceJobs = mutableMapOf<DeviceIdentifier, Job>()
+    @Volatile private var knownDevices = 0
+
     override fun initialize(host: Any) {
         val activity = host as Activity
         // REQUIRED before any other Wearables call, and only after the Android
@@ -96,7 +135,26 @@ class MetaDatAdapter : WearablesAdapter {
         // Activity that is about to be destroyed.
         if (initialized) return
         initialized = true
-        Wearables.initialize(activity)
+        appContext = activity.applicationContext
+        // initialize() returns a DatResult, and its failure was being discarded.
+        // A failed init (bad/missing MetaAppID + ClientToken in the manifest)
+        // makes every later SDK call a no-op, which the user only ever saw as a
+        // permanent "not connected" — so record it and stop claiming SDK-ready.
+        val result = runCatching { Wearables.initialize(activity) }
+        val initError = result.getOrNull()?.errorOrNull()
+        val threw = result.exceptionOrNull()
+        // ALREADY_INITIALIZED is benign: the SDK is up, which is all we need.
+        val ok = threw == null &&
+            (initError == null || initError == WearablesError.ALREADY_INITIALIZED)
+        if (!ok) {
+            val detail = threw?.message ?: initError?.description ?: "unknown"
+            Log.e(TAG, "Wearables.initialize failed: $detail")
+            _state.update {
+                it.copy(sdkReady = false, lastErrorDetail = "SDK init failed: $detail")
+            }
+            return   // nothing to monitor; every SDK call would fail anyway
+        }
+        _state.update { it.copy(sdkReady = true) }
         startMonitoring()
     }
 
@@ -112,13 +170,66 @@ class MetaDatAdapter : WearablesAdapter {
                             RegistrationState.REGISTERING -> GlassesConnection.REGISTERING
                             else -> s.connection
                         },
+                        registration = reg.toGlassesRegistration(),
                         // UNAVAILABLE = this app can't register at all: the Meta
                         // AI app is missing/too old, or Developer Mode is off (an
                         // unpublished app needs it). AVAILABLE just means "not
                         // registered yet" — register() drives that.
-                        lastError = if (reg == RegistrationState.UNAVAILABLE)
-                            GlassesError.META_DEVELOPER_MODE_REQUIRED else s.lastError,
+                        lastError = when {
+                            reg != RegistrationState.UNAVAILABLE -> s.lastError
+                            // Distinguish the two ways to be UNAVAILABLE. Telling
+                            // someone with no Meta AI app to enable Developer Mode
+                            // sends them looking for a setting that isn't there.
+                            !metaAiInstalled() -> GlassesError.META_AI_NOT_INSTALLED
+                            else -> GlassesError.META_DEVELOPER_MODE_REQUIRED
+                        },
                     )
+                }
+            }
+        }
+
+        // The SDK's own account of why registration failed. Nothing collected
+        // this stream, so META_AI_NOT_INSTALLED / INCOMPATIBLE_SDK_LEVEL /
+        // FAILED_TO_REGISTER were all emitted into the void and the app showed
+        // a blank "not connected" instead — the registration-side twin of the
+        // session-error bug fixed in connect().
+        scope.launch {
+            Wearables.registrationErrorStream.collect { err ->
+                Log.e(TAG, "registration error: ${err.name}")
+                registrationErrors.value = err
+                _state.update {
+                    it.copy(
+                        lastErrorDetail = "registration: ${err.description}",
+                        lastError = err.toGlassesError() ?: it.lastError,
+                    )
+                }
+            }
+        }
+
+        // Every device the SDK can see, not just the selector's ACTIVE one.
+        // Glasses whose firmware is too old for DAT never become active, so
+        // watching only the active device meant DEVICE_UPDATE_REQUIRED — a
+        // named, fixable cause — could never be observed. (This is the shape
+        // Meta's own samples use.)
+        scope.launch {
+            Wearables.devices.collect { ids ->
+                knownDevices = ids.size
+                seenDeviceJobs.values.forEach { it.cancel() }
+                seenDeviceJobs.clear()
+                ids.forEach { id ->
+                    seenDeviceJobs[id] = scope.launch {
+                        Wearables.devicesMetadata[id]?.collect { meta ->
+                            if (meta.compatibility == DeviceCompatibility.DEVICE_UPDATE_REQUIRED) {
+                                _state.update {
+                                    it.copy(
+                                        lastError = GlassesError.GLASSES_UPDATE_REQUIRED,
+                                        lastErrorDetail =
+                                            "${meta.name.ifEmpty { "glasses" }} needs a firmware update",
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -131,6 +242,7 @@ class MetaDatAdapter : WearablesAdapter {
                 deviceMetaJob?.cancel()
                 deviceMetaJob = null
                 if (device == null) {
+                    deviceSummary = null
                     // A live OR IN-FLIGHT session is the authority on connection
                     // state. The selector emits transient nulls (BT blip, device
                     // re-selection); letting those through flapped the UI and
@@ -152,7 +264,19 @@ class MetaDatAdapter : WearablesAdapter {
                 } else {
                     deviceMetaJob = scope.launch {
                         Wearables.devicesMetadata[device]?.collect { meta ->
-                            _state.update { it.copy(model = meta.name) }
+                            deviceSummary = meta.summary()
+                            _state.update {
+                                it.copy(
+                                    model = meta.name,
+                                    // Stale firmware is a distinct, fixable cause
+                                    // of "createSession returns null" — surface it
+                                    // instead of letting it read as "not connected".
+                                    lastError = if (meta.compatibility ==
+                                            DeviceCompatibility.DEVICE_UPDATE_REQUIRED)
+                                        GlassesError.GLASSES_UPDATE_REQUIRED
+                                    else it.lastError,
+                                )
+                            }
                         }
                     }
                 }
@@ -162,31 +286,122 @@ class MetaDatAdapter : WearablesAdapter {
 
     override suspend fun register(host: Any): Boolean {
         val activity = host as Activity
+        if (!_state.value.sdkReady) return false
         if (Wearables.registrationState.value == RegistrationState.REGISTERED) return true
-        _state.update { it.copy(connection = GlassesConnection.REGISTERING) }
-        // Bounces into the Meta AI app; returns via the myai-glasses:// callback.
+
+        // Fail fast when the SDK says registration isn't even offered — the old
+        // code called startRegistration() anyway and then sat on a 120-second
+        // timeout, two minutes of "registering…" with no Meta AI app in sight,
+        // before reporting one generic Developer-Mode hint.
+        //
+        // But UNAVAILABLE is ALSO what registrationState reports before the SDK
+        // has finished binding to the Meta AI app (it is the flow's initial
+        // value), so a tap right after launch would otherwise be told the app is
+        // missing. Give it a moment to settle first, and only then give up.
+        if (Wearables.registrationState.value == RegistrationState.UNAVAILABLE) {
+            _state.update { it.copy(connection = GlassesConnection.REGISTERING) }
+            val settled = withTimeoutOrNull(REGISTRATION_SETTLE_TIMEOUT_MS) {
+                Wearables.registrationState.first { it != RegistrationState.UNAVAILABLE }
+            }
+            if (settled == null) {
+                val why = if (!metaAiInstalled()) GlassesError.META_AI_NOT_INSTALLED
+                          else GlassesError.META_DEVELOPER_MODE_REQUIRED
+                _state.update {
+                    it.copy(connection = GlassesConnection.NOT_CONNECTED, lastError = why)
+                }
+                return false
+            }
+            if (settled == RegistrationState.REGISTERED) return true
+        }
+
+        registrationErrors.value = null
+        _state.update {
+            it.copy(connection = GlassesConnection.REGISTERING, lastErrorDetail = null)
+        }
+        // Hands off to the Meta AI app, which registers this app over the DAT
+        // service binding and flips registrationState. Fire-and-forget by design.
         Wearables.startRegistration(activity)
-        val registered = withTimeoutOrNull(120_000L) {
-            Wearables.registrationState.first { it == RegistrationState.REGISTERED }
-            true
-        } ?: false
-        if (!registered) {
+
+        // Settle on the FIRST of: registered, refused, or the user never
+        // finishing in the Meta AI app. Watching only for REGISTERED meant a
+        // refusal still cost the full timeout before saying anything — and the
+        // refusal arrives on registrationErrors, which is why both are combined
+        // here rather than waiting on the state alone.
+        val outcome = withTimeoutOrNull(REGISTRATION_TIMEOUT_MS) {
+            combine(Wearables.registrationState, registrationErrors) { state, err ->
+                state to err
+            }.first { (state, err) ->
+                state == RegistrationState.REGISTERED ||
+                    (err != null && state != RegistrationState.REGISTERING)
+            }
+        }
+        val registered = outcome?.first == RegistrationState.REGISTERED
+
+        if (registered) {
+            // A retry that worked must retract the reason the last one failed,
+            // or the "enable Developer Mode" banner outlives its cause.
+            _state.update { it.copy(lastError = null, lastErrorDetail = null) }
+        } else {
+            // The error collector has usually already set a precise lastError by
+            // now; only fall back to a guess when it hasn't.
             _state.update {
                 it.copy(
                     connection = GlassesConnection.NOT_CONNECTED,
-                    lastError = GlassesError.META_DEVELOPER_MODE_REQUIRED)
+                    lastError = registrationErrors.value?.toGlassesError()
+                        ?: it.lastError
+                        ?: GlassesError.META_DEVELOPER_MODE_REQUIRED,
+                )
             }
         }
         return registered
     }
 
+    /** The SDK reaches the glasses only through the Meta AI companion app; if
+     *  it isn't installed, no amount of retrying will help. The DAT AAR already
+     *  declares the `<queries>` entries that make these packages visible. */
+    private fun metaAiInstalled(): Boolean {
+        val pm = appContext?.packageManager ?: return true   // unknown: don't accuse
+        return META_AI_PACKAGES.any { pkg ->
+            runCatching { pm.getPackageInfo(pkg, 0) }.isSuccess
+        }
+    }
+
+    private fun RegistrationState.toGlassesRegistration(): GlassesRegistration = when (this) {
+        RegistrationState.UNAVAILABLE -> GlassesRegistration.UNAVAILABLE
+        RegistrationState.AVAILABLE -> GlassesRegistration.AVAILABLE
+        RegistrationState.REGISTERING -> GlassesRegistration.REGISTERING
+        RegistrationState.REGISTERED -> GlassesRegistration.REGISTERED
+        RegistrationState.UNREGISTERING -> GlassesRegistration.AVAILABLE
+    }
+
+    /** Null where the SDK error carries no action for the user (it stays in
+     *  lastErrorDetail either way). */
+    private fun RegistrationError.toGlassesError(): GlassesError? = when (this) {
+        RegistrationError.META_AI_NOT_INSTALLED -> GlassesError.META_AI_NOT_INSTALLED
+        RegistrationError.INCOMPATIBLE_SDK_LEVEL -> GlassesError.GLASSES_UPDATE_REQUIRED
+        RegistrationError.FAILED_TO_REGISTER -> GlassesError.REGISTRATION_FAILED
+        RegistrationError.ALREADY_REGISTERED -> null   // benign
+        else -> null
+    }
+
+    private fun Device.summary(): String =
+        "$name  type=$deviceType  link=$linkState  fw=$firmwareInfo  compat=$compatibility"
+
     override suspend fun ensureCameraPermission(
         requestPermission: suspend () -> Boolean,
     ): Boolean {
-        val current = Wearables.checkPermissionStatus(Permission.CAMERA).getOrNull()
+        val check = Wearables.checkPermissionStatus(Permission.CAMERA)
+        val current = check.getOrNull()
         if (current == PermissionStatus.Granted) {
             _state.update { it.copy(permissionGranted = true, lastError = null) }
             return true
+        }
+        // NO_DEVICE / NO_DEVICE_WITH_CONNECTION / META_AI_NOT_INSTALLED arrive
+        // here and used to be dropped by getOrNull(), so a permission check that
+        // failed because the glasses were asleep looked like a user denial.
+        check.errorOrNull()?.let { err ->
+            Log.w(TAG, "checkPermissionStatus: ${err.name}")
+            _state.update { it.copy(lastErrorDetail = "permission: ${err.description}") }
         }
         // The prompt is shown by the Meta AI app; the Activity owns the launcher.
         val granted = requestPermission()
@@ -395,6 +610,32 @@ class MetaDatAdapter : WearablesAdapter {
                 _state.update { it.copy(connection = GlassesConnection.CONNECTED) }
             }
         }
+    }
+
+    /**
+     * Everything the SDK will tell us about why the glasses are unusable,
+     * gathered in one place. This is the report to read FIRST when the answer
+     * to "why won't they connect" isn't obvious: it separates "no companion
+     * app" from "not registered" from "registered but no device in range".
+     */
+    override fun diagnosticSnapshot(): String = buildString {
+        val s = _state.value
+        appendLine("adapter: MetaDatAdapter (Meta DAT SDK)")
+        appendLine("sdk initialized: ${s.sdkReady}")
+        val pm = appContext?.packageManager
+        val metaAi = META_AI_PACKAGES.firstNotNullOfOrNull { pkg ->
+            runCatching { pm?.getPackageInfo(pkg, 0) }.getOrNull()?.let { "$pkg ${it.versionName}" }
+        }
+        appendLine("Meta AI app: ${metaAi ?: "NOT INSTALLED (or not visible)"}")
+        appendLine("dev mode: ${runCatching { Wearables.isDevMode.toString() }.getOrDefault("?")}")
+        appendLine("registration: ${s.registration}" +
+            (registrationErrors.value?.let { "  lastError=${it.name}" } ?: ""))
+        appendLine("devices seen by SDK: $knownDevices")
+        deviceSummary?.let { appendLine("active device: $it") }
+        appendLine("session: ${session?.state?.value ?: "none"}")
+        appendLine("connection: ${s.connection}  glasses-camera-permission=${s.permissionGranted}")
+        s.lastError?.let { appendLine("lastError: $it") }
+        append(s.lastErrorDetail?.let { "detail: $it" } ?: "detail: —")
     }
 
     /** PhotoData arrives as either a Bitmap or HEIC bytes, depending on device. */

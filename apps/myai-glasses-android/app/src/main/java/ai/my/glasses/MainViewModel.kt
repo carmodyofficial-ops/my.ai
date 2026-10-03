@@ -31,7 +31,9 @@ import ai.my.glasses.wearables.GlassesAdapters
 import ai.my.glasses.wearables.GlassesConnection
 import ai.my.glasses.wearables.GlassesError
 import ai.my.glasses.wearables.GlassesHost
+import ai.my.glasses.wearables.GlassesRegistration
 import ai.my.glasses.wearables.WearablesAdapter
+import java.lang.ref.WeakReference
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -58,6 +60,14 @@ data class UiState(
     val listening: Boolean = false,
     val glassesLabel: String = "not connected",
     val glassesDetail: String? = null,
+    /** A register→connect attempt is in flight (the Connect glasses button's
+     *  spinner). Distinct from [busy], which tracks a conversation turn. */
+    val glassesBusy: Boolean = false,
+    /** The app is registered with the Meta AI app. Until it is, no glasses call
+     *  can succeed, so the UI asks for registration rather than for Bluetooth. */
+    val glassesRegistered: Boolean = false,
+    /** A device session is live (mirrors the reducer's glassesConnected). */
+    val glassesConnected: Boolean = false,
     val hostLabel: String = "not paired",
     val modelLabel: String = "—",
     val voiceLabel: String = "—",
@@ -164,6 +174,10 @@ class MainViewModel(
      *  adapter is process-wide (GlassesAdapters.shared) and is NOT re-attached. */
     private var host: GlassesHost? = null
 
+    /** The current Activity, for [connectGlasses]'s register() bounce. Weak so a
+     *  destroyed Activity isn't pinned by the longer-lived ViewModel. */
+    private var activityRef: WeakReference<ComponentActivity>? = null
+
     init {
         // Arm the glasses touchpad control (media-button capture + its notification)
         // on app entry, regardless of pairing — so the touchpad works immediately.
@@ -219,9 +233,23 @@ class MainViewModel(
                         GlassesConnection.STREAMING -> "capturing…"
                         GlassesConnection.CONNECTING -> "connecting…"
                         GlassesConnection.REGISTERING -> "registering…"
-                        GlassesConnection.NOT_CONNECTED -> "not connected"
+                        // "not connected" was shown for every pre-connection
+                        // state alike, including the ones where connecting is
+                        // impossible until something else is fixed. Name the
+                        // stage the app is actually stuck at.
+                        GlassesConnection.NOT_CONNECTED -> when {
+                            !gs.sdkReady -> "SDK not started"
+                            gs.registration == GlassesRegistration.UNAVAILABLE ->
+                                "Meta AI app unavailable"
+                            gs.registration == GlassesRegistration.AVAILABLE ->
+                                "not registered"
+                            gs.registration == GlassesRegistration.REGISTERING ->
+                                "registering…"
+                            else -> "not connected"
+                        }
                     },
                     glassesDetail = gs.lastErrorDetail,
+                    glassesRegistered = gs.registration == GlassesRegistration.REGISTERED,
                 )
                 val connected = gs.connection == GlassesConnection.CONNECTED ||
                     gs.connection == GlassesConnection.STREAMING
@@ -234,17 +262,38 @@ class MainViewModel(
                 // META_DEVELOPER_MODE_REQUIRED could never reach AppState and their
                 // recovery hints were dead code. Developer-Mode-off is the most
                 // common first-run failure, and it showed only as "not connected".
-                if (gs.lastError != lastGlassesError) {
-                    lastGlassesError = gs.lastError
-                    gs.lastError?.let { dispatch(Event.GatewayError(it.name)) }
+                val glassesError = gs.lastError
+                if (glassesError != lastGlassesError) {
+                    lastGlassesError = glassesError
+                    if (glassesError != null) {
+                        dispatch(Event.GatewayError(glassesError.name))
+                    } else if (app.failure?.let(ConnectionReducer::isGlassesFailure) == true) {
+                        // The glasses-side error went away (a retry worked).
+                        // Only GLASSES_NOT_CONNECTED was ever retracted, so the
+                        // other hints outlived their cause — drop the banner,
+                        // but only when the banner on screen is the glasses one.
+                        dispatch(Event.FailureCleared)
+                    }
                 }
             }
         }
     }
 
     /** Re-attached by each Activity instance: only the permission launcher is
-     *  Activity-scoped. */
-    fun attachHost(glassesHost: GlassesHost) { host = glassesHost }
+     *  Activity-scoped. The Activity itself is kept weakly — [connectGlasses]
+     *  needs one to bounce through the Meta AI app, and the ViewModel outlives
+     *  any single instance. */
+    fun attachHost(glassesHost: GlassesHost, activity: ComponentActivity) {
+        host = glassesHost
+        activityRef = WeakReference(activity)
+    }
+
+    /** BLUETOOTH_CONNECT was refused, so the SDK was never initialized. Report
+     *  it as a failure with a recovery hint instead of leaving the user staring
+     *  at a status line that never changes. */
+    fun onGlassesPermissionDenied() {
+        dispatch(Event.GatewayError("BLUETOOTH_PERMISSION_DENIED"))
+    }
 
     /** Paired host base URL, for opening the full my.ai web UI in a browser. */
     fun hostUrl(): String? = credentials.hostBaseUrl
@@ -254,19 +303,42 @@ class MainViewModel(
      *  in-flight guard keeps a rotation from bouncing through the Meta AI app a
      *  second time while the first registration is still pending. */
     fun onAndroidPermissionsGranted(activity: ComponentActivity) {
-        if (bootstrapped || bootstrapJob?.isActive == true) return
+        activityRef = WeakReference(activity)
+        if (bootstrapped) return
+        connectGlasses()
+    }
+
+    /**
+     * Register with the Meta AI app, take the glasses-side camera permission,
+     * and open a device session — the whole sequence, on demand.
+     *
+     * This used to run exactly once per process, from the permission callback,
+     * and only ever advanced past register() on success. So any first-run
+     * failure (Developer Mode off, the Meta AI app not yet showing the glasses,
+     * the user taking too long in the bounce) left the app permanently at "not
+     * connected" with no way back short of a force-stop: pull-to-refresh called
+     * connect() alone, which cannot succeed unregistered. It is now idempotent,
+     * retryable, and wired to a button.
+     */
+    fun connectGlasses() {
+        if (bootstrapJob?.isActive == true) return
+        val activity = activityRef?.get() ?: return
         bootstrapJob = viewModelScope.launch {
-            // Registration is a no-op if already registered; on real glasses it
-            // bounces through the Meta AI app. Mock adapter returns immediately.
-            if (adapter.register(activity)) {
-                // Registration succeeded — the expensive Meta-app bounce is done.
-                // Mark bootstrapped so a later Activity recreation doesn't re-run
-                // this (reconnect is driven by pull-to-refresh / user actions).
-                bootstrapped = true
-                adapter.ensureCameraPermission {
-                    host?.requestGlassesCameraPermission() ?: false
+            _ui.value = _ui.value.copy(glassesBusy = true)
+            try {
+                // Registration is a no-op if already registered; on real glasses it
+                // bounces through the Meta AI app. Mock adapter returns immediately.
+                if (adapter.register(activity)) {
+                    // The expensive Meta-app bounce is done — don't repeat it on
+                    // every Activity recreation.
+                    bootstrapped = true
+                    adapter.ensureCameraPermission {
+                        host?.requestGlassesCameraPermission() ?: false
+                    }
+                    adapter.connect()
                 }
-                adapter.connect()
+            } finally {
+                _ui.value = _ui.value.copy(glassesBusy = false)
             }
         }
     }
@@ -278,6 +350,7 @@ class MainViewModel(
             paired = app.hostPaired,
             canTalk = app.canTalk,
             failure = app.failure,
+            glassesConnected = app.glassesConnected,
             // The reducer owns `listening`; mirroring it here keeps app.listening
             // and ui.listening from drifting into two independent booleans.
             listening = app.listening,
@@ -517,8 +590,14 @@ class MainViewModel(
         }
         // Reconnect the glasses independently — a no-op when already connected,
         // serialized against any in-flight connect. Fire-and-forget so it can't
-        // hold the spinner.
-        viewModelScope.launch { runCatching { adapter.connect() } }
+        // hold the spinner. If registration never completed, connect() alone can
+        // only fail, so redo the full sequence instead — this is the documented
+        // "pull down here to refresh" recovery, and it was a dead end.
+        if (adapter.state.value.registration == GlassesRegistration.REGISTERED) {
+            viewModelScope.launch { runCatching { adapter.connect() } }
+        } else {
+            connectGlasses()
+        }
     }
 
     private suspend fun doRefreshHealth() {
@@ -1031,6 +1110,10 @@ class MainViewModel(
         val report = buildString {
             appendLine("glasses: ${gs.connection}  model=${gs.model ?: "?"}  " +
                 "batt=${gs.batteryPercent?.let { "$it%" } ?: "?"}")
+            // The SDK's own account of the connection — companion app, dev mode,
+            // registration, visible devices. Read this first when the glasses
+            // won't connect; the line above only ever says "NOT_CONNECTED".
+            appendLine(adapter.diagnosticSnapshot())
             gs.lastErrorDetail?.let { appendLine("glasses detail: $it") }
             appendLine("host: ${if (app.hostReachable) "reachable" else "unreachable"}  " +
                 "model=${u.modelLabel}")

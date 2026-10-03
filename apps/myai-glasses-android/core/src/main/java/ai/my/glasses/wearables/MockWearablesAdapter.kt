@@ -17,7 +17,8 @@ import kotlinx.coroutines.launch
  * `MetaDatAdapter` can additionally target in -PmetaSdk=true debug builds.
  */
 class MockWearablesAdapter : WearablesAdapter {
-    private val _state = MutableStateFlow(GlassesState(model = "Mock Ray-Ban Meta"))
+    private val _state = MutableStateFlow(
+        GlassesState(model = "Mock Ray-Ban Meta", sdkReady = true))
     override val state: StateFlow<GlassesState> = _state
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -26,12 +27,22 @@ class MockWearablesAdapter : WearablesAdapter {
     override fun initialize(host: Any) { /* nothing to initialize in mock mode */ }
 
     override suspend fun register(host: Any): Boolean {
-        _state.update { it.copy(connection = GlassesConnection.REGISTERING) }
+        _state.update {
+            it.copy(connection = GlassesConnection.REGISTERING,
+                registration = GlassesRegistration.REGISTERING)
+        }
         delay(300)
         _state.update {
-            it.copy(permissionGranted = true, connection = GlassesConnection.NOT_CONNECTED)
+            it.copy(permissionGranted = true, connection = GlassesConnection.NOT_CONNECTED,
+                registration = GlassesRegistration.REGISTERED)
         }
         return true
+    }
+
+    override fun diagnosticSnapshot(): String = buildString {
+        appendLine("adapter: MockWearablesAdapter (NO Meta SDK in this build)")
+        appendLine("registration: ${_state.value.registration}")
+        append("connection: ${_state.value.connection}")
     }
 
     override suspend fun ensureCameraPermission(
