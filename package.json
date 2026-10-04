@@ -4,9 +4,9 @@
     "url": "https://github.com/carmodyofficial-ops/my.ai.git"
   },
   "devDependencies": {
-    "@antithesishq/bombadil": "^0.6.1"
+    "@antithesishq/bombadil": "^0.7.8"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.112.3"
+    "@anthropic-ai/sdk": "^0.131.0"
   }
 }
