@@ -19,8 +19,14 @@ val localProps: Map<String, String> = rootProject.file("local.properties")
     ?.mapNotNull { line -> line.split("=", limit = 2).takeIf { it.size == 2 } }
     ?.associate { it[0].trim() to it[1].trim() }
     ?: emptyMap()
-val metaAppId = localProps["metaAppId"] ?: ""
-val metaClientToken = localProps["metaClientToken"] ?: ""
+// -PmetaDevMode=true: build for the Meta AI app's Developer Mode. Meta's docs:
+// "In Developer Mode, attestation is not used, so the manifest placeholders can
+// both be 0." Real Developer Center credentials switch attestation ON, which
+// also needs a release channel the user is enrolled in — without one, Meta AI
+// connects to the glasses, refuses the registration and drops the link.
+val metaDevMode = (findProperty("metaDevMode") as String?)?.toBoolean() ?: false
+val metaAppId = if (metaDevMode) "0" else localProps["metaAppId"] ?: ""
+val metaClientToken = if (metaDevMode) "0" else localProps["metaClientToken"] ?: ""
 if (metaSdkEnabled && (metaAppId.isBlank() || metaClientToken.isBlank())) {
     throw GradleException(
         "metaSdk build needs metaAppId + metaClientToken in local.properties " +
@@ -35,8 +41,8 @@ android {
         applicationId = "ai.my.glasses"
         minSdk = 31 // AudioManager.setCommunicationDevice (BT HFP mic routing)
         targetSdk = 36
-        versionCode = 48
-        versionName = "0.10.1"
+        versionCode = 49
+        versionName = "0.10.2"
         buildConfigField("boolean", "META_SDK", metaSdkEnabled.toString())
         manifestPlaceholders["metaAppId"] = metaAppId
         manifestPlaceholders["metaClientToken"] = metaClientToken
