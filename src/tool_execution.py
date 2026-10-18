@@ -1142,7 +1142,22 @@ def format_tool_result(description: str, result: Dict) -> str:
         else:
             parts.append(result["response"])
     elif "results" in result:
-        parts.append(result["results"])
+        results = result["results"]
+        if isinstance(results, list):
+            # dispatch_subagents: one {"index", "task", "result"|"error"} per sub-agent.
+            for i, item in enumerate(results):
+                if not isinstance(item, dict):
+                    parts.append(f"**Sub-agent {i + 1}:**\n{item}")
+                    continue
+                idx = item.get("index")
+                n = idx + 1 if isinstance(idx, int) else i + 1
+                header = f"**Sub-agent {n}**" + (f" — {item['task']}" if item.get("task") else "")
+                if "error" in item:
+                    parts.append(f"{header}\n**Error:** {item['error']}")
+                else:
+                    parts.append(f"{header}\n{item.get('result', '')}")
+        else:
+            parts.append(str(results))
     elif "session_id" in result and "name" in result:
         parts.append(f"Session created: **{result['name']}** (id: `{result['session_id']}`, model: {result.get('model', 'unknown')})")
     elif "success" in result:

@@ -11,6 +11,7 @@ through the standard agent_tools.py pipeline.
 import asyncio
 import json
 import logging
+import re
 import uuid
 import time
 from typing import Dict, Optional, Tuple
@@ -219,7 +220,9 @@ _SUBAGENT_SYSTEM_PROMPT = (
     "with other sub-agents. Do exactly your assigned subtask — no more, no less — "
     "and return only the result, densely and concretely (specific findings, code, "
     "file:line, values). No preamble, no restating the task, no meta-commentary. "
-    "If your subtask is impossible or under-specified, say so in one line."
+    "You have NO tools: you cannot run commands, read files, or browse. If the "
+    "subtask needs any of that, or is under-specified, reply with ONE line "
+    "starting 'CANNOT:' and the reason — never invent tool calls or output."
 )
 
 _SUBAGENT_MAX = 6          # cap concurrent sub-agents per dispatch (cost/fan-out guard)
@@ -237,10 +240,41 @@ _EXPLORER_SYSTEM_PROMPT = (
     "You are a read-only investigator working ONE piece of a larger task in "
     "parallel with others. Use your tools (grep, glob, ls, read_file) to find the "
     "answer in the actual code — never guess an API, signature, or file layout. "
-    "You CANNOT modify anything; do not try. Return only your findings, densely "
-    "and concretely, citing file:line for every claim. No preamble, no restating "
-    "the task. If the answer genuinely isn't in the code, say so in one line."
+    "You CANNOT modify anything or run shell commands; do not try. Return only "
+    "your findings, densely and concretely, citing file:line for every claim. No "
+    "preamble, no restating the task. If the answer genuinely isn't in the code, "
+    "say so in one line. If the subtask needs a command you don't have (git, "
+    "pytest, pwd, ...) or files outside your reach, reply with ONE line starting "
+    "'CANNOT:' and the reason — never invent tool calls or output."
 )
+
+# A sub-agent that couldn't do its job must come back as an error the parent can
+# act on (run the step itself), not as junk "findings": a lone ".", a CANNOT:
+# refusal, or tool-call markup a tool-less model wrote out as text.
+_FAKE_TOOL_CALL_RE = re.compile(r"<tool_call>|<function=|<invoke\b|\"tool_calls\"\s*:")
+# Models often lead in with a sentence before the CANNOT: line, so match any line.
+_CANNOT_LINE_RE = re.compile(r"(?im)^\W*CANNOT:\s*(.+)$")
+
+
+def _subagent_outcome(idx: int, task: str, out: str, **extra) -> Dict:
+    """Turn a sub-agent's final text into a result or an actionable error entry."""
+    entry = {"index": idx, "task": task[:200], **extra}
+    text = (out or "").strip()
+    hint = (" Do this step yourself (sub-agents are read-only and cannot run "
+            "shell commands).")
+    cannot = _CANNOT_LINE_RE.search(text)
+    if cannot:
+        entry["error"] = f"sub-agent could not do this: {cannot.group(1).strip(' *').rstrip('.')[:300]}." + hint
+    elif _FAKE_TOOL_CALL_RE.search(text):
+        entry["error"] = ("sub-agent tried to call a tool it does not have and "
+                          "returned no findings." + hint)
+    elif len(re.sub(r"[\W_]+", "", text)) < 3:
+        entry["error"] = "sub-agent returned no findings." + hint
+    else:
+        if len(text) > 6000:
+            text = text[:6000] + "\n... (truncated)"
+        entry["result"] = text
+    return entry
 _EXPLORER_MAX_ROUNDS = 6   # bounded: an explorer that can't answer in 6 rounds should say so
 _EXPLORER_TIMEOUT = 240    # a tool-using loop needs longer than a single-shot call
 
@@ -266,11 +300,25 @@ async def _run_explorer(idx: int, task: str, *, url: str, model: str, headers,
     # re-dispatching so an explorer cannot fan out recursively.
     disabled = set(plan_mode_disabled_tools()) | {"dispatch_subagents", "request_sandbox_build"}
     prompt = task if not shared else f"{task}\n\nShared context:\n{shared}"
+    system = _EXPLORER_SYSTEM_PROMPT
+    if not workspace:
+        # No workspace: file tools only accept paths under the default roots, and
+        # relative paths ("." / "data/") are rejected — say where to look, or the
+        # explorer burns every round on "outside the allowed roots".
+        try:
+            from src.tool_execution import _tool_path_roots
+            roots = ", ".join(_tool_path_roots())
+        except Exception:
+            roots = ""
+        if roots:
+            system += (f"\n\nNo workspace is bound. Your file tools can read ONLY under: "
+                       f"{roots}. Always pass ABSOLUTE paths under those roots.")
     messages = [
-        {"role": "system", "content": _EXPLORER_SYSTEM_PROMPT},
+        {"role": "system", "content": system},
         {"role": "user", "content": prompt},
     ]
     chunks, used_tools = [], []
+    exhausted = False
     try:
         async for raw in stream_agent_loop(
             url, model, messages,
@@ -292,16 +340,17 @@ async def _run_explorer(idx: int, task: str, *, url: str, model: str, headers,
                 chunks.append(d["delta"])
             elif d.get("type") == "tool_start" and d.get("tool"):
                 used_tools.append(d["tool"])
+            elif d.get("type") == "rounds_exhausted":
+                exhausted = True
     except Exception as e:
         return {"index": idx, "task": task[:200], "error": f"explorer failed: {str(e)[:300]}"}
 
-    out = "".join(chunks).strip()
-    if len(out) > 6000:
-        out = out[:6000] + "\n... (truncated)"
-    if not out:
-        return {"index": idx, "task": task[:200],
-                "error": "explorer returned no findings"}
-    return {"index": idx, "task": task[:200], "result": out, "tools_used": used_tools}
+    out = "".join(chunks)
+    if exhausted and not out.strip():
+        return {"index": idx, "task": task[:200], "tools_used": used_tools,
+                "error": f"explorer used all {_EXPLORER_MAX_ROUNDS} rounds without an answer. "
+                         "Narrow the subtask (exact paths/symbols) or do it yourself."}
+    return _subagent_outcome(idx, task, out, tools_used=used_tools)
 
 
 async def do_dispatch_subagents(content: str, session_id: Optional[str] = None,
@@ -311,9 +360,11 @@ async def do_dispatch_subagents(content: str, session_id: Optional[str] = None,
     The main agent decomposes a task into independent pieces (e.g. "investigate
     module A", "investigate module B", "draft the X section"), dispatches them
     here, and synthesizes the returned results itself. Each sub-agent is a
-    focused, single-shot model call with no tools and no shared state — so this
-    is safe for parallel ANALYSIS/REASONING/DRAFTING, not for parallel file
-    mutation (which would conflict).
+    read-only explorer loop (or, with explorers turned off, a single-shot model
+    call with no tools) with no shared state — so this is safe for parallel
+    ANALYSIS/REASONING/DRAFTING, not for parallel file mutation (which would
+    conflict) or shell commands. A sub-agent that can't do its piece comes back
+    as an ``error`` entry telling the parent to do that step itself.
 
     Content: a JSON object ``{"tasks": ["...", "..."], "context": "optional
     shared background"}``; ``tasks`` may also be given as a plain ``---``-
@@ -368,26 +419,25 @@ async def do_dispatch_subagents(content: str, session_id: Optional[str] = None,
                  {"role": "user", "content": task}],
                 headers=headers, timeout=_SUBAGENT_TIMEOUT,
             )
-            resp = (resp or "").strip()
-            if len(resp) > 6000:
-                resp = resp[:6000] + "\n... (truncated)"
-            return {"index": idx, "task": task[:200], "result": resp}
+            return _subagent_outcome(idx, task, resp)
         except Exception as e:
             return {"index": idx, "task": task[:200], "error": str(e)[:300]}
 
     import asyncio
 
-    # Prefer tool-equipped explorers when a workspace is bound: they can read the
-    # code themselves instead of reasoning over whatever the caller pasted in.
-    # Falls back to the single-shot path when there is no workspace (nothing to
-    # explore) or the operator turned it off.
+    # Prefer tool-equipped explorers: they can read the code themselves instead of
+    # reasoning over whatever the caller pasted in. With a workspace bound their
+    # tools are confined to it; without one they get the same default read roots
+    # (data/, temp, tool_path_extra_roots) the parent's file tools use — a
+    # tool-less sub-agent handed "run X / read Y" just returned junk. Falls back to
+    # the single-shot path only when the operator turned explorers off.
     workspace = ""
     try:
         from src.tool_execution import get_active_workspace
         workspace = get_active_workspace() or ""
     except Exception:
         workspace = ""
-    explorer_mode = bool(workspace) and _explorers_enabled()
+    explorer_mode = _explorers_enabled()
 
     if explorer_mode:
         results = await asyncio.gather(*[
